@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
+from urllib.parse import urlparse  # IMPORTANT : Import ajouté
 
 # ============================================================================
 # CONFIGURATION
