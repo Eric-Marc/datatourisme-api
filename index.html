@@ -441,7 +441,10 @@
 
     <script>
         // Configuration - Serveur hébergé sur Render
-        const SERVER_URL = 'https://datatourisme-api-1.onrender.com';
+        // Configuration - Détection automatique (Local vs Production)
+        const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            ? '' 
+            : 'https://datatourisme-api-1.onrender.com';
         
         const CITY_COORDS = {
             'paris': { latitude: 48.8566, longitude: 2.3522, label: 'Paris' },
