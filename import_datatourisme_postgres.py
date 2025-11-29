@@ -207,27 +207,88 @@ def geocode_address_nominatim(address_str):
         return None, None
 
 
+def reverse_geocode_nominatim(lat, lon):
+    """
+    Trouve la ville correspondant aux coordonnées via Nominatim.
+    """
+    key = f"{lat},{lon}"
+    if key in GEOCODE_CACHE:
+        return GEOCODE_CACHE[key]
+
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "format": "json",
+        "zoom": 10  # Niveau ville
+    }
+    headers = {
+        "User-Agent": "datatourisme-openagenda-api/1.0 (eric@ericmahe.com)"
+    }
+
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        
+        address = data.get("address", {})
+        city = address.get("city") or address.get("town") or address.get("village") or address.get("municipality")
+        
+        if city:
+            print(f"🌍 Reverse geocode: ({lat}, {lon}) -> {city}")
+            GEOCODE_CACHE[key] = city
+            return city
+        else:
+            print(f"⚠️ Reverse geocode: Pas de ville trouvée pour ({lat}, {lon})")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Reverse geocode error: {e}")
+        return None
+
+
 def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
     """
     Récupère tous les événements OpenAgenda à proximité.
     Retourne une liste d'événements formatés.
-    (Logique copiée de server.py Gedeon)
     """
     print(f"🔍 OpenAgenda: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
 
-    # Recherche d'agendas
-    agendas_result = search_agendas(limit=100)
-    agendas = agendas_result.get('agendas', []) if agendas_result else []
-    total_agendas = len(agendas)
+    # 1. Trouver la ville pour cibler les agendas
+    city = reverse_geocode_nominatim(center_lat, center_lon)
+    search_term = city if city else None
+    
+    # 2. Recherche d'agendas (ciblée ou globale)
+    if search_term:
+        print(f"🎯 Ciblage agendas pour: {search_term}")
+        agendas_result = search_agendas(search_term=search_term, limit=20) # On limite à 20 pour être pertinent
+    else:
+        print("⚠️ Pas de ville identifiée, recherche globale (moins précis)")
+        agendas_result = search_agendas(limit=50)
 
+    agendas = agendas_result.get('agendas', []) if agendas_result else []
+    
+    # Si pas d'agendas trouvés avec la ville, on tente une recherche plus large (département ?) ou globale
+    if not agendas and search_term:
+        print(f"⚠️ Aucun agenda trouvé pour {search_term}, repli sur recherche globale")
+        agendas_result = search_agendas(limit=50)
+        agendas = agendas_result.get('agendas', []) if agendas_result else []
+
+    total_agendas = len(agendas)
     print(f"📚 OpenAgenda: {total_agendas} agendas trouvés")
 
     if not agendas:
         return []
 
     all_events = []
+    
+    # Limite de sécurité pour ne pas faire trop d'appels
+    max_agendas_to_scan = 15 
 
     for idx, agenda in enumerate(agendas):
+        if idx >= max_agendas_to_scan:
+            break
+            
         uid = agenda.get('uid')
         agenda_slug = agenda.get('slug')
         title = agenda.get('title', {})
@@ -236,9 +297,9 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
         else:
             agenda_title = title or 'Agenda'
 
-        print(f"📖 [{idx+1}/{total_agendas}] Agenda: {agenda_title} ({uid})")
+        print(f"📖 [{idx+1}/{min(total_agendas, max_agendas_to_scan)}] Agenda: {agenda_title} ({uid})")
 
-        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=300)
+        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=100)
         events = events_data.get('events', []) if events_data else []
 
         print(f"   → {len(events)} événements retournés par l'API")
@@ -275,7 +336,7 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                     ev_lat = geocoded_lat
                     ev_lon = geocoded_lon
                 else:
-                    print(f"   ⚠️  Pas de coordonnées pour: {ev.get('title', 'Sans titre')}")
+                    # print(f"   ⚠️  Pas de coordonnées pour: {ev.get('title', 'Sans titre')}")
                     continue
 
             try:
