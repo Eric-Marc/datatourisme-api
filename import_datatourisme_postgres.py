@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
 """
-Import des données DATAtourisme (CSV) vers PostgreSQL
-Solution nationale complète avec géolocalisation
+API Flask pour servir les événements DATAtourisme depuis PostgreSQL
++ OpenAgenda pour une couverture complète
 """
 
-import requests
-import csv
-from io import StringIO
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from datetime import datetime, timezone, timedelta
 import psycopg2
-from psycopg2.extras import execute_batch
-from datetime import datetime, timedelta
-from math import radians, sin, cos, sqrt, atan2
-import json
-
+from psycopg2.extras import RealDictCursor
+import os
+from urllib.parse import urlparse
+import requests
+import math
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-import os
-from urllib.parse import urlparse
+app = Flask(__name__, static_folder='.', static_url_path='')
+CORS(app)
 
-# URL de ta base PostgreSQL sur Render
-DATABASE_URL = os.environ.get('DATABASE_URL') or "postgresql://data_tourisme_user:B2zwMxZNbbU3LHKFFQrtIiY1VABoEuEo@dpg-d4hngejuibrs73do1jf0-a.frankfurt-postgres.render.com/data_tourisme"
+# PostgreSQL - Support pour Render et local
+database_url = os.environ.get('DATABASE_URL')
 
-if DATABASE_URL:
-    # Parser l'URL de Render
-    url = urlparse(DATABASE_URL)
+if database_url:
+    # Render fournit DATABASE_URL
+    url = urlparse(database_url)
     DB_CONFIG = {
         'host': url.hostname,
         'port': url.port or 5432,
@@ -37,474 +37,536 @@ if DATABASE_URL:
     }
     print(f"✅ Connexion à Render: {url.hostname}")
 else:
-    # Configuration locale (ne sera pas utilisée)
+    # Configuration locale pour développement
     DB_CONFIG = {
-        'host': 'localhost',
-        'port': 5432,
-        'database': 'datatourisme',
-        'user': 'postgres',
-        'password': 'votre_mot_de_passe',
+        'host': os.environ.get('DB_HOST', 'localhost'),
+        'port': int(os.environ.get('DB_PORT', 5432)),
+        'database': os.environ.get('DB_NAME', 'datatourisme'),
+        'user': os.environ.get('DB_USER', 'postgres'),
+        'password': os.environ.get('DB_PASSWORD', ''),
         'sslmode': 'prefer'
     }
     print(f"⚠️  Connexion locale: {DB_CONFIG['host']}")
 
-# DATAtourisme
-DATASET_ID = "5b598be088ee387c0c353714"
-DATA_GOUV_API = f"https://www.data.gouv.fr/api/1/datasets/{DATASET_ID}/"
+# === OpenAgenda ===
+OPENAGENDA_API_KEY = os.environ.get("OPENAGENDA_API_KEY", "a05c8baab2024ef494d3250fe4fec435")
+OPENAGENDA_BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2")
+
+# Valeurs par défaut
+RADIUS_KM_DEFAULT = 30
+DAYS_AHEAD_DEFAULT = 30
+
+# Cache simple en mémoire pour les géocodages Nominatim
+GEOCODE_CACHE = {}
 
 
 # ============================================================================
-# FONCTIONS BASE DE DONNÉES
+# FONCTIONS UTILITAIRES
 # ============================================================================
 
-def creer_base_donnees():
-    """Crée la structure de la base de données"""
-    
-    print("🔨 Création de la base de données...")
-    
-    conn = psycopg2.connect(**DB_CONFIG)
-    conn.autocommit = True  # Important pour CREATE EXTENSION
-    cur = conn.cursor()
-    
-    try:
-        # Activer l'extension PostGIS pour la géolocalisation
-        print("   📍 Activation de PostGIS...")
-        cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
-        print("   ✅ PostGIS activé")
-    except Exception as e:
-        print(f"   ⚠️  PostGIS: {e}")
-        print("   💡 Si erreur de permission, PostGIS est peut-être déjà activé")
-    
-    conn.autocommit = False  # Revenir au mode transaction
-    
-    # Table des événements
-    cur.execute("""
-        DROP TABLE IF EXISTS evenements CASCADE;
-        
-        CREATE TABLE evenements (
-            id SERIAL PRIMARY KEY,
-            uri TEXT UNIQUE,
-            nom TEXT NOT NULL,
-            categories TEXT[],
-            latitude DOUBLE PRECISION,
-            longitude DOUBLE PRECISION,
-            geom GEOMETRY(Point, 4326),  -- PostGIS
-            adresse TEXT,
-            code_postal TEXT,
-            commune TEXT,
-            periodes TEXT,
-            date_debut DATE,
-            date_fin DATE,
-            contacts TEXT,
-            classements TEXT,
-            description TEXT,
-            mesures_covid TEXT,
-            createur TEXT,
-            sit_diffuseur TEXT,
-            date_maj TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW()
-        );
-        
-        -- Index géospatiaux
-        CREATE INDEX idx_evenements_geom ON evenements USING GIST(geom);
-        CREATE INDEX idx_evenements_dates ON evenements(date_debut, date_fin);
-        CREATE INDEX idx_evenements_commune ON evenements(commune);
-        CREATE INDEX idx_evenements_code_postal ON evenements(code_postal);
-        CREATE INDEX idx_evenements_categories ON evenements USING GIN(categories);
-    """)
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    print("✅ Base de données créée avec succès")
+def get_db_connection():
+    """Crée une connexion à PostgreSQL"""
+    return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
 
 
-def trouver_url_csv_evenements():
-    """Trouve l'URL du fichier CSV événements via l'API data.gouv.fr"""
-    
-    print("🔍 Recherche de l'URL du fichier CSV...")
-    
-    try:
-        response = requests.get(DATA_GOUV_API, timeout=30)
-        response.raise_for_status()
-        
-        dataset = response.json()
-        resources = dataset.get('resources', [])
-        
-        for resource in resources:
-            title = resource.get('title', '').lower()
-            format_type = resource.get('format', '').lower()
-            
-            # Chercher le fichier FMA (événements)
-            if format_type == 'csv' and ('fma' in title or 'événement' in title or 'manifestation' in title):
-                url = resource.get('url')
-                print(f"✅ Fichier trouvé: {resource.get('title')}")
-                print(f"   URL: {url}\n")
-                return url
-        
-        print("❌ Aucun fichier CSV d'événements trouvé")
-        return None
-        
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
-        return None
+def calculate_bounding_box(lat, lng, radius_km):
+    """
+    Calculate bounding box coordinates from a center point and radius.
+    """
+    EARTH_RADIUS_KM = 6371.0
+    radius_rad = radius_km / EARTH_RADIUS_KM
+    lat_rad = math.radians(lat)
+
+    lat_delta = math.degrees(radius_rad)
+    min_lat = lat - lat_delta
+    max_lat = lat + lat_delta
+
+    lng_delta = math.degrees(radius_rad / math.cos(lat_rad))
+    min_lng = lng - lng_delta
+    max_lng = lng + lng_delta
+
+    return {
+        'northEast': {'lat': max_lat, 'lng': max_lng},
+        'southWest': {'lat': min_lat, 'lng': min_lng}
+    }
 
 
-def telecharger_et_importer_csv(url):
-    """Télécharge le CSV et l'importe dans PostgreSQL"""
-    
-    if not url:
-        return 0
-    
-    print(f"📥 Téléchargement du fichier CSV...")
-    print(f"   Cela peut prendre 1-2 minutes...\n")
-    
-    try:
-        response = requests.get(url, timeout=300)  # 5 minutes timeout
-        response.raise_for_status()
-        
-        size_mb = len(response.content) / (1024 * 1024)
-        print(f"✅ Téléchargé: {size_mb:.2f} MB")
-        
-        print("📊 Lecture du CSV...")
-        content = response.content.decode('utf-8', errors='ignore')
-        csv_file = StringIO(content)
-        reader = csv.DictReader(csv_file)
-        
-        evenements = list(reader)
-        print(f"✅ {len(evenements)} événements lus\n")
-        
-        # Import dans PostgreSQL
-        print("💾 Import dans PostgreSQL...")
-        count = importer_evenements_postgres(evenements)
-        
-        return count
-        
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
-        return 0
+def haversine_km(lat1, lon1, lat2, lon2):
+    """Distance en km entre deux points (latitude/longitude)."""
+    R = 6371.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
 
-def parser_periodes(periodes_str):
-    """Parse les périodes et retourne la première date de début et fin"""
-    
-    if not periodes_str:
+def geocode_address_nominatim(address_str):
+    """
+    Géocode une adresse texte avec Nominatim (OpenStreetMap).
+    """
+    if not address_str:
         return None, None
-    
+
+    if address_str in GEOCODE_CACHE:
+        return GEOCODE_CACHE[address_str]
+
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": address_str,
+        "format": "json",
+        "limit": 1
+    }
+    headers = {
+        "User-Agent": "datatourisme-openagenda-api/1.0 (eric@ericmahe.com)"
+    }
+
     try:
-        # Format: 2024-06-15<->2024-06-20|2024-07-01<->2024-07-10
-        periodes = periodes_str.split('|')
-        if periodes:
-            premiere = periodes[0].split('<->')
-            if len(premiere) == 2:
-                debut = datetime.strptime(premiere[0].strip(), '%Y-%m-%d').date()
-                fin = datetime.strptime(premiere[1].strip(), '%Y-%m-%d').date()
-                return debut, fin
-    except:
-        pass
-    
-    return None, None
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if not data:
+            GEOCODE_CACHE[address_str] = (None, None)
+            return None, None
+
+        lat = float(data[0]["lat"])
+        lon = float(data[0]["lon"])
+        GEOCODE_CACHE[address_str] = (lat, lon)
+        print(f"🌍 Nominatim geocode OK: '{address_str}' -> ({lat}, {lon})")
+        return lat, lon
+    except Exception as e:
+        print(f"❌ Nominatim error for '{address_str}': {e}")
+        GEOCODE_CACHE[address_str] = (None, None)
+        return None, None
 
 
-def parser_categories(categories_str):
-    """Parse les catégories en tableau"""
+# ============================================================================
+# FONCTIONS OPENAGENDA
+# ============================================================================
+
+def search_openagenda_agendas(search_term=None, official=None, limit=100):
+    """
+    Recherche d'agendas OpenAgenda.
+    """
+    url = f"{OPENAGENDA_BASE_URL}/agendas"
+    params = {
+        "key": OPENAGENDA_API_KEY,
+        "size": min(limit, 300)
+    }
+
+    if search_term:
+        params["search"] = search_term
+    if official is not None:
+        params["official"] = 1 if official else 0
+
+    try:
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        return r.json() or {}
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error searching OpenAgenda agendas: {e}")
+        return {"agendas": []}
+
+
+def get_openagenda_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=300):
+    """
+    Récupère les événements d'un agenda OpenAgenda avec filtrage géographique et temporel via l'API.
+    """
+    url = f"{OPENAGENDA_BASE_URL}/agendas/{agenda_uid}/events"
+
+    bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
     
-    if not categories_str:
+    today = datetime.now()
+    today_str = today.strftime('%Y-%m-%d')
+    end_date = today + timedelta(days=days_ahead)
+    end_date_str = end_date.strftime('%Y-%m-%d')
+
+    params = {
+        'key': OPENAGENDA_API_KEY,
+        'size': min(limit, 300),
+        'detailed': 1,
+        'geo[northEast][lat]': bbox['northEast']['lat'],
+        'geo[northEast][lng]': bbox['northEast']['lng'],
+        'geo[southWest][lat]': bbox['southWest']['lat'],
+        'geo[southWest][lng]': bbox['southWest']['lng'],
+        'timings[gte]': today_str,
+        'timings[lte]': end_date_str,
+    }
+
+    try:
+        r = requests.get(url, params=params, timeout=20)
+        r.raise_for_status()
+        return r.json() or {}
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error fetching events from OpenAgenda agenda {agenda_uid}: {e}")
+        return {"events": []}
+
+
+def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
+    """
+    Récupère tous les événements OpenAgenda à proximité.
+    Retourne une liste d'événements formatés.
+    """
+    print(f"🔍 OpenAgenda: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
+
+    # Recherche d'agendas
+    agendas_result = search_openagenda_agendas(limit=100)
+    agendas = agendas_result.get('agendas', []) if agendas_result else []
+    total_agendas = len(agendas)
+
+    print(f"📚 OpenAgenda: {total_agendas} agendas trouvés")
+
+    if not agendas:
         return []
-    
-    # Format: https://url1|https://url2
-    categories = categories_str.split('|')
-    
-    # Extraire seulement le dernier segment de l'URL
-    result = []
-    for cat in categories:
-        if '/' in cat:
-            result.append(cat.split('/')[-1])
+
+    all_events = []
+
+    for idx, agenda in enumerate(agendas):
+        uid = agenda.get('uid')
+        agenda_slug = agenda.get('slug')
+        title = agenda.get('title', {})
+        if isinstance(title, dict):
+            agenda_title = title.get('fr') or title.get('en') or 'Agenda'
         else:
-            result.append(cat)
-    
-    return result
+            agenda_title = title or 'Agenda'
+
+        events_data = get_openagenda_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=300)
+        events = events_data.get('events', []) if events_data else []
+
+        for ev in events:
+            # Récupération du timing
+            timings = ev.get('timings') or []
+            begin_str = None
+            end_str = None
+            if timings:
+                first_timing = timings[0]
+                begin_str = first_timing.get('begin')
+                end_str = first_timing.get('end')
+
+            # Récupération de la localisation
+            loc = ev.get('location') or {}
+            ev_lat = loc.get('latitude')
+            ev_lon = loc.get('longitude')
+
+            # Si OpenAgenda ne fournit pas de lat/lon, on tente Nominatim
+            if ev_lat is None or ev_lon is None:
+                parts = []
+                if loc.get("name"):
+                    parts.append(str(loc["name"]))
+                if loc.get("address"):
+                    parts.append(str(loc["address"]))
+                if loc.get("city"):
+                    parts.append(str(loc["city"]))
+                parts.append("France")
+                address_str = ", ".join(parts)
+
+                geocoded_lat, geocoded_lon = geocode_address_nominatim(address_str)
+                if geocoded_lat is not None and geocoded_lon is not None:
+                    ev_lat = geocoded_lat
+                    ev_lon = geocoded_lon
+                else:
+                    continue
+
+            try:
+                ev_lat = float(ev_lat)
+                ev_lon = float(ev_lon)
+            except ValueError:
+                continue
+
+            # Calcul de la distance exacte
+            dist = haversine_km(center_lat, center_lon, ev_lat, ev_lon)
+
+            # Vérification finale du rayon
+            if dist > radius_km:
+                continue
+
+            title_field = ev.get('title')
+            if isinstance(title_field, dict):
+                ev_title = title_field.get('fr') or title_field.get('en') or 'Événement'
+            else:
+                ev_title = title_field or 'Événement'
+
+            # slug de l'événement
+            event_slug = ev.get('slug')
+            openagenda_url = None
+            if agenda_slug and event_slug:
+                openagenda_url = f"https://openagenda.com/{agenda_slug}/events/{event_slug}?lang=fr"
+
+            all_events.append({
+                "uid": f"oa-{ev.get('uid')}",  # Préfixe pour différencier
+                "title": ev_title,
+                "begin": begin_str,
+                "end": end_str,
+                "locationName": loc.get("name"),
+                "city": loc.get("city"),
+                "address": loc.get("address"),
+                "latitude": ev_lat,
+                "longitude": ev_lon,
+                "distanceKm": round(dist, 1),
+                "openagendaUrl": openagenda_url,
+                "agendaTitle": agenda_title,
+                "source": "OpenAgenda"  # Important pour différencier
+            })
+
+    print(f"✅ OpenAgenda: {len(all_events)} événements trouvés")
+    return all_events
 
 
-def parser_code_postal_commune(cp_commune_str):
-    """Parse le format code_postal#commune"""
+# ============================================================================
+# ROUTES
+# ============================================================================
+
+@app.route('/')
+def index():
+    """Page d'accueil"""
+    return send_from_directory('.', 'index.html')
+
+
+@app.route('/api/events/nearby', methods=['GET'])
+def get_nearby_events():
+    """
+    Récupère les événements à proximité d'une position
+    Combine DATAtourisme (PostgreSQL) et OpenAgenda
     
-    if not cp_commune_str:
-        return None, None
+    Paramètres:
+        - lat (float, requis): Latitude du centre
+        - lon (float, requis): Longitude du centre
+        - radiusKm (int, optionnel): Rayon en km (défaut: 30)
+        - days (int, optionnel): Nombre de jours (défaut: 30)
+    """
     
     try:
-        parts = cp_commune_str.split('#')
-        if len(parts) == 2:
-            return parts[0].strip(), parts[1].strip()
-    except:
-        pass
-    
-    return None, None
-
-
-def importer_evenements_postgres(evenements):
-    """Importe les événements dans PostgreSQL par batch"""
-    
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
-    
-    # Préparer les données
-    data_to_insert = []
-    skipped = 0
-    
-    for event in evenements:
+        # Récupération des paramètres
+        center_lat = request.args.get('lat', type=float)
+        center_lon = request.args.get('lon', type=float)
+        radius_km = request.args.get('radiusKm', RADIUS_KM_DEFAULT, type=int)
+        days_ahead = request.args.get('days', DAYS_AHEAD_DEFAULT, type=int)
+        
+        if center_lat is None or center_lon is None:
+            return jsonify({
+                "status": "error",
+                "message": "Paramètres 'lat' et 'lon' requis"
+            }), 400
+        
+        print(f"🔍 Recherche combinée: ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
+        
+        # Date limite
+        date_limite = datetime.now().date() + timedelta(days=days_ahead)
+        
+        all_events = []
+        datatourisme_count = 0
+        openagenda_count = 0
+        
+        # ========== 1. DATAtourisme (PostgreSQL) ==========
         try:
-            # Coordonnées GPS
-            lat = event.get('Latitude')
-            lon = event.get('Longitude')
+            conn = get_db_connection()
+            cur = conn.cursor()
             
-            if not lat or not lon:
-                skipped += 1
-                continue
+            query = """
+                SELECT 
+                    uri as uid,
+                    nom as title,
+                    description,
+                    date_debut as begin,
+                    date_fin as end,
+                    latitude,
+                    longitude,
+                    adresse as address,
+                    commune as city,
+                    code_postal as "postalCode",
+                    contacts,
+                    ST_Distance(
+                        geom::geography,
+                        ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
+                    ) / 1000 as "distanceKm"
+                FROM evenements
+                WHERE ST_DWithin(
+                    geom::geography,
+                    ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                    %s
+                )
+                AND (date_debut IS NULL OR date_debut <= %s)
+                AND (date_fin IS NULL OR date_fin >= CURRENT_DATE)
+                ORDER BY "distanceKm", date_debut
+                LIMIT 500
+            """
             
-            lat = float(lat)
-            lon = float(lon)
-            
-            # Parser les périodes
-            periodes = event.get('Periodes_regroupees', '')
-            date_debut, date_fin = parser_periodes(periodes)
-            
-            # Parser catégories
-            categories = parser_categories(event.get('Categories_de_POI', ''))
-            
-            # Parser code postal et commune
-            cp, commune = parser_code_postal_commune(event.get('Code_postal_et_commune', ''))
-            
-            # Date de mise à jour
-            date_maj_str = event.get('Date_de_mise_a_jour', '')
-            try:
-                date_maj = datetime.fromisoformat(date_maj_str.replace('Z', '+00:00'))
-            except:
-                date_maj = None
-            
-            data_to_insert.append((
-                event.get('URI_ID_du_POI', ''),
-                event.get('Nom_du_POI', 'Sans nom'),
-                categories,
-                lat,
-                lon,
-                f'POINT({lon} {lat})',  # PostGIS
-                event.get('Adresse_postale', ''),
-                cp,
-                commune,
-                periodes,
-                date_debut,
-                date_fin,
-                event.get('Contacts_du_POI', ''),
-                event.get('Classements_du_POI', ''),
-                event.get('Description', ''),
-                event.get('Covid19_mesures_specifiques', ''),
-                event.get('Createur_de_la_donnee', ''),
-                event.get('SIT_diffuseur', ''),
-                date_maj
+            cur.execute(query, (
+                center_lon, center_lat,
+                center_lon, center_lat,
+                radius_km * 1000,
+                date_limite
             ))
             
+            rows = cur.fetchall()
+            
+            for row in rows:
+                event = dict(row)
+                
+                if event.get('begin'):
+                    event['begin'] = event['begin'].isoformat()
+                if event.get('end'):
+                    event['end'] = event['end'].isoformat()
+                
+                if event.get('distanceKm'):
+                    event['distanceKm'] = round(event['distanceKm'], 1)
+                
+                event['locationName'] = event.get('city', '')
+                event['source'] = 'DATAtourisme'  # Important pour différencier
+                event['agendaTitle'] = 'DATAtourisme National'
+                
+                # Parser les contacts pour extraire l'URL
+                contacts = event.get('contacts', '')
+                event['openagendaUrl'] = ''
+                if contacts and '#' in contacts:
+                    parts = contacts.split('#')
+                    for part in parts:
+                        if part.startswith('http'):
+                            event['openagendaUrl'] = part
+                            break
+                
+                all_events.append(event)
+            
+            datatourisme_count = len(rows)
+            cur.close()
+            conn.close()
+            
+            print(f"✅ DATAtourisme: {datatourisme_count} événements trouvés")
+            
+        except psycopg2.Error as e:
+            print(f"⚠️ Erreur PostgreSQL (DATAtourisme): {e}")
+        
+        # ========== 2. OpenAgenda ==========
+        try:
+            openagenda_events = fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead)
+            openagenda_count = len(openagenda_events)
+            all_events.extend(openagenda_events)
         except Exception as e:
-            skipped += 1
-            continue
-    
-    print(f"   Préparation: {len(data_to_insert)} événements à importer")
-    print(f"   Ignorés: {skipped} (sans coordonnées)\n")
-    
-    # Import par batch (plus rapide)
-    query = """
-        INSERT INTO evenements (
-            uri, nom, categories, latitude, longitude, geom,
-            adresse, code_postal, commune, periodes,
-            date_debut, date_fin, contacts, classements,
-            description, mesures_covid, createur, sit_diffuseur, date_maj
-        ) VALUES (
-            %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326),
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-        )
-        ON CONFLICT (uri) DO UPDATE SET
-            nom = EXCLUDED.nom,
-            categories = EXCLUDED.categories,
-            latitude = EXCLUDED.latitude,
-            longitude = EXCLUDED.longitude,
-            geom = EXCLUDED.geom,
-            adresse = EXCLUDED.adresse,
-            code_postal = EXCLUDED.code_postal,
-            commune = EXCLUDED.commune,
-            periodes = EXCLUDED.periodes,
-            date_debut = EXCLUDED.date_debut,
-            date_fin = EXCLUDED.date_fin,
-            contacts = EXCLUDED.contacts,
-            classements = EXCLUDED.classements,
-            description = EXCLUDED.description,
-            date_maj = EXCLUDED.date_maj
-    """
-    
-    execute_batch(cur, query, data_to_insert, page_size=1000)
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    print(f"✅ {len(data_to_insert)} événements importés dans PostgreSQL")
-    
-    return len(data_to_insert)
+            print(f"⚠️ Erreur OpenAgenda: {e}")
+        
+        # ========== 3. Tri par distance puis date ==========
+        all_events.sort(key=lambda e: (e.get("distanceKm") or 999, e.get("begin") or ""))
+        
+        print(f"✅ Total combiné: {len(all_events)} événements (DATAtourisme: {datatourisme_count}, OpenAgenda: {openagenda_count})")
+        
+        return jsonify({
+            "status": "success",
+            "center": {"latitude": center_lat, "longitude": center_lon},
+            "radiusKm": radius_km,
+            "days": days_ahead,
+            "events": all_events,
+            "count": len(all_events),
+            "sources": {
+                "DATAtourisme": datatourisme_count,
+                "OpenAgenda": openagenda_count
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": "Erreur interne du serveur",
+            "details": str(e)
+        }), 500
 
 
-def afficher_statistiques():
-    """Affiche les statistiques de la base"""
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    """Retourne des statistiques sur la base"""
     
-    print("\n" + "="*70)
-    print("📊 STATISTIQUES DE LA BASE")
-    print("="*70 + "\n")
-    
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
-    
-    # Total événements
-    cur.execute("SELECT COUNT(*) FROM evenements")
-    total = cur.fetchone()[0]
-    print(f"📍 Total événements: {total:,}")
-    
-    # Par région (top 10)
-    cur.execute("""
-        SELECT commune, COUNT(*) as count
-        FROM evenements
-        WHERE commune IS NOT NULL
-        GROUP BY commune
-        ORDER BY count DESC
-        LIMIT 10
-    """)
-    print("\n🏙️  Top 10 communes:")
-    for commune, count in cur.fetchall():
-        print(f"   {commune}: {count:,}")
-    
-    # Événements à venir
-    cur.execute("""
-        SELECT COUNT(*)
-        FROM evenements
-        WHERE date_debut >= CURRENT_DATE
-    """)
-    futurs = cur.fetchone()[0]
-    print(f"\n📅 Événements à venir: {futurs:,}")
-    
-    # Taille de la base
-    cur.execute("""
-        SELECT pg_size_pretty(pg_total_relation_size('evenements'))
-    """)
-    size = cur.fetchone()[0]
-    print(f"\n💾 Taille de la table: {size}")
-    
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Total événements
+        cur.execute("SELECT COUNT(*) as total FROM evenements")
+        total = cur.fetchone()['total']
+        
+        # Événements à venir
+        cur.execute("""
+            SELECT COUNT(*) as count
+            FROM evenements
+            WHERE date_debut >= CURRENT_DATE
+        """)
+        futurs = cur.fetchone()['count']
+        
+        # Top communes
+        cur.execute("""
+            SELECT commune, COUNT(*) as count
+            FROM evenements
+            WHERE commune IS NOT NULL
+            GROUP BY commune
+            ORDER BY count DESC
+            LIMIT 10
+        """)
+        top_communes = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "total_events": total,
+            "upcoming_events": futurs,
+            "top_communes": [dict(row) for row in top_communes],
+            "sources": ["DATAtourisme", "OpenAgenda"]
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
-# ============================================================================
-# FONCTION DE RECHERCHE
-# ============================================================================
-
-def rechercher_evenements(latitude, longitude, rayon_km, jours_avant=30):
-    """Recherche des événements dans PostgreSQL"""
+@app.route('/health', methods=['GET'])
+def health():
+    """Endpoint de santé pour vérifier que l'API fonctionne"""
     
-    print(f"\n🔍 Recherche d'événements...")
-    print(f"   Centre: ({latitude}, {longitude})")
-    print(f"   Rayon: {rayon_km} km")
-    print(f"   Période: {jours_avant} jours\n")
-    
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
-    
-    date_limite = datetime.now().date() + timedelta(days=jours_avant)
-    
-    # Requête avec PostGIS
-    query = """
-        SELECT 
-            nom,
-            commune,
-            date_debut,
-            ST_Distance(
-                geom::geography,
-                ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
-            ) / 1000 as distance_km
-        FROM evenements
-        WHERE ST_DWithin(
-            geom::geography,
-            ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
-            %s  -- rayon en mètres
-        )
-        AND (date_debut IS NULL OR date_debut <= %s)
-        AND (date_fin IS NULL OR date_fin >= CURRENT_DATE)
-        ORDER BY distance_km, date_debut
-        LIMIT 50
-    """
-    
-    cur.execute(query, (
-        longitude, latitude,  # Pour le calcul de distance
-        longitude, latitude,  # Pour le filtre géographique
-        rayon_km * 1000,      # Rayon en mètres
-        date_limite
-    ))
-    
-    results = cur.fetchall()
-    
-    print(f"✅ {len(results)} événements trouvés\n")
-    
-    for i, (nom, commune, date, distance) in enumerate(results[:10], 1):
-        date_str = date.strftime('%d/%m/%Y') if date else 'Date non précisée'
-        print(f"{i}. {nom}")
-        print(f"   📍 {commune} ({distance:.1f} km)")
-        print(f"   📅 {date_str}\n")
-    
-    cur.close()
-    conn.close()
-    
-    return results
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "healthy",
+            "database": "connected",
+            "sources": ["DATAtourisme PostgreSQL", "OpenAgenda"]
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e)
+        }), 500
 
 
 # ============================================================================
-# PROGRAMME PRINCIPAL
+# LANCEMENT DU SERVEUR
 # ============================================================================
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
     
     print("="*70)
-    print("🎯 DATATOURISME → POSTGRESQL")
+    print("🚀 API DATATOURISME + OPENAGENDA")
+    print("="*70)
+    print(f"Port: {port}")
+    print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
+    print(f"OpenAgenda API: {OPENAGENDA_BASE_URL}")
+    print(f"Rayon par défaut: {RADIUS_KM_DEFAULT} km")
+    print(f"Période par défaut: {DAYS_AHEAD_DEFAULT} jours")
     print("="*70)
     print()
     
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == 'search':
-        # Mode recherche
-        rechercher_evenements(43.6047, 1.4442, 30, 30)
-    
-    else:
-        # Mode import
-        print("1️⃣  Création de la structure...")
-        creer_base_donnees()
-        print()
-        
-        print("2️⃣  Recherche du fichier CSV...")
-        url = trouver_url_csv_evenements()
-        print()
-        
-        if url:
-            print("3️⃣  Téléchargement et import...")
-            count = telecharger_et_importer_csv(url)
-            print()
-            
-            if count > 0:
-                print("4️⃣  Statistiques...")
-                afficher_statistiques()
-                print()
-                
-                print("="*70)
-                print("✅ IMPORT TERMINÉ !")
-                print("="*70)
-                print()
-                print("💡 Pour rechercher des événements:")
-                print("   python import_datatourisme.py search")
-                print()
-        else:
-            print("❌ Impossible de trouver le fichier CSV")
+    app.run(host='0.0.0.0', port=port, debug=True)
