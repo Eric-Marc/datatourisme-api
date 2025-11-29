@@ -25,19 +25,17 @@ CORS(app)
 database_url = os.environ.get('DATABASE_URL')
 
 if database_url:
-    # Render fournit DATABASE_URL
     url = urlparse(database_url)
     DB_CONFIG = {
         'host': url.hostname,
         'port': url.port or 5432,
-        'database': url.path[1:],  # Enlever le / initial
+        'database': url.path[1:],
         'user': url.username,
         'password': url.password,
-        'sslmode': 'require'  # Important pour Render
+        'sslmode': 'require'
     }
     print(f"✅ Connexion à Render: {url.hostname}")
 else:
-    # Configuration locale pour développement
     DB_CONFIG = {
         'host': os.environ.get('DB_HOST', 'localhost'),
         'port': int(os.environ.get('DB_PORT', 5432)),
@@ -48,9 +46,9 @@ else:
     }
     print(f"⚠️  Connexion locale: {DB_CONFIG['host']}")
 
-# === OpenAgenda ===
-OPENAGENDA_API_KEY = os.environ.get("OPENAGENDA_API_KEY", "a05c8baab2024ef494d3250fe4fec435")
-OPENAGENDA_BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2")
+# === OpenAgenda (copié de server.py Gedeon qui fonctionne) ===
+API_KEY = os.environ.get("OPENAGENDA_API_KEY", "a05c8baab2024ef494d3250fe4fec435")
+BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2")
 
 # Valeurs par défaut
 RADIUS_KM_DEFAULT = 30
@@ -68,6 +66,10 @@ def get_db_connection():
     """Crée une connexion à PostgreSQL"""
     return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
 
+
+# ============================================================================
+# FONCTIONS OPENAGENDA (copiées de server.py Gedeon qui fonctionne)
+# ============================================================================
 
 def calculate_bounding_box(lat, lng, radius_km):
     """
@@ -104,6 +106,64 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return R * c
 
 
+def search_agendas(search_term=None, official=None, limit=100):
+    """
+    Recherche d'agendas OpenAgenda.
+    """
+    url = f"{BASE_URL}/agendas"
+    params = {
+        "key": API_KEY,
+        "size": min(limit, 300)
+    }
+
+    if search_term:
+        params["search"] = search_term
+    if official is not None:
+        params["official"] = 1 if official else 0
+
+    try:
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        return r.json() or {}
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error searching agendas: {e}")
+        return {"agendas": []}
+
+
+def get_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=300):
+    """
+    Récupère les événements d'un agenda avec filtrage géographique et temporel via l'API.
+    """
+    url = f"{BASE_URL}/agendas/{agenda_uid}/events"
+
+    bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
+    
+    today = datetime.now()
+    today_str = today.strftime('%Y-%m-%d')
+    end_date = today + timedelta(days=days_ahead)
+    end_date_str = end_date.strftime('%Y-%m-%d')
+
+    params = {
+        'key': API_KEY,
+        'size': min(limit, 300),
+        'detailed': 1,
+        'geo[northEast][lat]': bbox['northEast']['lat'],
+        'geo[northEast][lng]': bbox['northEast']['lng'],
+        'geo[southWest][lat]': bbox['southWest']['lat'],
+        'geo[southWest][lng]': bbox['southWest']['lng'],
+        'timings[gte]': today_str,
+        'timings[lte]': end_date_str,
+    }
+
+    try:
+        r = requests.get(url, params=params, timeout=20)
+        r.raise_for_status()
+        return r.json() or {}
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error fetching events from agenda {agenda_uid}: {e}")
+        return {"events": []}
+
+
 def geocode_address_nominatim(address_str):
     """
     Géocode une adresse texte avec Nominatim (OpenStreetMap).
@@ -137,83 +197,26 @@ def geocode_address_nominatim(address_str):
         GEOCODE_CACHE[address_str] = (lat, lon)
         print(f"🌍 Nominatim geocode OK: '{address_str}' -> ({lat}, {lon})")
         return lat, lon
-    except Exception as e:
+    except requests.RequestException as e:
         print(f"❌ Nominatim error for '{address_str}': {e}")
         GEOCODE_CACHE[address_str] = (None, None)
         return None, None
-
-
-# ============================================================================
-# FONCTIONS OPENAGENDA
-# ============================================================================
-
-def search_openagenda_agendas(search_term=None, official=None, limit=100):
-    """
-    Recherche d'agendas OpenAgenda.
-    """
-    url = f"{OPENAGENDA_BASE_URL}/agendas"
-    params = {
-        "key": OPENAGENDA_API_KEY,
-        "size": min(limit, 300)
-    }
-
-    if search_term:
-        params["search"] = search_term
-    if official is not None:
-        params["official"] = 1 if official else 0
-
-    try:
-        r = requests.get(url, params=params, timeout=15)
-        r.raise_for_status()
-        return r.json() or {}
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error searching OpenAgenda agendas: {e}")
-        return {"agendas": []}
-
-
-def get_openagenda_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=300):
-    """
-    Récupère les événements d'un agenda OpenAgenda avec filtrage géographique et temporel via l'API.
-    """
-    url = f"{OPENAGENDA_BASE_URL}/agendas/{agenda_uid}/events"
-
-    bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
-    
-    today = datetime.now()
-    today_str = today.strftime('%Y-%m-%d')
-    end_date = today + timedelta(days=days_ahead)
-    end_date_str = end_date.strftime('%Y-%m-%d')
-
-    params = {
-        'key': OPENAGENDA_API_KEY,
-        'size': min(limit, 300),
-        'detailed': 1,
-        'geo[northEast][lat]': bbox['northEast']['lat'],
-        'geo[northEast][lng]': bbox['northEast']['lng'],
-        'geo[southWest][lat]': bbox['southWest']['lat'],
-        'geo[southWest][lng]': bbox['southWest']['lng'],
-        'timings[gte]': today_str,
-        'timings[lte]': end_date_str,
-    }
-
-    try:
-        r = requests.get(url, params=params, timeout=20)
-        r.raise_for_status()
-        return r.json() or {}
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error fetching events from OpenAgenda agenda {agenda_uid}: {e}")
-        return {"events": []}
+    except (KeyError, ValueError) as e:
+        print(f"❌ Nominatim parse error for '{address_str}': {e}")
+        GEOCODE_CACHE[address_str] = (None, None)
+        return None, None
 
 
 def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
     """
     Récupère tous les événements OpenAgenda à proximité.
     Retourne une liste d'événements formatés.
+    (Logique copiée de server.py Gedeon)
     """
     print(f"🔍 OpenAgenda: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
 
     # Recherche d'agendas
-    agendas_result = search_openagenda_agendas(limit=100)
+    agendas_result = search_agendas(limit=100)
     agendas = agendas_result.get('agendas', []) if agendas_result else []
     total_agendas = len(agendas)
 
@@ -233,8 +236,12 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
         else:
             agenda_title = title or 'Agenda'
 
-        events_data = get_openagenda_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=300)
+        print(f"📖 [{idx+1}/{total_agendas}] Agenda: {agenda_title} ({uid})")
+
+        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=300)
         events = events_data.get('events', []) if events_data else []
+
+        print(f"   → {len(events)} événements retournés par l'API")
 
         for ev in events:
             # Récupération du timing
@@ -268,6 +275,7 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                     ev_lat = geocoded_lat
                     ev_lon = geocoded_lon
                 else:
+                    print(f"   ⚠️  Pas de coordonnées pour: {ev.get('title', 'Sans titre')}")
                     continue
 
             try:
@@ -296,7 +304,7 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                 openagenda_url = f"https://openagenda.com/{agenda_slug}/events/{event_slug}?lang=fr"
 
             all_events.append({
-                "uid": f"oa-{ev.get('uid')}",  # Préfixe pour différencier
+                "uid": f"oa-{ev.get('uid')}",
                 "title": ev_title,
                 "begin": begin_str,
                 "end": end_str,
@@ -308,10 +316,10 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                 "distanceKm": round(dist, 1),
                 "openagendaUrl": openagenda_url,
                 "agendaTitle": agenda_title,
-                "source": "OpenAgenda"  # Important pour différencier
+                "source": "OpenAgenda"
             })
 
-    print(f"✅ OpenAgenda: {len(all_events)} événements trouvés")
+    print(f"✅ OpenAgenda: {len(all_events)} événements trouvés au total")
     return all_events
 
 
@@ -330,16 +338,9 @@ def get_nearby_events():
     """
     Récupère les événements à proximité d'une position
     Combine DATAtourisme (PostgreSQL) et OpenAgenda
-    
-    Paramètres:
-        - lat (float, requis): Latitude du centre
-        - lon (float, requis): Longitude du centre
-        - radiusKm (int, optionnel): Rayon en km (défaut: 30)
-        - days (int, optionnel): Nombre de jours (défaut: 30)
     """
     
     try:
-        # Récupération des paramètres
         center_lat = request.args.get('lat', type=float)
         center_lon = request.args.get('lon', type=float)
         radius_km = request.args.get('radiusKm', RADIUS_KM_DEFAULT, type=int)
@@ -353,7 +354,6 @@ def get_nearby_events():
         
         print(f"🔍 Recherche combinée: ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
         
-        # Date limite
         date_limite = datetime.now().date() + timedelta(days=days_ahead)
         
         all_events = []
@@ -415,10 +415,9 @@ def get_nearby_events():
                     event['distanceKm'] = round(event['distanceKm'], 1)
                 
                 event['locationName'] = event.get('city', '')
-                event['source'] = 'DATAtourisme'  # Important pour différencier
+                event['source'] = 'DATAtourisme'
                 event['agendaTitle'] = 'DATAtourisme National'
                 
-                # Parser les contacts pour extraire l'URL
                 contacts = event.get('contacts', '')
                 event['openagendaUrl'] = ''
                 if contacts and '#' in contacts:
@@ -446,6 +445,8 @@ def get_nearby_events():
             all_events.extend(openagenda_events)
         except Exception as e:
             print(f"⚠️ Erreur OpenAgenda: {e}")
+            import traceback
+            traceback.print_exc()
         
         # ========== 3. Tri par distance puis date ==========
         all_events.sort(key=lambda e: (e.get("distanceKm") or 999, e.get("begin") or ""))
@@ -484,11 +485,9 @@ def get_stats():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Total événements
         cur.execute("SELECT COUNT(*) as total FROM evenements")
         total = cur.fetchone()['total']
         
-        # Événements à venir
         cur.execute("""
             SELECT COUNT(*) as count
             FROM evenements
@@ -496,7 +495,6 @@ def get_stats():
         """)
         futurs = cur.fetchone()['count']
         
-        # Top communes
         cur.execute("""
             SELECT commune, COUNT(*) as count
             FROM evenements
@@ -528,7 +526,7 @@ def get_stats():
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Endpoint de santé pour vérifier que l'API fonctionne"""
+    """Endpoint de santé"""
     
     try:
         conn = get_db_connection()
@@ -563,7 +561,7 @@ if __name__ == '__main__':
     print("="*70)
     print(f"Port: {port}")
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
-    print(f"OpenAgenda API: {OPENAGENDA_BASE_URL}")
+    print(f"OpenAgenda API: {BASE_URL}")
     print(f"Rayon par défaut: {RADIUS_KM_DEFAULT} km")
     print(f"Période par défaut: {DAYS_AHEAD_DEFAULT} jours")
     print("="*70)
