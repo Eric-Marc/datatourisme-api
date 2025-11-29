@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carte des Événements DATAtourisme</title>
+    <title>Carte des Événements DATAtourisme + OpenAgenda</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -149,6 +149,14 @@
             color: #667eea;
         }
 
+        .stat-value.datatourisme {
+            color: #3b82f6;
+        }
+
+        .stat-value.openagenda {
+            color: #ef4444;
+        }
+
         .stat-label {
             font-size: 14px;
             color: #666;
@@ -181,8 +189,46 @@
             }
         }
 
+        /* Légende des couleurs */
+        .legend {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 10px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #475569;
+        }
+
+        .legend-marker {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .legend-marker.datatourisme {
+            background: #3b82f6;
+        }
+
+        .legend-marker.openagenda {
+            background: #ef4444;
+        }
+
+        .legend-marker.center {
+            background: #22c55e;
+        }
+
         #map {
-            height: calc(100vh - 240px);
+            height: calc(100vh - 280px);
             width: 100%;
         }
 
@@ -205,6 +251,26 @@
             font-size: 12px;
             display: inline-block;
             margin-bottom: 8px;
+        }
+
+        .event-popup .source-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            margin-left: 5px;
+        }
+
+        .event-popup .source-badge.datatourisme {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .event-popup .source-badge.openagenda {
+            background: #fee2e2;
+            color: #dc2626;
         }
 
         .event-popup .venue {
@@ -250,6 +316,21 @@
             margin: 15px;
         }
 
+        /* Custom marker icons */
+        .custom-marker {
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .marker-datatourisme {
+            background: #3b82f6;
+        }
+
+        .marker-openagenda {
+            background: #ef4444;
+        }
+
         @media (max-width: 768px) {
             #header h1 {
                 font-size: 22px;
@@ -267,12 +348,17 @@
                 flex-direction: column;
                 align-items: flex-start;
             }
+
+            .legend {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
         }
     </style>
 </head>
 <body>
     <div id="header">
-        <h1>🗓️ Carte des Événements DATAtourisme</h1>
+        <h1>🗓️ Carte des Événements DATAtourisme + OpenAgenda</h1>
         <p>Trouvez des événements près de chez vous ou dans une ville donnée (France uniquement)</p>
     </div>
 
@@ -305,12 +391,41 @@
         </div>
     </div>
 
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-marker datatourisme"></div>
+            <span>DATAtourisme</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-marker openagenda"></div>
+            <span>OpenAgenda</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-marker center"></div>
+            <span>Centre de recherche</span>
+        </div>
+    </div>
+
     <div id="stats">
         <div class="stat">
             <span class="stat-icon">📍</span>
             <div>
                 <div class="stat-value" id="event-count">0</div>
-                <div class="stat-label">Événements</div>
+                <div class="stat-label">Total</div>
+            </div>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🔵</span>
+            <div>
+                <div class="stat-value datatourisme" id="datatourisme-count">0</div>
+                <div class="stat-label">DATAtourisme</div>
+            </div>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🔴</span>
+            <div>
+                <div class="stat-value openagenda" id="openagenda-count">0</div>
+                <div class="stat-label">OpenAgenda</div>
             </div>
         </div>
         <div class="stat">
@@ -318,13 +433,6 @@
             <div>
                 <div class="stat-value" id="venue-count">0</div>
                 <div class="stat-label">Lieux</div>
-            </div>
-        </div>
-        <div class="stat">
-            <span class="stat-icon">📅</span>
-            <div>
-                <div class="stat-value" id="agenda-count">0</div>
-                <div class="stat-label">Agendas</div>
             </div>
         </div>
     </div>
@@ -350,15 +458,33 @@
         let currentContextLabel = '';
         let sliderUpdateTimeout = null;
         const SLIDER_DEBOUNCE_MS = 800;
-        let initialMapBounds = null; // Pour stocker la vue initiale
-        let currentFetchController = null; // Pour annuler les requêtes en cours
-        let currentRadiusCircle = null; // Pour stocker le cercle de rayon
-        let currentCenterMarker = null; // Pour stocker le marqueur du centre
+        let initialMapBounds = null;
+        let currentFetchController = null;
+        let currentRadiusCircle = null;
+        let currentCenterMarker = null;
+
+        // Icônes personnalisées pour les marqueurs
+        function createCustomIcon(source) {
+            const color = source === 'DATAtourisme' ? '#3b82f6' : '#ef4444';
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="
+                    background: ${color};
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                "></div>`,
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+        }
 
         // Initialiser la carte
         function initMap() {
             if (!map) {
-                map = L.map('map').setView([46.603354, 1.888334], 6); // Centre de la France
+                map = L.map('map').setView([46.603354, 1.888334], 6);
 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -373,7 +499,6 @@
             statusEl.textContent = message;
             statusEl.className = 'status ' + type;
             
-            // Ajouter l'animation de clignotement si c'est un chargement actif
             if (type === 'active' && (message.includes('🔍') || message.includes('Recherche') || message.includes('Connexion'))) {
                 statusEl.classList.add('loading');
             } else {
@@ -382,13 +507,22 @@
         }
 
         // Mettre à jour les statistiques
-        function updateStats(events) {
+        function updateStats(events, sources) {
             const uniqueVenues = new Set(events.map(e => e.locationName).filter(v => v));
-            const uniqueAgendas = new Set(events.map(e => e.agendaTitle).filter(a => a));
 
             document.getElementById('event-count').textContent = events.length;
             document.getElementById('venue-count').textContent = uniqueVenues.size;
-            document.getElementById('agenda-count').textContent = uniqueAgendas.size;
+            
+            // Compter par source
+            if (sources) {
+                document.getElementById('datatourisme-count').textContent = sources.DATAtourisme || 0;
+                document.getElementById('openagenda-count').textContent = sources.OpenAgenda || 0;
+            } else {
+                const datatourismeCount = events.filter(e => e.source === 'DATAtourisme').length;
+                const openagendaCount = events.filter(e => e.source === 'OpenAgenda').length;
+                document.getElementById('datatourisme-count').textContent = datatourismeCount;
+                document.getElementById('openagenda-count').textContent = openagendaCount;
+            }
         }
 
         // Formater une date ISO en format lisible
@@ -409,7 +543,7 @@
         }
 
         // Afficher les événements sur la carte
-        function displayEventsOnMap(events, centerLat, centerLon, radiusKm) {
+        function displayEventsOnMap(events, centerLat, centerLon, radiusKm, sources) {
             // Supprimer l'ancien cluster
             if (currentMarkerCluster) {
                 map.removeLayer(currentMarkerCluster);
@@ -432,7 +566,48 @@
                 chunkedLoading: true,
                 spiderfyOnMaxZoom: true,
                 showCoverageOnHover: false,
-                zoomToBoundsOnClick: true
+                zoomToBoundsOnClick: true,
+                // Personnaliser les icônes de cluster
+                iconCreateFunction: function(cluster) {
+                    const markers = cluster.getAllChildMarkers();
+                    const datatourismeCount = markers.filter(m => m.options.source === 'DATAtourisme').length;
+                    const openagendaCount = markers.filter(m => m.options.source === 'OpenAgenda').length;
+                    
+                    // Couleur dominante
+                    let bgColor = '#667eea';
+                    if (datatourismeCount > openagendaCount) {
+                        bgColor = '#3b82f6';
+                    } else if (openagendaCount > datatourismeCount) {
+                        bgColor = '#ef4444';
+                    }
+                    
+                    const count = cluster.getChildCount();
+                    let size = 'small';
+                    if (count >= 100) size = 'large';
+                    else if (count >= 10) size = 'medium';
+                    
+                    const sizes = { small: 30, medium: 40, large: 50 };
+                    const s = sizes[size];
+                    
+                    return L.divIcon({
+                        html: `<div style="
+                            background: ${bgColor};
+                            width: ${s}px;
+                            height: ${s}px;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            color: white;
+                            font-weight: bold;
+                            font-size: ${s > 35 ? 14 : 12}px;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        ">${count}</div>`,
+                        className: 'marker-cluster',
+                        iconSize: [s, s]
+                    });
+                }
             });
 
             allMarkers = [];
@@ -440,18 +615,18 @@
             // Ajouter un cercle pour visualiser le rayon de recherche
             if (centerLat && centerLon && radiusKm) {
                 currentRadiusCircle = L.circle([centerLat, centerLon], {
-                    radius: radiusKm * 1000, // en mètres
+                    radius: radiusKm * 1000,
                     color: '#667eea',
                     fillColor: 'transparent',
                     fillOpacity: 0,
                     weight: 2
                 }).addTo(map);
 
-                // Marqueur pour le centre de recherche
+                // Marqueur pour le centre de recherche (vert)
                 currentCenterMarker = L.marker([centerLat, centerLon], {
                     icon: L.divIcon({
                         className: 'center-marker',
-                        html: '<div style="background: #ef4444; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
+                        html: '<div style="background: #22c55e; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
                         iconSize: [20, 20]
                     })
                 }).addTo(map).bindPopup('<strong>Centre de recherche</strong>');
@@ -461,12 +636,23 @@
             events.forEach(event => {
                 if (!event.latitude || !event.longitude) return;
 
-                const marker = L.marker([event.latitude, event.longitude]);
+                const source = event.source || 'DATAtourisme';
+                const icon = createCustomIcon(source);
+                
+                const marker = L.marker([event.latitude, event.longitude], {
+                    icon: icon,
+                    source: source  // Stocker la source pour le clustering
+                });
+
+                // Badge de source
+                const sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
+                const sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🔴 OpenAgenda';
 
                 // Créer le contenu du popup
                 let popupContent = `
                     <div class="event-popup">
                         <h3>${event.title || 'Événement sans titre'}</h3>
+                        <span class="source-badge ${sourceBadgeClass}">${sourceLabel}</span>
                         ${event.begin ? `<div class="date">📅 ${formatDate(event.begin)}</div>` : ''}
                         ${event.locationName ? `<div class="venue"><strong>📍 Lieu :</strong> ${event.locationName}</div>` : ''}
                         ${event.address ? `<div class="address">${event.address}${event.city ? ', ' + event.city : ''}</div>` : ''}
@@ -491,10 +677,7 @@
                 const bounds = group.getBounds().pad(0.1);
                 map.fitBounds(bounds);
                 
-                // Sauvegarder la vue initiale
                 initialMapBounds = bounds;
-                
-                // Afficher le bouton de réinitialisation
                 document.getElementById('resetViewBtn').style.display = 'inline-block';
             } else if (centerLat && centerLon) {
                 map.setView([centerLat, centerLon], 11);
@@ -503,17 +686,17 @@
             }
 
             // Mettre à jour les statistiques
-            updateStats(events);
+            updateStats(events, sources);
         }
 
-        // Trouver la ville à partir des coordonnées (géocodage inverse)
+        // Trouver la ville à partir des coordonnées
         async function getCityFromCoordinates(lat, lon) {
             try {
                 const response = await fetch(
                     `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`,
                     {
                         headers: {
-                            'User-Agent': 'OpenAgenda Events App'
+                            'User-Agent': 'DATAtourisme OpenAgenda Events App'
                         }
                     }
                 );
@@ -523,7 +706,6 @@
                 const data = await response.json();
                 const address = data.address || {};
                 
-                // Essayer différents champs pour trouver la ville
                 const city = address.city || 
                             address.town || 
                             address.village || 
@@ -556,7 +738,6 @@
                     
                     updateStatus('🔍 Recherche de votre ville...', 'active');
                     
-                    // Trouver la ville
                     const locationInfo = await getCityFromCoordinates(lat, lon);
                     let locationText = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
                     let popupText = `<strong>Votre position</strong><br>${locationText}`;
@@ -566,19 +747,16 @@
                         popupText = `<strong>📍 Votre position</strong><br>${locationInfo.city}<br>${locationInfo.country}<br><small>${lat.toFixed(4)}, ${lon.toFixed(4)}</small>`;
                     }
                     
-                    // Afficher la position sur la carte d'abord
                     map.setView([lat, lon], 12);
                     
-                    // Ajouter un marqueur temporaire pour montrer la position
                     const tempMarker = L.marker([lat, lon], {
                         icon: L.divIcon({
                             className: 'user-position-marker',
-                            html: '<div style="background: #ef4444; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
+                            html: '<div style="background: #22c55e; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
                             iconSize: [20, 20]
                         })
                     }).addTo(map).bindPopup(popupText).openPopup();
                     
-                    // Vérifier si la position est en France (approximativement)
                     const isInFrance = (lat >= 41 && lat <= 51) && (lon >= -5 && lon <= 10);
                     
                     if (!isInFrance) {
@@ -626,13 +804,11 @@
             const city = CITY_COORDS[cityKey];
             if (!city) return;
 
-            // Annuler toute recherche en attente des sliders
             if (sliderUpdateTimeout) {
                 clearTimeout(sliderUpdateTimeout);
                 sliderUpdateTimeout = null;
             }
 
-            // Positionner la carte immédiatement sur la ville
             map.setView([city.latitude, city.longitude], 12);
 
             currentContextLabel = city.label;
@@ -654,12 +830,10 @@
             }
 
             try {
-                // Annuler la requête précédente si elle existe
                 if (currentFetchController) {
                     currentFetchController.abort();
                 }
 
-                // Créer un nouveau controller pour cette requête
                 currentFetchController = new AbortController();
 
                 const lat = position.coords.latitude;
@@ -674,7 +848,6 @@
                 params.append('radiusKm', currentRadiusKm);
                 params.append('days', currentDays);
 
-                // Timeout de 90 secondes pour les serveurs Render en veille
                 const timeoutId = setTimeout(() => currentFetchController.abort(), 90000);
 
                 updateStatus(`🔍 Recherche des événements ${placeText} dans un rayon de ${currentRadiusKm} km...`, 'active');
@@ -695,20 +868,23 @@
                 }
 
                 const events = result.events || [];
+                const sources = result.sources || {};
                 
                 if (events.length === 0) {
                     updateStatus(`🔍 Aucun événement trouvé ${placeText} dans un rayon de ${currentRadiusKm} km`, 'waiting');
-                    displayEventsOnMap([], lat, lon, currentRadiusKm);
+                    displayEventsOnMap([], lat, lon, currentRadiusKm, sources);
                     return;
                 }
 
-                displayEventsOnMap(events, lat, lon, currentRadiusKm);
-                updateStatus(`✅ ${events.length} événement(s) trouvé(s) ${placeText}`, 'active');
+                displayEventsOnMap(events, lat, lon, currentRadiusKm, sources);
+                
+                const dtCount = sources.DATAtourisme || 0;
+                const oaCount = sources.OpenAgenda || 0;
+                updateStatus(`✅ ${events.length} événement(s) trouvé(s) ${placeText} (🔵 ${dtCount} DATAtourisme, 🔴 ${oaCount} OpenAgenda)`, 'active');
 
             } catch (e) {
                 console.error('Erreur complète:', e);
                 
-                // Si c'est une annulation volontaire, ne pas afficher d'erreur
                 if (e.name === 'AbortError') {
                     console.log('Requête annulée (nouvelle recherche en cours)');
                     return;
@@ -720,7 +896,6 @@
                     updateStatus('❌ Erreur: ' + e.message, 'error');
                 }
                 
-                // Message d'erreur détaillé
                 let errorMsg = 'Erreur lors du chargement:\n\n' + e.message;
                 
                 if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
