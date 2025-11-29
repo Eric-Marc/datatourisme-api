@@ -513,16 +513,15 @@
             document.getElementById('event-count').textContent = events.length;
             document.getElementById('venue-count').textContent = uniqueVenues.size;
             
-            // Compter par source
-            if (sources) {
-                document.getElementById('datatourisme-count').textContent = sources.DATAtourisme || 0;
-                document.getElementById('openagenda-count').textContent = sources.OpenAgenda || 0;
-            } else {
-                const datatourismeCount = events.filter(e => e.source === 'DATAtourisme').length;
-                const openagendaCount = events.filter(e => e.source === 'OpenAgenda').length;
-                document.getElementById('datatourisme-count').textContent = datatourismeCount;
-                document.getElementById('openagenda-count').textContent = openagendaCount;
-            }
+            // Compter depuis les événements - si pas de source, c'est DATAtourisme (ancienne API)
+            const datatourismeCount = events.filter(e => e.source === 'DATAtourisme' || !e.source).length;
+            const openagendaCount = events.filter(e => e.source === 'OpenAgenda').length;
+            
+            document.getElementById('datatourisme-count').textContent = datatourismeCount;
+            document.getElementById('openagenda-count').textContent = openagendaCount;
+            
+            console.log(`Stats: Total=${events.length}, DATAtourisme=${datatourismeCount}, OpenAgenda=${openagendaCount}`);
+        }
         }
 
         // Formater une date ISO en format lisible
@@ -861,6 +860,14 @@
                 const result = await res.json();
 
                 console.log('Résultat API:', result);
+                
+                // Debug: afficher les sources des premiers événements
+                if (result.events && result.events.length > 0) {
+                    console.log('Premiers événements avec leurs sources:');
+                    result.events.slice(0, 5).forEach((e, i) => {
+                        console.log(`  ${i+1}. "${e.title}" - source: "${e.source}"`);
+                    });
+                }
 
                 if (!res.ok || result.status !== 'success') {
                     updateStatus('❌ ' + (result.message || 'Erreur lors de la récupération des événements'), 'error');
