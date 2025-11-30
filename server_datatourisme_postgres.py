@@ -575,7 +575,7 @@ def health():
 def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
     """
     Récupère les cinémas et leurs séances autour d'une position.
-    Utilise les départements Allociné pour trouver les cinémas.
+    Utilise les grandes villes ou les départements Allociné.
     """
     if not ALLOCINE_AVAILABLE:
         print("⚠️ Allociné API non disponible")
@@ -587,7 +587,7 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
         api = allocineAPI()
         today = datetime.now().strftime("%Y-%m-%d")
         
-        # Récupérer le code postal via géocodage inverse
+        # Récupérer la ville via géocodage inverse
         url = "https://nominatim.openstreetmap.org/reverse"
         params = {
             "lat": center_lat,
@@ -597,68 +597,110 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
         }
         headers = {"User-Agent": "gedeon-allocine/1.0 (eric@ericmahe.com)"}
         
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        geo_data = r.json()
+        city_name = ""
+        postcode = ""
+        dept_code = ""
         
-        postcode = geo_data.get('address', {}).get('postcode', '')
-        dept_code = postcode[:2] if postcode else ''
-        
-        city_name = geo_data.get('address', {}).get('city') or \
-                    geo_data.get('address', {}).get('town') or \
-                    geo_data.get('address', {}).get('village') or \
-                    geo_data.get('address', {}).get('municipality', '')
+        try:
+            r = requests.get(url, params=params, headers=headers, timeout=10)
+            r.raise_for_status()
+            geo_data = r.json()
+            
+            postcode = geo_data.get('address', {}).get('postcode', '') or ''
+            dept_code = postcode[:2] if len(postcode) >= 2 else ''
+            
+            city_name = geo_data.get('address', {}).get('city') or \
+                        geo_data.get('address', {}).get('town') or \
+                        geo_data.get('address', {}).get('village') or \
+                        geo_data.get('address', {}).get('municipality', '') or ''
+        except Exception as e:
+            print(f"   ⚠️ Erreur géocodage inverse: {e}")
         
         print(f"   📍 Ville: {city_name}, Code postal: {postcode}, Département: {dept_code}")
         
-        if not dept_code:
-            print("   ❌ Impossible de déterminer le département")
-            return []
+        location_id = None
         
-        # Récupérer la liste des départements Allociné
-        departements = api.get_departements()
-        dept_id = None
-        dept_name = None
-        
-        for dept in departements:
-            # Le nom du département contient généralement le numéro (ex: "84 - Vaucluse")
-            dept_str = str(dept.get('name', ''))
-            if dept_str.startswith(dept_code + ' ') or dept_str.startswith(dept_code + '-') or \
-               f"({dept_code})" in dept_str or dept_str == dept_code:
-                dept_id = dept.get('id')
-                dept_name = dept_str
-                print(f"   ✓ Département trouvé: {dept_name} (ID: {dept_id})")
-                break
-        
-        # Si pas trouvé par numéro, chercher par nom
-        if not dept_id:
-            # Mapping des départements courants
-            dept_mapping = {
-                '75': 'Paris', '77': 'Seine-et-Marne', '78': 'Yvelines',
-                '91': 'Essonne', '92': 'Hauts-de-Seine', '93': 'Seine-Saint-Denis',
-                '94': 'Val-de-Marne', '95': "Val-d'Oise",
-                '13': 'Bouches-du-Rhône', '69': 'Rhône', '33': 'Gironde',
-                '31': 'Haute-Garonne', '59': 'Nord', '84': 'Vaucluse',
-                '06': 'Alpes-Maritimes', '34': 'Hérault', '44': 'Loire-Atlantique'
-            }
+        # ===== Méthode 1: Chercher dans les grandes villes par nom =====
+        print("   🔍 Recherche dans les grandes villes...")
+        try:
+            top_villes = api.get_top_villes()
+            print(f"      {len(top_villes)} grandes villes disponibles")
             
-            search_name = dept_mapping.get(dept_code, '')
-            if search_name:
-                for dept in departements:
-                    if search_name.lower() in str(dept.get('name', '')).lower():
-                        dept_id = dept.get('id')
-                        dept_name = dept.get('name')
-                        print(f"   ✓ Département trouvé par nom: {dept_name} (ID: {dept_id})")
+            # Chercher par nom de ville
+            if city_name:
+                for ville in top_villes:
+                    ville_name = ville.get('name', '')
+                    if city_name.lower() in ville_name.lower() or ville_name.lower() in city_name.lower():
+                        location_id = ville.get('id')
+                        print(f"   ✓ Grande ville trouvée: {ville_name} (ID: {location_id})")
                         break
+            
+            # Si pas trouvé et qu'on n'a pas de département, essayer de deviner par proximité
+            if not location_id and not dept_code:
+                # Mapping grandes villes et leurs coordonnées approximatives
+                grandes_villes_coords = {
+                    'Paris': (48.8566, 2.3522),
+                    'Lyon': (45.7640, 4.8357),
+                    'Marseille': (43.2965, 5.3698),
+                    'Toulouse': (43.6047, 1.4442),
+                    'Bordeaux': (44.8378, -0.5792),
+                    'Nantes': (47.2184, -1.5536),
+                    'Lille': (50.6292, 3.0573),
+                    'Strasbourg': (48.5734, 7.7521),
+                    'Nice': (43.7102, 7.2620),
+                    'Montpellier': (43.6108, 3.8767),
+                }
+                
+                closest_ville = None
+                closest_dist = float('inf')
+                
+                for ville_nom, (vlat, vlon) in grandes_villes_coords.items():
+                    d = haversine_km(center_lat, center_lon, vlat, vlon)
+                    if d < closest_dist and d < 50:  # Max 50km
+                        closest_dist = d
+                        closest_ville = ville_nom
+                
+                if closest_ville:
+                    for ville in top_villes:
+                        if closest_ville.lower() in ville.get('name', '').lower():
+                            location_id = ville.get('id')
+                            print(f"   ✓ Grande ville proche trouvée: {ville.get('name')} ({closest_dist:.0f}km) (ID: {location_id})")
+                            break
+                        
+        except Exception as e:
+            print(f"      ⚠️ Erreur top_villes: {e}")
         
-        if not dept_id:
-            print(f"   ❌ Département {dept_code} non trouvé dans Allociné")
-            print(f"   Départements disponibles: {[d.get('name') for d in departements[:10]]}...")
+        # ===== Méthode 2: Chercher par département si on a le code =====
+        if not location_id and dept_code:
+            print("   🔍 Recherche par département...")
+            try:
+                departements = api.get_departements()
+                print(f"      {len(departements)} départements disponibles")
+                
+                for dept in departements:
+                    dept_str = str(dept.get('name', ''))
+                    if dept_str.startswith(dept_code + ' ') or \
+                       dept_str.startswith(dept_code + '-') or \
+                       dept_str.startswith(dept_code + ')') or \
+                       f"({dept_code})" in dept_str:
+                        location_id = dept.get('id')
+                        print(f"   ✓ Département trouvé: {dept_str} (ID: {location_id})")
+                        break
+                    
+            except Exception as e:
+                print(f"      ⚠️ Erreur départements: {e}")
+        
+        if not location_id:
+            print(f"   ❌ Aucune localisation Allociné trouvée")
             return []
         
-        # Récupérer les cinémas du département
-        cinemas = api.get_cinema(dept_id)
-        print(f"   🎥 {len(cinemas)} cinémas trouvés dans le département")
+        # Récupérer les cinémas
+        cinemas = api.get_cinema(location_id)
+        print(f"   🎥 {len(cinemas)} cinémas trouvés")
+        
+        if not cinemas:
+            print("   ❌ Aucun cinéma trouvé")
+            return []
         
         all_cinema_events = []
         cinemas_checked = 0
@@ -670,26 +712,27 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
             
             # Géocoder l'adresse du cinéma pour vérifier la distance
             cinema_lat, cinema_lon = None, None
-            if cinema_address and city_name:
+            if cinema_address:
                 full_address = f"{cinema_address}, France"
                 cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
             
-            # Si pas de coordonnées, essayer avec le nom du cinéma
+            # Si pas de coordonnées, essayer avec le nom du cinéma + ville
             if cinema_lat is None and cinema_name:
-                cinema_lat, cinema_lon = geocode_address_nominatim(f"{cinema_name}, France")
+                search_addr = f"{cinema_name}, {city_name}, France" if city_name else f"{cinema_name}, France"
+                cinema_lat, cinema_lon = geocode_address_nominatim(search_addr)
             
             if cinema_lat is None or cinema_lon is None:
-                continue
-            
-            # Vérifier la distance
-            dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
-            if dist > radius_km:
-                continue
+                # Utiliser le centre comme approximation
+                cinema_lat = center_lat
+                cinema_lon = center_lon
+                dist = 0
+            else:
+                dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
+                if dist > radius_km:
+                    continue
             
             cinemas_checked += 1
-            print(f"   🎬 [{cinemas_checked}] {cinema_name} ({dist:.1f}km)")
             
-            # Limiter le nombre de cinémas pour la performance
             if cinemas_checked > 15:
                 print(f"   ⚠️ Limite de 15 cinémas atteinte")
                 break
@@ -699,7 +742,7 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
                 movies = api.get_movies(cinema_id, today)
                 
                 if movies:
-                    print(f"      → {len(movies)} films")
+                    print(f"   🎬 [{cinemas_checked}] {cinema_name}: {len(movies)} films ({dist:.1f}km)")
                     for movie in movies:
                         film_title = movie.get('title', 'Film inconnu')
                         
@@ -725,7 +768,7 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
                         })
                         
             except Exception as e:
-                print(f"      ⚠️ Erreur: {e}")
+                print(f"      ⚠️ Erreur films: {e}")
                 continue
         
         print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées dans {cinemas_checked} cinémas")
