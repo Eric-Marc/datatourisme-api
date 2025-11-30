@@ -575,6 +575,7 @@ def health():
 def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
     """
     Récupère les cinémas et leurs séances autour d'une position.
+    Utilise les départements Allociné pour trouver les cinémas.
     """
     if not ALLOCINE_AVAILABLE:
         print("⚠️ Allociné API non disponible")
@@ -586,8 +587,7 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
         api = allocineAPI()
         today = datetime.now().strftime("%Y-%m-%d")
         
-        # Récupérer les villes proches via géocodage inverse
-        # On utilise Nominatim pour trouver la ville
+        # Récupérer le code postal via géocodage inverse
         url = "https://nominatim.openstreetmap.org/reverse"
         params = {
             "lat": center_lat,
@@ -601,71 +601,105 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
         r.raise_for_status()
         geo_data = r.json()
         
+        postcode = geo_data.get('address', {}).get('postcode', '')
+        dept_code = postcode[:2] if postcode else ''
+        
         city_name = geo_data.get('address', {}).get('city') or \
                     geo_data.get('address', {}).get('town') or \
                     geo_data.get('address', {}).get('village') or \
                     geo_data.get('address', {}).get('municipality', '')
         
-        print(f"   📍 Ville détectée: {city_name}")
+        print(f"   📍 Ville: {city_name}, Code postal: {postcode}, Département: {dept_code}")
         
-        # Chercher l'ID de la ville dans Allociné
-        top_villes = api.get_top_villes()
-        city_id = None
-        
-        for ville in top_villes:
-            if city_name.lower() in ville['name'].lower():
-                city_id = ville['id']
-                print(f"   ✓ Ville Allociné trouvée: {ville['name']} (ID: {city_id})")
-                break
-        
-        if not city_id:
-            # Essayer avec le département ou la région
-            print(f"   ⚠️ Ville {city_name} non trouvée dans Allociné, essai avec les grandes villes proches...")
-            # Prendre Paris par défaut si on est en Île-de-France
-            dept = geo_data.get('address', {}).get('postcode', '')[:2]
-            if dept in ['75', '77', '78', '91', '92', '93', '94', '95']:
-                for ville in top_villes:
-                    if 'Paris' in ville['name']:
-                        city_id = ville['id']
-                        print(f"   ✓ Utilisation de Paris (ID: {city_id})")
-                        break
-        
-        if not city_id:
-            print("   ❌ Aucune ville Allociné trouvée")
+        if not dept_code:
+            print("   ❌ Impossible de déterminer le département")
             return []
         
-        # Récupérer les cinémas
-        cinemas = api.get_cinema(city_id)
-        print(f"   🎥 {len(cinemas)} cinémas trouvés")
+        # Récupérer la liste des départements Allociné
+        departements = api.get_departements()
+        dept_id = None
+        dept_name = None
+        
+        for dept in departements:
+            # Le nom du département contient généralement le numéro (ex: "84 - Vaucluse")
+            dept_str = str(dept.get('name', ''))
+            if dept_str.startswith(dept_code + ' ') or dept_str.startswith(dept_code + '-') or \
+               f"({dept_code})" in dept_str or dept_str == dept_code:
+                dept_id = dept.get('id')
+                dept_name = dept_str
+                print(f"   ✓ Département trouvé: {dept_name} (ID: {dept_id})")
+                break
+        
+        # Si pas trouvé par numéro, chercher par nom
+        if not dept_id:
+            # Mapping des départements courants
+            dept_mapping = {
+                '75': 'Paris', '77': 'Seine-et-Marne', '78': 'Yvelines',
+                '91': 'Essonne', '92': 'Hauts-de-Seine', '93': 'Seine-Saint-Denis',
+                '94': 'Val-de-Marne', '95': "Val-d'Oise",
+                '13': 'Bouches-du-Rhône', '69': 'Rhône', '33': 'Gironde',
+                '31': 'Haute-Garonne', '59': 'Nord', '84': 'Vaucluse',
+                '06': 'Alpes-Maritimes', '34': 'Hérault', '44': 'Loire-Atlantique'
+            }
+            
+            search_name = dept_mapping.get(dept_code, '')
+            if search_name:
+                for dept in departements:
+                    if search_name.lower() in str(dept.get('name', '')).lower():
+                        dept_id = dept.get('id')
+                        dept_name = dept.get('name')
+                        print(f"   ✓ Département trouvé par nom: {dept_name} (ID: {dept_id})")
+                        break
+        
+        if not dept_id:
+            print(f"   ❌ Département {dept_code} non trouvé dans Allociné")
+            print(f"   Départements disponibles: {[d.get('name') for d in departements[:10]]}...")
+            return []
+        
+        # Récupérer les cinémas du département
+        cinemas = api.get_cinema(dept_id)
+        print(f"   🎥 {len(cinemas)} cinémas trouvés dans le département")
         
         all_cinema_events = []
+        cinemas_checked = 0
         
-        for cinema in cinemas[:20]:  # Limiter à 20 cinémas
+        for cinema in cinemas:
             cinema_name = cinema.get('name', 'Cinéma')
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
             
-            # Géocoder l'adresse du cinéma
+            # Géocoder l'adresse du cinéma pour vérifier la distance
             cinema_lat, cinema_lon = None, None
-            if cinema_address:
-                full_address = f"{cinema_address}, {city_name}, France"
+            if cinema_address and city_name:
+                full_address = f"{cinema_address}, France"
                 cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
             
+            # Si pas de coordonnées, essayer avec le nom du cinéma
+            if cinema_lat is None and cinema_name:
+                cinema_lat, cinema_lon = geocode_address_nominatim(f"{cinema_name}, France")
+            
             if cinema_lat is None or cinema_lon is None:
-                # Utiliser le centre de recherche comme approximation
-                cinema_lat = center_lat
-                cinema_lon = center_lon
+                continue
             
             # Vérifier la distance
             dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
             if dist > radius_km:
                 continue
             
+            cinemas_checked += 1
+            print(f"   🎬 [{cinemas_checked}] {cinema_name} ({dist:.1f}km)")
+            
+            # Limiter le nombre de cinémas pour la performance
+            if cinemas_checked > 15:
+                print(f"   ⚠️ Limite de 15 cinémas atteinte")
+                break
+            
             # Récupérer les films
             try:
                 movies = api.get_movies(cinema_id, today)
                 
                 if movies:
+                    print(f"      → {len(movies)} films")
                     for movie in movies:
                         film_title = movie.get('title', 'Film inconnu')
                         
@@ -691,10 +725,10 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
                         })
                         
             except Exception as e:
-                print(f"   ⚠️ Erreur films pour {cinema_name}: {e}")
+                print(f"      ⚠️ Erreur: {e}")
                 continue
         
-        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées")
+        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées dans {cinemas_checked} cinémas")
         return all_cinema_events
         
     except Exception as e:
