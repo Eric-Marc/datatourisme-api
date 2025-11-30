@@ -13,6 +13,7 @@ import os
 from urllib.parse import urlparse
 import requests
 import math
+import time
 
 # ============================================================================
 # CONFIGURATION
@@ -209,13 +210,10 @@ def geocode_address_nominatim(address_str):
 
 def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
     """
-    Récupère les événements OpenAgenda directement via l'endpoint /v2/events
-    avec filtrage géographique. Beaucoup plus efficace que de parcourir les agendas.
+    Récupère TOUS les événements OpenAgenda dans la zone.
+    Exhaustif - pas de limite artificielle.
     """
-    import time
-    start_time = time.time()
-    
-    print(f"🔍 OpenAgenda: Recherche directe autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
+    print(f"🔍 OpenAgenda: Recherche EXHAUSTIVE autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
 
     # Calculer la bounding box
     bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
@@ -227,10 +225,10 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
 
     all_events = []
     offset = 0
-    page_size = 100
-    max_events = 300  # Limite totale
+    page_size = 300  # Maximum autorisé par l'API
+    max_pages = 20   # Jusqu'à 6000 événements
 
-    while offset < max_events:
+    while True:
         url = f"{BASE_URL}/events"
         params = {
             'key': API_KEY,
@@ -245,8 +243,10 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
             'timings[lte]': end_date_str,
         }
 
+        print(f"   📡 Requête OpenAgenda: offset={offset}")
+
         try:
-            r = requests.get(url, params=params, timeout=20)
+            r = requests.get(url, params=params, timeout=60)
             r.raise_for_status()
             data = r.json() or {}
         except requests.exceptions.RequestException as e:
@@ -257,10 +257,13 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
         total = data.get('total', 0)
         
         if offset == 0:
-            print(f"📚 OpenAgenda: {total} événements trouvés dans la zone")
+            print(f"📚 OpenAgenda: {total} événements trouvés dans la zone (bbox)")
 
         if not events:
+            print(f"   → Pas d'événements dans cette page")
             break
+
+        print(f"   → {len(events)} événements récupérés")
 
         for ev in events:
             # Récupération du timing
@@ -347,10 +350,15 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
         
         # Si on a récupéré tous les événements disponibles
         if offset >= total:
+            print(f"   ✓ Tous les événements récupérés")
+            break
+            
+        # Limite de sécurité
+        if offset >= page_size * max_pages:
+            print(f"   ⚠️ Limite de pages atteinte ({max_pages})")
             break
 
-    elapsed = time.time() - start_time
-    print(f"✅ OpenAgenda: {len(all_events)} événements récupérés en {elapsed:.1f}s")
+    print(f"✅ OpenAgenda: {len(all_events)} événements dans le rayon de {radius_km}km")
     return all_events
 
 
@@ -422,7 +430,7 @@ def get_nearby_events():
                 AND (date_debut IS NULL OR date_debut <= %s)
                 AND (date_fin IS NULL OR date_fin >= CURRENT_DATE)
                 ORDER BY "distanceKm", date_debut
-                LIMIT 500
+                LIMIT 2000
             """
             
             cur.execute(query, (
