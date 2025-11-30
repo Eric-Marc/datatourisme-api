@@ -15,6 +15,15 @@ import requests
 import math
 import time
 
+# Allociné API
+try:
+    from allocineAPI.allocineAPI import allocineAPI
+    ALLOCINE_AVAILABLE = True
+    print("✅ Allociné API disponible")
+except ImportError:
+    ALLOCINE_AVAILABLE = False
+    print("⚠️ Allociné API non disponible (pip install allocine-seances)")
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -548,7 +557,7 @@ def health():
         return jsonify({
             "status": "healthy",
             "database": "connected",
-            "sources": ["DATAtourisme PostgreSQL", "OpenAgenda"]
+            "sources": ["DATAtourisme PostgreSQL", "OpenAgenda", "Allociné" if ALLOCINE_AVAILABLE else "Allociné (non dispo)"]
         }), 200
         
     except Exception as e:
@@ -560,6 +569,179 @@ def health():
 
 
 # ============================================================================
+# ALLOCINÉ - CINÉMAS ET SÉANCES
+# ============================================================================
+
+def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
+    """
+    Récupère les cinémas et leurs séances autour d'une position.
+    """
+    if not ALLOCINE_AVAILABLE:
+        print("⚠️ Allociné API non disponible")
+        return []
+    
+    print(f"🎬 Allociné: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km")
+    
+    try:
+        api = allocineAPI()
+        today = datetime.now().strftime("%Y-%m-%d")
+        
+        # Récupérer les villes proches via géocodage inverse
+        # On utilise Nominatim pour trouver la ville
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {
+            "lat": center_lat,
+            "lon": center_lon,
+            "format": "json",
+            "zoom": 10
+        }
+        headers = {"User-Agent": "gedeon-allocine/1.0 (eric@ericmahe.com)"}
+        
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        geo_data = r.json()
+        
+        city_name = geo_data.get('address', {}).get('city') or \
+                    geo_data.get('address', {}).get('town') or \
+                    geo_data.get('address', {}).get('village') or \
+                    geo_data.get('address', {}).get('municipality', '')
+        
+        print(f"   📍 Ville détectée: {city_name}")
+        
+        # Chercher l'ID de la ville dans Allociné
+        top_villes = api.get_top_villes()
+        city_id = None
+        
+        for ville in top_villes:
+            if city_name.lower() in ville['name'].lower():
+                city_id = ville['id']
+                print(f"   ✓ Ville Allociné trouvée: {ville['name']} (ID: {city_id})")
+                break
+        
+        if not city_id:
+            # Essayer avec le département ou la région
+            print(f"   ⚠️ Ville {city_name} non trouvée dans Allociné, essai avec les grandes villes proches...")
+            # Prendre Paris par défaut si on est en Île-de-France
+            dept = geo_data.get('address', {}).get('postcode', '')[:2]
+            if dept in ['75', '77', '78', '91', '92', '93', '94', '95']:
+                for ville in top_villes:
+                    if 'Paris' in ville['name']:
+                        city_id = ville['id']
+                        print(f"   ✓ Utilisation de Paris (ID: {city_id})")
+                        break
+        
+        if not city_id:
+            print("   ❌ Aucune ville Allociné trouvée")
+            return []
+        
+        # Récupérer les cinémas
+        cinemas = api.get_cinema(city_id)
+        print(f"   🎥 {len(cinemas)} cinémas trouvés")
+        
+        all_cinema_events = []
+        
+        for cinema in cinemas[:20]:  # Limiter à 20 cinémas
+            cinema_name = cinema.get('name', 'Cinéma')
+            cinema_address = cinema.get('address', '')
+            cinema_id = cinema.get('id')
+            
+            # Géocoder l'adresse du cinéma
+            cinema_lat, cinema_lon = None, None
+            if cinema_address:
+                full_address = f"{cinema_address}, {city_name}, France"
+                cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
+            
+            if cinema_lat is None or cinema_lon is None:
+                # Utiliser le centre de recherche comme approximation
+                cinema_lat = center_lat
+                cinema_lon = center_lon
+            
+            # Vérifier la distance
+            dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
+            if dist > radius_km:
+                continue
+            
+            # Récupérer les films
+            try:
+                movies = api.get_movies(cinema_id, today)
+                
+                if movies:
+                    for movie in movies:
+                        film_title = movie.get('title', 'Film inconnu')
+                        
+                        all_cinema_events.append({
+                            "uid": f"allocine-{cinema_id}-{movie.get('id', '')}",
+                            "title": f"🎬 {film_title}",
+                            "begin": today,
+                            "end": today,
+                            "locationName": cinema_name,
+                            "city": city_name,
+                            "address": cinema_address,
+                            "latitude": cinema_lat,
+                            "longitude": cinema_lon,
+                            "distanceKm": round(dist, 1),
+                            "openagendaUrl": "",
+                            "agendaTitle": cinema_name,
+                            "source": "Allocine",
+                            "director": movie.get('director', ''),
+                            "genres": movie.get('genres', []),
+                            "runtime": movie.get('runtime', 0),
+                            "poster": movie.get('urlPoster', ''),
+                            "synopsis": movie.get('synopsisFull', '')[:200] if movie.get('synopsisFull') else ''
+                        })
+                        
+            except Exception as e:
+                print(f"   ⚠️ Erreur films pour {cinema_name}: {e}")
+                continue
+        
+        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées")
+        return all_cinema_events
+        
+    except Exception as e:
+        print(f"❌ Erreur Allociné: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+@app.route('/api/cinema/nearby', methods=['GET'])
+def get_nearby_cinema():
+    """
+    Récupère les séances de cinéma à proximité d'une position
+    """
+    try:
+        center_lat = request.args.get('lat', type=float)
+        center_lon = request.args.get('lon', type=float)
+        radius_km = request.args.get('radiusKm', RADIUS_KM_DEFAULT, type=int)
+        
+        if center_lat is None or center_lon is None:
+            return jsonify({
+                "status": "error",
+                "message": "Paramètres 'lat' et 'lon' requis"
+            }), 400
+        
+        cinema_events = fetch_allocine_cinemas(center_lat, center_lon, radius_km)
+        
+        return jsonify({
+            "status": "success",
+            "center": {"latitude": center_lat, "longitude": center_lon},
+            "radiusKm": radius_km,
+            "events": cinema_events,
+            "count": len(cinema_events),
+            "source": "Allocine"
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+# ============================================================================
 # LANCEMENT DU SERVEUR
 # ============================================================================
 
@@ -567,11 +749,12 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     
     print("="*70)
-    print("🚀 API DATATOURISME + OPENAGENDA")
+    print("🚀 API DATATOURISME + OPENAGENDA + ALLOCINÉ")
     print("="*70)
     print(f"Port: {port}")
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
     print(f"OpenAgenda API: {BASE_URL}")
+    print(f"Allociné: {'Disponible' if ALLOCINE_AVAILABLE else 'Non disponible'}")
     print(f"Rayon par défaut: {RADIUS_KM_DEFAULT} km")
     print(f"Période par défaut: {DAYS_AHEAD_DEFAULT} jours")
     print("="*70)
