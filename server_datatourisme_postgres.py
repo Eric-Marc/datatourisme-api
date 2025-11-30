@@ -209,48 +209,58 @@ def geocode_address_nominatim(address_str):
 
 def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
     """
-    Récupère tous les événements OpenAgenda à proximité.
-    Retourne une liste d'événements formatés.
-    Optimisé pour éviter les timeouts Gunicorn.
+    Récupère les événements OpenAgenda directement via l'endpoint /v2/events
+    avec filtrage géographique. Beaucoup plus efficace que de parcourir les agendas.
     """
     import time
     start_time = time.time()
-    MAX_DURATION_SECONDS = 25  # Limite pour éviter timeout Gunicorn (30s par défaut)
     
-    print(f"🔍 OpenAgenda: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
+    print(f"🔍 OpenAgenda: Recherche directe autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
 
-    # Recherche d'agendas - limiter à 50 pour la performance
-    agendas_result = search_agendas(limit=50)
-    agendas = agendas_result.get('agendas', []) if agendas_result else []
-    total_agendas = len(agendas)
-
-    print(f"📚 OpenAgenda: {total_agendas} agendas à parcourir")
-
-    if not agendas:
-        return []
+    # Calculer la bounding box
+    bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
+    
+    today = datetime.now()
+    today_str = today.strftime('%Y-%m-%d')
+    end_date = today + timedelta(days=days_ahead)
+    end_date_str = end_date.strftime('%Y-%m-%d')
 
     all_events = []
+    offset = 0
+    page_size = 100
+    max_events = 300  # Limite totale
 
-    for idx, agenda in enumerate(agendas):
-        # Vérifier le temps écoulé pour éviter timeout
-        elapsed = time.time() - start_time
-        if elapsed > MAX_DURATION_SECONDS:
-            print(f"⏱️ OpenAgenda: Timeout préventif après {idx} agendas ({elapsed:.1f}s)")
+    while offset < max_events:
+        url = f"{BASE_URL}/events"
+        params = {
+            'key': API_KEY,
+            'size': page_size,
+            'from': offset,
+            'detailed': 1,
+            'geo[northEast][lat]': bbox['northEast']['lat'],
+            'geo[northEast][lng]': bbox['northEast']['lng'],
+            'geo[southWest][lat]': bbox['southWest']['lat'],
+            'geo[southWest][lng]': bbox['southWest']['lng'],
+            'timings[gte]': today_str,
+            'timings[lte]': end_date_str,
+        }
+
+        try:
+            r = requests.get(url, params=params, timeout=20)
+            r.raise_for_status()
+            data = r.json() or {}
+        except requests.exceptions.RequestException as e:
+            print(f"❌ OpenAgenda API error: {e}")
             break
-            
-        uid = agenda.get('uid')
-        agenda_slug = agenda.get('slug')
-        title = agenda.get('title', {})
-        if isinstance(title, dict):
-            agenda_title = title.get('fr') or title.get('en') or 'Agenda'
-        else:
-            agenda_title = title or 'Agenda'
 
-        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=100)
-        events = events_data.get('events', []) if events_data else []
+        events = data.get('events', [])
+        total = data.get('total', 0)
+        
+        if offset == 0:
+            print(f"📚 OpenAgenda: {total} événements trouvés dans la zone")
 
-        if events:
-            print(f"📖 [{idx+1}/{total_agendas}] {agenda_title}: {len(events)} événements")
+        if not events:
+            break
 
         for ev in events:
             # Récupération du timing
@@ -267,7 +277,7 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
             ev_lat = loc.get('latitude')
             ev_lon = loc.get('longitude')
 
-            # Si OpenAgenda ne fournit pas de lat/lon, on tente Nominatim
+            # Si pas de coordonnées, on tente Nominatim
             if ev_lat is None or ev_lon is None:
                 parts = []
                 if loc.get("name"):
@@ -289,23 +299,29 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
             try:
                 ev_lat = float(ev_lat)
                 ev_lon = float(ev_lon)
-            except ValueError:
+            except (ValueError, TypeError):
                 continue
 
             # Calcul de la distance exacte
             dist = haversine_km(center_lat, center_lon, ev_lat, ev_lon)
 
-            # Vérification finale du rayon
+            # Vérification finale du rayon (la bbox est carrée, on veut un cercle)
             if dist > radius_km:
                 continue
 
+            # Titre
             title_field = ev.get('title')
             if isinstance(title_field, dict):
                 ev_title = title_field.get('fr') or title_field.get('en') or 'Événement'
             else:
                 ev_title = title_field or 'Événement'
 
-            # slug de l'événement
+            # Agenda info
+            origin_agenda = ev.get('originAgenda') or {}
+            agenda_title = origin_agenda.get('title', 'OpenAgenda')
+            agenda_slug = origin_agenda.get('slug')
+            
+            # URL de l'événement
             event_slug = ev.get('slug')
             openagenda_url = None
             if agenda_slug and event_slug:
@@ -327,8 +343,14 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                 "source": "OpenAgenda"
             })
 
+        offset += page_size
+        
+        # Si on a récupéré tous les événements disponibles
+        if offset >= total:
+            break
+
     elapsed = time.time() - start_time
-    print(f"✅ OpenAgenda: {len(all_events)} événements trouvés en {elapsed:.1f}s")
+    print(f"✅ OpenAgenda: {len(all_events)} événements récupérés en {elapsed:.1f}s")
     return all_events
 
 
