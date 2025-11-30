@@ -114,7 +114,7 @@ def search_agendas(search_term=None, official=None, limit=100):
     url = f"{BASE_URL}/agendas"
     params = {
         "key": API_KEY,
-        "size": min(limit, 300)
+        "size": min(limit, 100)  # Maximum 100 par l'API
     }
 
     if search_term:
@@ -131,7 +131,7 @@ def search_agendas(search_term=None, official=None, limit=100):
         return {"agendas": []}
 
 
-def get_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=300):
+def get_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=100):
     """
     Récupère les événements d'un agenda avec filtrage géographique et temporel via l'API.
     """
@@ -146,7 +146,7 @@ def get_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_a
 
     params = {
         'key': API_KEY,
-        'size': min(limit, 300),
+        'size': min(limit, 100),  # Maximum 100 par l'API
         'detailed': 1,
         'geo[northEast][lat]': bbox['northEast']['lat'],
         'geo[northEast][lng]': bbox['northEast']['lng'],
@@ -214,18 +214,27 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
     Basé sur le code server.py qui fonctionne.
     """
     print(f"🔍 OpenAgenda: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
+    print(f"   API_KEY: {API_KEY[:10]}...")
+    print(f"   BASE_URL: {BASE_URL}")
 
     # 1. Recherche d'agendas (tous les agendas accessibles à la clé API)
-    agendas_result = search_agendas(limit=300)
+    agendas_result = search_agendas(limit=100)
+    print(f"   Résultat search_agendas: {type(agendas_result)}, clés: {agendas_result.keys() if agendas_result else 'None'}")
+    
     agendas = agendas_result.get('agendas', []) if agendas_result else []
     total_agendas = len(agendas)
 
     print(f"📚 OpenAgenda: {total_agendas} agendas trouvés")
+    
+    if total_agendas > 0:
+        print(f"   Premier agenda: {agendas[0].get('title', 'Sans titre')} (uid: {agendas[0].get('uid')})")
 
     if not agendas:
+        print("   ⚠️ AUCUN AGENDA TROUVÉ - Vérifier la clé API")
         return []
 
     all_events = []
+    agendas_with_events = 0
 
     for idx, agenda in enumerate(agendas):
         uid = agenda.get('uid')
@@ -237,10 +246,11 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
             agenda_title = title or 'Agenda'
 
         # Récupérer les événements de cet agenda avec filtrage géographique et temporel
-        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=300)
+        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=100)
         events = events_data.get('events', []) if events_data else []
 
         if events:
+            agendas_with_events += 1
             print(f"📖 [{idx+1}/{total_agendas}] {agenda_title}: {len(events)} événements")
 
         for ev in events:
@@ -319,6 +329,7 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
             })
 
     print(f"✅ OpenAgenda: {len(all_events)} événements trouvés au total")
+    print(f"   📊 {agendas_with_events}/{total_agendas} agendas avaient des événements dans la zone")
     return all_events
 
 
