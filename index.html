@@ -251,6 +251,27 @@
             touch-action: pan-x pan-y;
         }
 
+        /* Marqueurs d'événements - plus gros et clignotants */
+        .event-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.6;
+                transform: scale(0.85);
+            }
+        }
+
         /* Indicateur de long-press */
         #longpress-indicator {
             position: fixed;
@@ -515,9 +536,9 @@
             var color = source === 'DATAtourisme' ? '#3b82f6' : '#f97316';
             return L.divIcon({
                 className: 'custom-div-icon',
-                html: '<div style="background:' + color + ';width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
-                iconSize: [12, 12],
-                iconAnchor: [6, 6]
+                html: '<div class="event-marker" style="background:' + color + ';"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
             });
         }
 
