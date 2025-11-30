@@ -211,16 +211,20 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
     """
     Récupère tous les événements OpenAgenda à proximité.
     Retourne une liste d'événements formatés.
-    (Logique copiée de server.py Gedeon)
+    Optimisé pour éviter les timeouts Gunicorn.
     """
+    import time
+    start_time = time.time()
+    MAX_DURATION_SECONDS = 25  # Limite pour éviter timeout Gunicorn (30s par défaut)
+    
     print(f"🔍 OpenAgenda: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
 
-    # Recherche d'agendas
-    agendas_result = search_agendas(limit=100)
+    # Recherche d'agendas - limiter à 50 pour la performance
+    agendas_result = search_agendas(limit=50)
     agendas = agendas_result.get('agendas', []) if agendas_result else []
     total_agendas = len(agendas)
 
-    print(f"📚 OpenAgenda: {total_agendas} agendas trouvés")
+    print(f"📚 OpenAgenda: {total_agendas} agendas à parcourir")
 
     if not agendas:
         return []
@@ -228,6 +232,12 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
     all_events = []
 
     for idx, agenda in enumerate(agendas):
+        # Vérifier le temps écoulé pour éviter timeout
+        elapsed = time.time() - start_time
+        if elapsed > MAX_DURATION_SECONDS:
+            print(f"⏱️ OpenAgenda: Timeout préventif après {idx} agendas ({elapsed:.1f}s)")
+            break
+            
         uid = agenda.get('uid')
         agenda_slug = agenda.get('slug')
         title = agenda.get('title', {})
@@ -236,12 +246,11 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
         else:
             agenda_title = title or 'Agenda'
 
-        print(f"📖 [{idx+1}/{total_agendas}] Agenda: {agenda_title} ({uid})")
-
-        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=300)
+        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=100)
         events = events_data.get('events', []) if events_data else []
 
-        print(f"   → {len(events)} événements retournés par l'API")
+        if events:
+            print(f"📖 [{idx+1}/{total_agendas}] {agenda_title}: {len(events)} événements")
 
         for ev in events:
             # Récupération du timing
@@ -275,7 +284,6 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                     ev_lat = geocoded_lat
                     ev_lon = geocoded_lon
                 else:
-                    print(f"   ⚠️  Pas de coordonnées pour: {ev.get('title', 'Sans titre')}")
                     continue
 
             try:
@@ -319,7 +327,8 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                 "source": "OpenAgenda"
             })
 
-    print(f"✅ OpenAgenda: {len(all_events)} événements trouvés au total")
+    elapsed = time.time() - start_time
+    print(f"✅ OpenAgenda: {len(all_events)} événements trouvés en {elapsed:.1f}s")
     return all_events
 
 
