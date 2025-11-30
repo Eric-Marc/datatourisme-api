@@ -168,42 +168,70 @@
             padding: 10px 20px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             display: flex;
-            gap: 25px;
+            gap: 15px;
             flex-wrap: wrap;
             align-items: center;
         }
 
-        .stat {
+        .source-toggle {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            padding: 10px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid #e2e8f0;
+            background: #f8fafc;
+            user-select: none;
         }
 
-        .stat-icon {
+        .source-toggle:hover {
+            border-color: #cbd5e1;
+        }
+
+        .source-toggle.active {
+            border-color: #667eea;
+            background: white;
+        }
+
+        .source-toggle.inactive {
+            opacity: 0.5;
+            background: #f1f5f9;
+        }
+
+        .toggle-icon {
             font-size: 20px;
         }
 
-        .stat-value {
+        .toggle-value {
             font-size: 20px;
             font-weight: bold;
             color: #667eea;
         }
 
-        .stat-value.total {
-            color: #8b5cf6;
-        }
-
-        .stat-value.datatourisme {
+        #toggle-datatourisme .toggle-value {
             color: #3b82f6;
         }
 
-        .stat-value.openagenda {
+        #toggle-openagenda .toggle-value {
             color: #f97316;
         }
 
-        .stat-label {
+        .toggle-label {
             font-size: 12px;
             color: #666;
+        }
+
+        .toggle-check {
+            font-size: 16px;
+            color: #22c55e;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .source-toggle.inactive .toggle-check {
+            visibility: hidden;
         }
 
         #map-container {
@@ -423,33 +451,21 @@
     </div>
 
     <div id="stats">
-        <div class="stat">
-            <span class="stat-icon">🟣</span>
+        <div class="source-toggle active" id="toggle-datatourisme" onclick="toggleSource('datatourisme')">
+            <span class="toggle-icon">🔵</span>
             <div>
-                <div class="stat-value total" id="event-count">0</div>
-                <div class="stat-label">Total</div>
+                <div class="toggle-value" id="datatourisme-count">0</div>
+                <div class="toggle-label">DATAtourisme</div>
             </div>
+            <span class="toggle-check">✓</span>
         </div>
-        <div class="stat">
-            <span class="stat-icon">🔵</span>
+        <div class="source-toggle active" id="toggle-openagenda" onclick="toggleSource('openagenda')">
+            <span class="toggle-icon">🟠</span>
             <div>
-                <div class="stat-value datatourisme" id="datatourisme-count">0</div>
-                <div class="stat-label">DATAtourisme</div>
+                <div class="toggle-value" id="openagenda-count">0</div>
+                <div class="toggle-label">OpenAgenda</div>
             </div>
-        </div>
-        <div class="stat">
-            <span class="stat-icon">🟠</span>
-            <div>
-                <div class="stat-value openagenda" id="openagenda-count">0</div>
-                <div class="stat-label">OpenAgenda</div>
-            </div>
-        </div>
-        <div class="stat">
-            <span class="stat-icon">🏛️</span>
-            <div>
-                <div class="stat-value" id="venue-count">0</div>
-                <div class="stat-label">Lieux</div>
-            </div>
+            <span class="toggle-check">✓</span>
         </div>
     </div>
 
@@ -490,6 +506,9 @@
         var currentRadiusCircle = null;
         var currentCenterMarker = null;
         var initialMapBounds = null;
+        var allEventsData = []; // Stocke tous les événements reçus
+        var showDatatourisme = true;
+        var showOpenagenda = true;
 
         // État du long-press
         var longPressTimer = null;
@@ -714,6 +733,7 @@
                 map.removeLayer(currentCenterMarker);
                 currentCenterMarker = null;
             }
+            allEventsData = [];
             updateStats([], {});
         }
 
@@ -820,32 +840,55 @@
             }
         }
 
-        // Mettre à jour les stats
+        // Mettre à jour les stats (depuis allEventsData pour toujours afficher les totaux)
         function updateStats(events, sources) {
-            var venues = {};
-            
-            for (var i = 0; i < events.length; i++) {
-                if (events[i].locationName) venues[events[i].locationName] = true;
-            }
-
-            document.getElementById('event-count').textContent = events.length;
-            document.getElementById('venue-count').textContent = Object.keys(venues).length;
-            
-            // Compter par source depuis les événements
+            // Compter par source depuis TOUS les événements (pas filtrés)
             var datatourismeCount = 0;
             var openagendaCount = 0;
             
-            for (var j = 0; j < events.length; j++) {
-                var src = events[j].source;
+            for (var j = 0; j < allEventsData.length; j++) {
+                var src = allEventsData[j].source;
                 if (src === 'OpenAgenda') {
                     openagendaCount++;
                 } else {
-                    datatourismeCount++; // DATAtourisme ou pas de source
+                    datatourismeCount++;
                 }
             }
             
             document.getElementById('datatourisme-count').textContent = datatourismeCount;
             document.getElementById('openagenda-count').textContent = openagendaCount;
+        }
+
+        // Basculer l'affichage d'une source
+        function toggleSource(source) {
+            var toggleEl = document.getElementById('toggle-' + source);
+            
+            if (source === 'datatourisme') {
+                showDatatourisme = !showDatatourisme;
+                toggleEl.classList.toggle('active', showDatatourisme);
+                toggleEl.classList.toggle('inactive', !showDatatourisme);
+            } else if (source === 'openagenda') {
+                showOpenagenda = !showOpenagenda;
+                toggleEl.classList.toggle('active', showOpenagenda);
+                toggleEl.classList.toggle('inactive', !showOpenagenda);
+            }
+            
+            // Réafficher les événements filtrés
+            if (allEventsData.length > 0 && currentPosition) {
+                var filteredEvents = filterEventsBySource(allEventsData);
+                displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+            }
+        }
+
+        // Filtrer les événements selon les sources sélectionnées
+        function filterEventsBySource(events) {
+            return events.filter(function(e) {
+                if (e.source === 'OpenAgenda') {
+                    return showOpenagenda;
+                } else {
+                    return showDatatourisme;
+                }
+            });
         }
 
         // Formater date
@@ -1014,13 +1057,18 @@
                     var events = result.events || [];
                     var sources = result.sources || {};
                     
+                    // Stocker tous les événements
+                    allEventsData = events;
+                    
                     if (events.length === 0) {
                         updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
                         displayEventsOnMap([], lat, lon, currentRadiusKm);
                         return;
                     }
 
-                    displayEventsOnMap(events, lat, lon, currentRadiusKm);
+                    // Filtrer selon les sources sélectionnées
+                    var filteredEvents = filterEventsBySource(events);
+                    displayEventsOnMap(filteredEvents, lat, lon, currentRadiusKm);
                     
                     var dtCount = sources.DATAtourisme || 0;
                     var oaCount = sources.OpenAgenda || 0;
