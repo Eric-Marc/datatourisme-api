@@ -218,6 +218,10 @@
             color: #f97316;
         }
 
+        #toggle-cinema .toggle-value {
+            color: #800020;
+        }
+
         .toggle-label {
             font-size: 12px;
             color: #666;
@@ -473,6 +477,14 @@
             </div>
             <span class="toggle-check">✓</span>
         </div>
+        <div class="source-toggle active" id="toggle-cinema" onclick="toggleCinema()">
+            <span class="toggle-icon">🎬</span>
+            <div>
+                <div class="toggle-value" id="cinema-count">0</div>
+                <div class="toggle-label">Cinéma</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
     </div>
 
     <div id="map-container">
@@ -513,8 +525,10 @@
         var currentCenterMarker = null;
         var initialMapBounds = null;
         var allEventsData = []; // Stocke tous les événements reçus
+        var cinemaEventsData = []; // Stocke les événements cinéma
         var showDatatourisme = true;
         var showOpenagenda = true;
+        var showCinema = true;
 
         // État du long-press
         var longPressTimer = null;
@@ -533,7 +547,16 @@
 
         // Créer une icône personnalisée selon la source
         function createCustomIcon(source) {
-            var color = source === 'DATAtourisme' ? '#3b82f6' : '#f97316';
+            var color;
+            if (source === 'DATAtourisme') {
+                color = '#3b82f6'; // Bleu
+            } else if (source === 'OpenAgenda') {
+                color = '#f97316'; // Orange
+            } else if (source === 'Allocine') {
+                color = '#800020'; // Rouge bordeaux
+            } else {
+                color = '#888888'; // Gris par défaut
+            }
             return L.divIcon({
                 className: 'custom-div-icon',
                 html: '<div class="event-marker" style="background:' + color + ';"></div>',
@@ -882,8 +905,64 @@
             // Réafficher les événements filtrés
             if (allEventsData.length > 0 && currentPosition) {
                 var filteredEvents = filterEventsBySource(allEventsData);
+                // Ajouter les événements cinéma si activé
+                if (showCinema && cinemaEventsData.length > 0) {
+                    filteredEvents = filteredEvents.concat(cinemaEventsData);
+                }
                 displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
             }
+        }
+
+        // Toggle spécifique pour le cinéma
+        function toggleCinema() {
+            var toggleEl = document.getElementById('toggle-cinema');
+            showCinema = !showCinema;
+            toggleEl.classList.toggle('active', showCinema);
+            toggleEl.classList.toggle('inactive', !showCinema);
+            
+            // Si on active et qu'on a une position, charger les données cinéma
+            if (showCinema && currentPosition && cinemaEventsData.length === 0) {
+                fetchCinemaEvents(currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+            } else if (currentPosition) {
+                // Réafficher avec/sans cinéma
+                var filteredEvents = filterEventsBySource(allEventsData);
+                if (showCinema && cinemaEventsData.length > 0) {
+                    filteredEvents = filteredEvents.concat(cinemaEventsData);
+                }
+                displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+            }
+        }
+
+        // Récupérer les événements cinéma
+        function fetchCinemaEvents(lat, lon, radiusKm) {
+            var url = '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
+            
+            document.getElementById('status').textContent = '🎬 Chargement des séances de cinéma...';
+            
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.status === 'success') {
+                        cinemaEventsData = data.events || [];
+                        document.getElementById('cinema-count').textContent = cinemaEventsData.length;
+                        
+                        // Afficher avec les autres événements
+                        var filteredEvents = filterEventsBySource(allEventsData);
+                        if (showCinema) {
+                            filteredEvents = filteredEvents.concat(cinemaEventsData);
+                        }
+                        displayEventsOnMap(filteredEvents, lat, lon, radiusKm);
+                        
+                        document.getElementById('status').textContent = '✅ ' + cinemaEventsData.length + ' séances de cinéma trouvées';
+                    } else {
+                        console.error('Erreur cinéma:', data.message);
+                        document.getElementById('status').textContent = '⚠️ Erreur cinéma: ' + data.message;
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Erreur fetch cinéma:', error);
+                    document.getElementById('status').textContent = '⚠️ Erreur chargement cinéma';
+                });
         }
 
         // Filtrer les événements selon les sources sélectionnées
@@ -891,6 +970,8 @@
             return events.filter(function(e) {
                 if (e.source === 'OpenAgenda') {
                     return showOpenagenda;
+                } else if (e.source === 'Allocine') {
+                    return showCinema;
                 } else {
                     return showDatatourisme;
                 }
@@ -926,10 +1007,13 @@
                     var markers = cluster.getAllChildMarkers();
                     var dtCount = 0;
                     var oaCount = 0;
+                    var cinemaCount = 0;
                     
                     for (var i = 0; i < markers.length; i++) {
                         if (markers[i].options.source === 'OpenAgenda') {
                             oaCount++;
+                        } else if (markers[i].options.source === 'Allocine') {
+                            cinemaCount++;
                         } else {
                             dtCount++;
                         }
@@ -939,17 +1023,20 @@
                     
                     // Couleur selon le niveau de regroupement
                     var bgColor;
-                    var totalEvents = allEventsData.length;
+                    var totalEvents = allEventsData.length + cinemaEventsData.length;
                     
                     // Si c'est le cluster global (contient tous ou presque tous les événements) → vert
                     if (count >= totalEvents * 0.8) {
                         bgColor = '#22c55e'; // Vert pour le total
                     } else {
                         // Sinon, couleur selon la source dominante
-                        if (dtCount > oaCount) {
-                            bgColor = '#3b82f6'; // Bleu DATAtourisme
-                        } else if (oaCount > dtCount) {
+                        var maxCount = Math.max(dtCount, oaCount, cinemaCount);
+                        if (maxCount === cinemaCount && cinemaCount > 0) {
+                            bgColor = '#800020'; // Rouge bordeaux Cinéma
+                        } else if (maxCount === oaCount && oaCount > 0) {
                             bgColor = '#f97316'; // Orange OpenAgenda
+                        } else if (maxCount === dtCount && dtCount > 0) {
+                            bgColor = '#3b82f6'; // Bleu DATAtourisme
                         } else {
                             bgColor = '#8b5cf6'; // Violet si égalité
                         }
@@ -1001,7 +1088,14 @@
                 
                 // Zoomer sur le marqueur quand on clique dessus
                 marker.on('click', function(e) {
+                    // Zoomer et centrer
                     map.setView(e.latlng, 14);
+                    // Forcer l'affichage du marqueur hors cluster et ouvrir le popup
+                    setTimeout(function() {
+                        currentMarkerCluster.zoomToShowLayer(marker, function() {
+                            marker.openPopup();
+                        });
+                    }, 300);
                 });
                 
                 // Badge de source
