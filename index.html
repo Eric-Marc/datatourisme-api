@@ -935,10 +935,26 @@
                         }
                     }
                     
-                    // Couleur verte pour le total (tous les événements)
-                    var bgColor = '#22c55e';
-                    
                     var count = cluster.getChildCount();
+                    
+                    // Couleur selon le niveau de regroupement
+                    var bgColor;
+                    var totalEvents = allEventsData.length;
+                    
+                    // Si c'est le cluster global (contient tous ou presque tous les événements) → vert
+                    if (count >= totalEvents * 0.8) {
+                        bgColor = '#22c55e'; // Vert pour le total
+                    } else {
+                        // Sinon, couleur selon la source dominante
+                        if (dtCount > oaCount) {
+                            bgColor = '#3b82f6'; // Bleu DATAtourisme
+                        } else if (oaCount > dtCount) {
+                            bgColor = '#f97316'; // Orange OpenAgenda
+                        } else {
+                            bgColor = '#8b5cf6'; // Violet si égalité
+                        }
+                    }
+                    
                     var size = count >= 100 ? 50 : (count >= 10 ? 40 : 30);
                     var fontSize = size > 35 ? 14 : 12;
                     
