@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Carte des Événements DATAtourisme + OpenAgenda</title>
 
     <!-- Leaflet CSS -->
@@ -37,23 +37,23 @@
         #header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 20px;
+            padding: 15px 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
         #header h1 {
-            font-size: 28px;
-            margin-bottom: 8px;
+            font-size: 24px;
+            margin-bottom: 5px;
         }
 
         #header p {
-            font-size: 16px;
+            font-size: 14px;
             opacity: 0.9;
         }
 
         #controls {
             background: white;
-            padding: 15px 20px;
+            padding: 12px 20px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
@@ -62,29 +62,39 @@
             gap: 15px;
             flex-wrap: wrap;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .control-group:last-child {
             margin-bottom: 0;
         }
 
-        .button-group {
+        .slider-group {
             display: flex;
+            align-items: center;
             gap: 10px;
-            flex-wrap: wrap;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .slider-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            min-width: 60px;
         }
 
         button {
             border: none;
             border-radius: 8px;
-            padding: 10px 20px;
+            padding: 10px 16px;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
             background: #667eea;
             color: white;
+            flex-shrink: 0;
         }
 
         button:hover:not(:disabled) {
@@ -98,68 +108,16 @@
             cursor: not-allowed;
         }
 
-        .slider-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .slider-label {
-            font-size: 14px;
-            font-weight: 600;
-            color: #666;
-            min-width: 80px;
-        }
-
         input[type="range"] {
             flex: 1;
-            max-width: 200px;
+            max-width: 180px;
         }
 
         .slider-value {
             font-size: 14px;
             font-weight: bold;
             color: #667eea;
-            min-width: 60px;
-        }
-
-        #stats {
-            background: white;
-            padding: 15px 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            display: flex;
-            gap: 30px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .stat {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .stat-icon {
-            font-size: 24px;
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .stat-value.datatourisme {
-            color: #3b82f6;
-        }
-
-        .stat-value.openagenda {
-            color: #ef4444;
-        }
-
-        .stat-label {
-            font-size: 14px;
-            color: #666;
+            min-width: 55px;
         }
 
         .status {
@@ -168,6 +126,7 @@
             font-size: 13px;
             font-weight: 500;
             transition: all 0.3s;
+            flex-shrink: 0;
         }
 
         .status.waiting { background: #fef3c7; color: #92400e; }
@@ -179,14 +138,8 @@
         }
 
         @keyframes blinkStatus {
-            0%, 100% { 
-                opacity: 1; 
-                transform: scale(1);
-            }
-            50% { 
-                opacity: 0.5; 
-                transform: scale(0.98);
-            }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.98); }
         }
 
         /* Légende des couleurs */
@@ -194,7 +147,7 @@
             display: flex;
             gap: 20px;
             align-items: center;
-            padding: 10px 20px;
+            padding: 8px 20px;
             background: #f8fafc;
             border-top: 1px solid #e2e8f0;
         }
@@ -202,14 +155,14 @@
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 14px;
+            gap: 6px;
+            font-size: 13px;
             color: #475569;
         }
 
         .legend-marker {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             border: 2px solid white;
             box-shadow: 0 1px 3px rgba(0,0,0,0.3);
@@ -227,9 +180,96 @@
             background: #22c55e;
         }
 
-        #map {
-            height: calc(100vh - 280px);
+        #stats {
+            background: white;
+            padding: 10px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 25px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-icon {
+            font-size: 20px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-value.datatourisme {
+            color: #3b82f6;
+        }
+
+        .stat-value.openagenda {
+            color: #ef4444;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        #map-container {
+            position: relative;
+            height: calc(100vh - 240px);
             width: 100%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            cursor: crosshair;
+        }
+
+        /* Indicateur de long-press */
+        #longpress-indicator {
+            position: fixed;
+            pointer-events: none;
+            z-index: 2000;
+            width: 70px;
+            height: 70px;
+            margin-left: -35px;
+            margin-top: -35px;
+            display: none;
+        }
+
+        #longpress-indicator.visible {
+            display: block;
+        }
+
+        #longpress-indicator svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        #longpress-indicator .bg-circle {
+            fill: none;
+            stroke: rgba(102, 126, 234, 0.3);
+            stroke-width: 6;
+        }
+
+        #longpress-indicator .progress-circle {
+            fill: none;
+            stroke: #667eea;
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-dasharray: 188.5;
+            stroke-dashoffset: 188.5;
+        }
+
+        #longpress-indicator .center-dot {
+            fill: #667eea;
         }
 
         .event-popup {
@@ -316,63 +356,49 @@
             margin: 15px;
         }
 
-        /* Custom marker icons */
-        .custom-marker {
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        /* Instructions flottantes */
+        #map-instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 1000;
+            pointer-events: none;
+            transition: opacity 0.5s;
         }
 
-        .marker-datatourisme {
-            background: #3b82f6;
-        }
-
-        .marker-openagenda {
-            background: #ef4444;
+        #map-instructions.hidden {
+            opacity: 0;
         }
 
         @media (max-width: 768px) {
-            #header h1 {
-                font-size: 22px;
-            }
-
-            #stats {
-                gap: 15px;
-            }
-
-            .stat-value {
-                font-size: 20px;
-            }
-
-            .control-group {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .legend {
-                flex-wrap: wrap;
-                gap: 10px;
-            }
+            #header h1 { font-size: 20px; }
+            #header p { font-size: 12px; }
+            #stats { gap: 15px; }
+            .stat-value { font-size: 18px; }
+            .control-group { flex-direction: column; align-items: stretch; }
+            .slider-group { min-width: 100%; }
+            #map-container { height: calc(100vh - 290px); }
+            button { width: 100%; }
+            .legend { flex-wrap: wrap; gap: 10px; }
         }
     </style>
 </head>
 <body>
     <div id="header">
-        <h1>🗓️ Carte des Événements DATAtourisme + OpenAgenda</h1>
-        <p>Trouvez des événements près de chez vous ou dans une ville donnée (France uniquement)</p>
+        <h1>🗓️ Événements DATAtourisme + OpenAgenda</h1>
+        <p>Maintenez appuyé 2 secondes sur la carte pour rechercher des événements</p>
     </div>
 
     <div id="controls">
         <div class="control-group">
-            <div class="button-group">
-                <button onclick="getUserLocation()">📍 Ma position</button>
-                <button onclick="fetchNearbyEventsForCity('paris')">🗼 Paris</button>
-                <button onclick="fetchNearbyEventsForCity('toulouse')">🏛️ Toulouse</button>
-                <button onclick="resetMapView()" id="resetViewBtn" style="display:none;">🔄 Réinitialiser la vue</button>
-            </div>
-        </div>
+            <button id="btnMyPosition" onclick="getUserLocation()">📍 Ma position</button>
 
-        <div class="control-group">
             <div class="slider-group">
                 <span class="slider-label">Rayon:</span>
                 <input type="range" id="radiusRange" min="5" max="100" value="30" step="5">
@@ -384,10 +410,8 @@
                 <input type="range" id="daysRange" min="1" max="30" value="7" step="1">
                 <span class="slider-value"><span id="daysValue">7</span> jours</span>
             </div>
-        </div>
 
-        <div class="control-group">
-            <div class="status" id="status">🔵 En attente d'une recherche</div>
+            <div class="status" id="status">👆 Maintenez appuyé sur la carte</div>
         </div>
     </div>
 
@@ -437,48 +461,58 @@
         </div>
     </div>
 
-    <div id="map"></div>
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="map-instructions">👆 Maintenez appuyé 2s pour sélectionner un point</div>
+    </div>
+
+    <!-- Indicateur de long-press -->
+    <div id="longpress-indicator">
+        <svg viewBox="0 0 60 60">
+            <circle class="bg-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="progress-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="center-dot" cx="30" cy="30" r="5"></circle>
+        </svg>
+    </div>
 
     <script>
-        // Configuration - Serveur hébergé sur Render
-        // Configuration - Détection automatique (Local vs Production)
-        const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? '' 
-            : 'https://datatourisme-api-1.onrender.com';
-        
-        const CITY_COORDS = {
-            'paris': { latitude: 48.8566, longitude: 2.3522, label: 'Paris' },
-            'toulouse': { latitude: 43.6047, longitude: 1.4442, label: 'Toulouse' }
-        };
+        // Configuration - URL relative pour le même serveur
+        var SERVER_URL = window.location.origin;
+        var LONGPRESS_DURATION = 2000; // 2 secondes
+        var LONGPRESS_MOVE_THRESHOLD = 80; // pixels - tolérance pour les mouvements involontaires sur mobile
 
-        // Variables globales
-        let map = null;
-        let currentMarkerCluster = null;
-        let allMarkers = [];
-        let currentPosition = null;
-        let currentRadiusKm = 30;
-        let currentDays = 7;
-        let currentContextLabel = '';
-        let sliderUpdateTimeout = null;
-        const SLIDER_DEBOUNCE_MS = 800;
-        let initialMapBounds = null;
-        let currentFetchController = null;
-        let currentRadiusCircle = null;
-        let currentCenterMarker = null;
+        // État global
+        var map = null;
+        var currentMarkerCluster = null;
+        var currentPosition = null;
+        var currentRadiusKm = 30;
+        var currentDays = 7;
+        var currentContextLabel = '';
+        var currentFetchController = null;
+        var currentRadiusCircle = null;
+        var currentCenterMarker = null;
 
-        // Icônes personnalisées pour les marqueurs
+        // État du long-press
+        var longPressTimer = null;
+        var longPressInterval = null;
+        var longPressStartTime = null;
+        var longPressStartX = 0;
+        var longPressStartY = 0;
+        var longPressLatLng = null;
+        var longPressActive = false;
+        var clearOldSearchTimer = null;
+
+        // Éléments DOM
+        var indicator = document.getElementById('longpress-indicator');
+        var progressCircle = indicator.querySelector('.progress-circle');
+        var mapInstructions = document.getElementById('map-instructions');
+
+        // Créer une icône personnalisée selon la source
         function createCustomIcon(source) {
-            const color = source === 'DATAtourisme' ? '#3b82f6' : '#ef4444';
+            var color = source === 'DATAtourisme' ? '#3b82f6' : '#ef4444';
             return L.divIcon({
                 className: 'custom-div-icon',
-                html: `<div style="
-                    background: ${color};
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                    border: 2px solid white;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-                "></div>`,
+                html: '<div style="background:' + color + ';width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
                 iconSize: [12, 12],
                 iconAnchor: [6, 6]
             });
@@ -486,484 +520,538 @@
 
         // Initialiser la carte
         function initMap() {
-            if (!map) {
-                map = L.map('map').setView([46.603354, 1.888334], 6);
+            map = L.map('map', {
+                center: [46.603354, 1.888334],
+                zoom: 6,
+                tap: true,
+                tapTolerance: 15
+            });
 
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                    maxZoom: 19
-                }).addTo(map);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            setupLongPressEvents();
+        }
+
+        // Configuration des événements long-press
+        function setupLongPressEvents() {
+            var mapEl = document.getElementById('map');
+
+            // Desktop - souris
+            mapEl.addEventListener('mousedown', onPressStart);
+            document.addEventListener('mouseup', onPressEnd);
+            document.addEventListener('mousemove', onPressMove);
+
+            // Mobile - tactile
+            mapEl.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchend', onPressEnd);
+            document.addEventListener('touchcancel', onPressEnd);
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+
+            // Annuler lors du déplacement/zoom de la carte
+            map.on('movestart', cancelLongPress);
+            map.on('zoomstart', cancelLongPress);
+        }
+
+        function onTouchStart(e) {
+            if (e.touches.length !== 1) return;
+            
+            var touch = e.touches[0];
+            var target = document.elementFromPoint(touch.clientX, touch.clientY);
+            
+            // Ne PAS intercepter les touches sur les marqueurs, popups, clusters ou contrôles
+            if (target && (
+                target.closest('.leaflet-marker-icon') ||
+                target.closest('.leaflet-marker-pane') ||
+                target.closest('.leaflet-popup') ||
+                target.closest('.leaflet-popup-pane') ||
+                target.closest('.leaflet-control') ||
+                target.closest('.marker-cluster') ||
+                target.closest('.leaflet-interactive')
+            )) {
+                return;
             }
+            
+            onPressStart({ clientX: touch.clientX, clientY: touch.clientY, target: target });
+        }
+
+        function onTouchMove(e) {
+            if (!longPressActive) return;
+            if (e.touches.length !== 1) return;
+            var touch = e.touches[0];
+            onPressMove({ clientX: touch.clientX, clientY: touch.clientY });
+        }
+
+        function onPressStart(e) {
+            // Ignorer les clics sur les contrôles Leaflet, marqueurs, popups, clusters
+            if (e.target && (
+                e.target.closest('.leaflet-control') || 
+                e.target.closest('.leaflet-popup') ||
+                e.target.closest('.leaflet-popup-pane') ||
+                e.target.closest('.leaflet-marker-icon') ||
+                e.target.closest('.leaflet-marker-pane') ||
+                e.target.closest('.marker-cluster') ||
+                e.target.closest('.leaflet-interactive')
+            )) {
+                return;
+            }
+
+            // Annuler tout long-press précédent
+            cancelLongPress();
+
+            // Programmer le nettoyage de l'ancienne recherche après 1 seconde
+            clearOldSearchTimer = setTimeout(function() {
+                if (longPressActive) {
+                    clearOldSearch();
+                }
+            }, 1000);
+
+            // Calculer les coordonnées sur la carte
+            var mapContainer = map.getContainer();
+            var rect = mapContainer.getBoundingClientRect();
+            var point = L.point(e.clientX - rect.left, e.clientY - rect.top);
+            
+            // Stocker les infos du nouveau long-press
+            longPressLatLng = map.containerPointToLatLng(point);
+            longPressStartTime = Date.now();
+            longPressStartX = e.clientX;
+            longPressStartY = e.clientY;
+            longPressActive = true;
+
+            // Positionner et afficher l'indicateur
+            indicator.style.left = e.clientX + 'px';
+            indicator.style.top = e.clientY + 'px';
+            progressCircle.style.strokeDashoffset = '188.5';
+            indicator.classList.add('visible');
+
+            // Animation de progression
+            longPressInterval = setInterval(function() {
+                if (!longPressActive) {
+                    clearInterval(longPressInterval);
+                    return;
+                }
+                
+                var elapsed = Date.now() - longPressStartTime;
+                var progress = Math.min(elapsed / LONGPRESS_DURATION, 1);
+                var offset = 188.5 * (1 - progress);
+                progressCircle.style.strokeDashoffset = String(offset);
+            }, 30);
+
+            // Timer pour déclencher la recherche
+            longPressTimer = setTimeout(function() {
+                if (longPressActive && longPressLatLng) {
+                    var lat = longPressLatLng.lat;
+                    var lng = longPressLatLng.lng;
+                    
+                    cancelLongPress();
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lng);
+                }
+            }, LONGPRESS_DURATION);
+        }
+
+        function onPressMove(e) {
+            if (!longPressActive) return;
+
+            var dx = e.clientX - longPressStartX;
+            var dy = e.clientY - longPressStartY;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > LONGPRESS_MOVE_THRESHOLD) {
+                cancelLongPress();
+            }
+        }
+
+        function onPressEnd() {
+            cancelLongPress();
+        }
+
+        function cancelLongPress() {
+            if (longPressTimer !== null) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            if (longPressInterval !== null) {
+                clearInterval(longPressInterval);
+                longPressInterval = null;
+            }
+
+            if (clearOldSearchTimer !== null) {
+                clearTimeout(clearOldSearchTimer);
+                clearOldSearchTimer = null;
+            }
+            
+            longPressActive = false;
+            longPressLatLng = null;
+            longPressStartTime = null;
+            longPressStartX = 0;
+            longPressStartY = 0;
+            
+            indicator.classList.remove('visible');
+            progressCircle.style.strokeDashoffset = '188.5';
+        }
+
+        // Effacer l'ancienne recherche
+        function clearOldSearch() {
+            if (currentMarkerCluster) {
+                map.removeLayer(currentMarkerCluster);
+                currentMarkerCluster = null;
+            }
+            if (currentRadiusCircle) {
+                map.removeLayer(currentRadiusCircle);
+                currentRadiusCircle = null;
+            }
+            if (currentCenterMarker) {
+                map.removeLayer(currentCenterMarker);
+                currentCenterMarker = null;
+            }
+            updateStats([], {});
+        }
+
+        // Quand un point est sélectionné
+        function onLocationSelected(lat, lon) {
+            // Vérifier si en France
+            var isInFrance = (lat >= 41 && lat <= 51) && (lon >= -5 && lon <= 10);
+            if (!isInFrance) {
+                updateStatus('⚠️ Position hors France métropolitaine', 'error');
+                return;
+            }
+
+            updateStatus('🔍 Recherche de la localisation...', 'active');
+            
+            // Géocodage inverse
+            getCityFromCoordinates(lat, lon).then(function(locationInfo) {
+                if (locationInfo && locationInfo.city) {
+                    currentContextLabel = 'à ' + locationInfo.city;
+                } else {
+                    currentContextLabel = 'à cette position';
+                }
+
+                currentPosition = { coords: { latitude: lat, longitude: lon } };
+                fetchNearbyEvents(currentPosition);
+            });
+        }
+
+        // Obtenir la position GPS de l'utilisateur
+        function getUserLocation() {
+            if (!navigator.geolocation) {
+                updateStatus('❌ Géolocalisation non supportée', 'error');
+                return;
+            }
+
+            clearOldSearch();
+            updateStatus('🔍 Recherche de votre position...', 'active');
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    
+                    map.setView([lat, lon], 11);
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lon);
+                },
+                function(error) {
+                    var msg = '❌ ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            msg += 'Permission refusée (activez la localisation)';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            msg += 'Position non disponible';
+                            break;
+                        case error.TIMEOUT:
+                            msg += 'Délai dépassé';
+                            break;
+                        default:
+                            msg += 'Erreur de géolocalisation';
+                    }
+                    updateStatus(msg, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        // Géocodage inverse
+        function getCityFromCoordinates(lat, lon) {
+            return fetch(
+                'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&zoom=10&addressdetails=1',
+                { headers: { 'User-Agent': 'DATAtourisme OpenAgenda Events App' } }
+            )
+            .then(function(response) {
+                if (!response.ok) return null;
+                return response.json();
+            })
+            .then(function(data) {
+                if (!data) return null;
+                var address = data.address || {};
+                var city = address.city || address.town || address.village || 
+                          address.municipality || address.county || address.state;
+                return { city: city, country: address.country || '' };
+            })
+            .catch(function(e) {
+                console.error('Erreur géocodage:', e);
+                return null;
+            });
         }
 
         // Mettre à jour le statut
-        function updateStatus(message, type = 'waiting') {
-            const statusEl = document.getElementById('status');
+        function updateStatus(message, type) {
+            type = type || 'waiting';
+            var statusEl = document.getElementById('status');
             statusEl.textContent = message;
             statusEl.className = 'status ' + type;
             
-            if (type === 'active' && (message.includes('🔍') || message.includes('Recherche') || message.includes('Connexion'))) {
+            if (type === 'active' && message.indexOf('🔍') >= 0) {
                 statusEl.classList.add('loading');
-            } else {
-                statusEl.classList.remove('loading');
             }
         }
 
-        // Mettre à jour les statistiques
+        // Mettre à jour les stats
         function updateStats(events, sources) {
-            const uniqueVenues = new Set(events.map(e => e.locationName).filter(v => v));
+            var venues = {};
+            
+            for (var i = 0; i < events.length; i++) {
+                if (events[i].locationName) venues[events[i].locationName] = true;
+            }
 
             document.getElementById('event-count').textContent = events.length;
-            document.getElementById('venue-count').textContent = uniqueVenues.size;
+            document.getElementById('venue-count').textContent = Object.keys(venues).length;
             
-            // Compter depuis les événements - si pas de source, c'est DATAtourisme (ancienne API)
-            const datatourismeCount = events.filter(e => e.source === 'DATAtourisme' || !e.source).length;
-            const openagendaCount = events.filter(e => e.source === 'OpenAgenda').length;
+            // Compter par source depuis les événements
+            var datatourismeCount = 0;
+            var openagendaCount = 0;
+            
+            for (var j = 0; j < events.length; j++) {
+                var src = events[j].source;
+                if (src === 'OpenAgenda') {
+                    openagendaCount++;
+                } else {
+                    datatourismeCount++; // DATAtourisme ou pas de source
+                }
+            }
             
             document.getElementById('datatourisme-count').textContent = datatourismeCount;
             document.getElementById('openagenda-count').textContent = openagendaCount;
-            
-            console.log(`Stats: Total=${events.length}, DATAtourisme=${datatourismeCount}, OpenAgenda=${openagendaCount}`);
         }
 
-        // Formater une date ISO en format lisible
+        // Formater date
         function formatDate(isoString) {
             if (!isoString) return 'Date non précisée';
             try {
-                const date = new Date(isoString);
-                return date.toLocaleDateString('fr-FR', { 
-                    day: '2-digit', 
-                    month: '2-digit', 
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                return new Date(isoString).toLocaleDateString('fr-FR', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
                 });
             } catch (e) {
                 return 'Date non précisée';
             }
         }
 
-        // Afficher les événements sur la carte
-        function displayEventsOnMap(events, centerLat, centerLon, radiusKm, sources) {
-            // Supprimer l'ancien cluster
-            if (currentMarkerCluster) {
-                map.removeLayer(currentMarkerCluster);
-            }
+        // Afficher les événements
+        function displayEventsOnMap(events, centerLat, centerLon, radiusKm) {
+            if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
+            if (currentRadiusCircle) map.removeLayer(currentRadiusCircle);
+            if (currentCenterMarker) map.removeLayer(currentCenterMarker);
 
-            // Supprimer l'ancien cercle de rayon
-            if (currentRadiusCircle) {
-                map.removeLayer(currentRadiusCircle);
-                currentRadiusCircle = null;
-            }
-
-            // Supprimer l'ancien marqueur de centre
-            if (currentCenterMarker) {
-                map.removeLayer(currentCenterMarker);
-                currentCenterMarker = null;
-            }
-
-            // Créer un nouveau cluster
+            // Créer le cluster avec couleurs personnalisées
             currentMarkerCluster = L.markerClusterGroup({
                 chunkedLoading: true,
                 spiderfyOnMaxZoom: true,
                 showCoverageOnHover: false,
                 zoomToBoundsOnClick: true,
-                // Personnaliser les icônes de cluster
                 iconCreateFunction: function(cluster) {
-                    const markers = cluster.getAllChildMarkers();
-                    const datatourismeCount = markers.filter(m => m.options.source === 'DATAtourisme').length;
-                    const openagendaCount = markers.filter(m => m.options.source === 'OpenAgenda').length;
+                    var markers = cluster.getAllChildMarkers();
+                    var dtCount = 0;
+                    var oaCount = 0;
+                    
+                    for (var i = 0; i < markers.length; i++) {
+                        if (markers[i].options.source === 'OpenAgenda') {
+                            oaCount++;
+                        } else {
+                            dtCount++;
+                        }
+                    }
                     
                     // Couleur dominante
-                    let bgColor = '#667eea';
-                    if (datatourismeCount > openagendaCount) {
+                    var bgColor = '#667eea';
+                    if (dtCount > oaCount) {
                         bgColor = '#3b82f6';
-                    } else if (openagendaCount > datatourismeCount) {
+                    } else if (oaCount > dtCount) {
                         bgColor = '#ef4444';
                     }
                     
-                    const count = cluster.getChildCount();
-                    let size = 'small';
-                    if (count >= 100) size = 'large';
-                    else if (count >= 10) size = 'medium';
-                    
-                    const sizes = { small: 30, medium: 40, large: 50 };
-                    const s = sizes[size];
+                    var count = cluster.getChildCount();
+                    var size = count >= 100 ? 50 : (count >= 10 ? 40 : 30);
+                    var fontSize = size > 35 ? 14 : 12;
                     
                     return L.divIcon({
-                        html: `<div style="
-                            background: ${bgColor};
-                            width: ${s}px;
-                            height: ${s}px;
-                            border-radius: 50%;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                            font-weight: bold;
-                            font-size: ${s > 35 ? 14 : 12}px;
-                            border: 3px solid white;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                        ">${count}</div>`,
+                        html: '<div style="background:' + bgColor + ';width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:' + fontSize + 'px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + count + '</div>',
                         className: 'marker-cluster',
-                        iconSize: [s, s]
+                        iconSize: [size, size]
                     });
                 }
             });
 
-            allMarkers = [];
-
-            // Ajouter un cercle pour visualiser le rayon de recherche
             if (centerLat && centerLon && radiusKm) {
                 currentRadiusCircle = L.circle([centerLat, centerLon], {
                     radius: radiusKm * 1000,
                     color: '#667eea',
-                    fillColor: 'transparent',
-                    fillOpacity: 0,
-                    weight: 2
+                    fillColor: '#667eea',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    dashArray: '5, 10',
+                    interactive: false
                 }).addTo(map);
 
-                // Marqueur pour le centre de recherche (vert)
                 currentCenterMarker = L.marker([centerLat, centerLon], {
                     icon: L.divIcon({
                         className: 'center-marker',
-                        html: '<div style="background: #22c55e; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
-                        iconSize: [20, 20]
+                        html: '<div style="background:#22c55e;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
                     })
-                }).addTo(map).bindPopup('<strong>Centre de recherche</strong>');
+                }).addTo(map).bindPopup('<strong>📍 Point de recherche</strong>');
             }
 
-            // Créer les marqueurs pour chaque événement
-            events.forEach(event => {
-                if (!event.latitude || !event.longitude) return;
+            for (var i = 0; i < events.length; i++) {
+                var event = events[i];
+                if (!event.latitude || !event.longitude) continue;
 
-                const source = event.source || 'DATAtourisme';
-                const icon = createCustomIcon(source);
+                var source = event.source || 'DATAtourisme';
+                var icon = createCustomIcon(source);
                 
-                const marker = L.marker([event.latitude, event.longitude], {
+                var marker = L.marker([event.latitude, event.longitude], {
                     icon: icon,
-                    source: source  // Stocker la source pour le clustering
+                    source: source
                 });
-
+                
                 // Badge de source
-                const sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
-                const sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🔴 OpenAgenda';
-
-                // Créer le contenu du popup
-                let popupContent = `
-                    <div class="event-popup">
-                        <h3>${event.title || 'Événement sans titre'}</h3>
-                        <span class="source-badge ${sourceBadgeClass}">${sourceLabel}</span>
-                        ${event.begin ? `<div class="date">📅 ${formatDate(event.begin)}</div>` : ''}
-                        ${event.locationName ? `<div class="venue"><strong>📍 Lieu :</strong> ${event.locationName}</div>` : ''}
-                        ${event.address ? `<div class="address">${event.address}${event.city ? ', ' + event.city : ''}</div>` : ''}
-                        ${event.distanceKm !== undefined ? `<div class="distance">📏 Distance : ${event.distanceKm} km</div>` : ''}
-                        ${event.agendaTitle ? `<div class="address">📚 ${event.agendaTitle}</div>` : ''}
-                        ${event.openagendaUrl ? `<a href="${event.openagendaUrl}" target="_blank" class="link">Voir les détails →</a>` : ''}
-                    </div>
-                `;
-
-                marker.bindPopup(popupContent, { maxWidth: 320 });
-
-                allMarkers.push({ marker: marker, event: event });
+                var sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
+                var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🔴 OpenAgenda';
+                
+                var popupHtml = '<div class="event-popup">';
+                popupHtml += '<h3>' + (event.title || 'Événement sans titre') + '</h3>';
+                popupHtml += '<span class="source-badge ' + sourceBadgeClass + '">' + sourceLabel + '</span>';
+                if (event.begin) popupHtml += '<div class="date">📅 ' + formatDate(event.begin) + '</div>';
+                if (event.locationName) popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
+                if (event.address) popupHtml += '<div class="address">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+                if (event.distanceKm !== undefined) popupHtml += '<div class="distance">📏 ' + event.distanceKm + ' km</div>';
+                if (event.agendaTitle) popupHtml += '<div class="address">📚 ' + event.agendaTitle + '</div>';
+                if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
+                popupHtml += '</div>';
+                
+                marker.bindPopup(popupHtml, { maxWidth: 320 });
                 currentMarkerCluster.addLayer(marker);
-            });
+            }
 
-            // Ajouter le cluster à la carte
             map.addLayer(currentMarkerCluster);
 
-            // Ajuster la vue pour montrer tous les marqueurs
-            if (allMarkers.length > 0) {
-                const group = L.featureGroup(allMarkers.map(m => m.marker));
-                const bounds = group.getBounds().pad(0.1);
-                map.fitBounds(bounds);
-                
-                initialMapBounds = bounds;
-                document.getElementById('resetViewBtn').style.display = 'inline-block';
-            } else if (centerLat && centerLon) {
-                map.setView([centerLat, centerLon], 11);
-                initialMapBounds = map.getBounds();
-                document.getElementById('resetViewBtn').style.display = 'inline-block';
+            if (centerLat && centerLon && radiusKm && currentRadiusCircle) {
+                map.fitBounds(currentRadiusCircle.getBounds().pad(0.1));
             }
 
-            // Mettre à jour les statistiques
-            updateStats(events, sources);
+            updateStats(events, {});
         }
 
-        // Trouver la ville à partir des coordonnées
-        async function getCityFromCoordinates(lat, lon) {
-            try {
-                const response = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`,
-                    {
-                        headers: {
-                            'User-Agent': 'DATAtourisme OpenAgenda Events App'
-                        }
-                    }
-                );
-                
-                if (!response.ok) return null;
-                
-                const data = await response.json();
-                const address = data.address || {};
-                
-                const city = address.city || 
-                            address.town || 
-                            address.village || 
-                            address.municipality ||
-                            address.county ||
-                            address.state;
-                
-                const country = address.country || '';
-                
-                return { city, country, fullAddress: data.display_name };
-            } catch (e) {
-                console.error('Erreur géocodage inverse:', e);
-                return null;
-            }
-        }
-
-        // Obtenir la position de l'utilisateur
-        function getUserLocation() {
-            updateStatus('🔍 Recherche de votre position...', 'active');
-
-            if (!navigator.geolocation) {
-                updateStatus('❌ La géolocalisation n\'est pas supportée par votre navigateur', 'error');
-                return;
-            }
-
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    
-                    updateStatus('🔍 Recherche de votre ville...', 'active');
-                    
-                    const locationInfo = await getCityFromCoordinates(lat, lon);
-                    let locationText = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-                    let popupText = `<strong>Votre position</strong><br>${locationText}`;
-                    
-                    if (locationInfo && locationInfo.city) {
-                        locationText = `${locationInfo.city}, ${locationInfo.country}`;
-                        popupText = `<strong>📍 Votre position</strong><br>${locationInfo.city}<br>${locationInfo.country}<br><small>${lat.toFixed(4)}, ${lon.toFixed(4)}</small>`;
-                    }
-                    
-                    map.setView([lat, lon], 12);
-                    
-                    const tempMarker = L.marker([lat, lon], {
-                        icon: L.divIcon({
-                            className: 'user-position-marker',
-                            html: '<div style="background: #22c55e; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
-                            iconSize: [20, 20]
-                        })
-                    }).addTo(map).bindPopup(popupText).openPopup();
-                    
-                    const isInFrance = (lat >= 41 && lat <= 51) && (lon >= -5 && lon <= 10);
-                    
-                    if (!isInFrance) {
-                        updateStatus(`⚠️ Position détectée : ${locationText} (hors France)`, 'error');
-                        setTimeout(() => {
-                            alert(`📍 Position détectée : ${locationText}\n` +
-                                  `Coordonnées : ${lat.toFixed(4)}, ${lon.toFixed(4)}\n\n` +
-                                  `⚠️ Cette application recherche uniquement des événements en France.\n\n` +
-                                  `Vous êtes actuellement en dehors de la France métropolitaine.\n` +
-                                  `Utilisez les boutons "🗼 Paris" ou "🏛️ Toulouse" pour tester l'application avec des événements réels.`);
-                        }, 500);
-                        return;
-                    }
-                    
-                    currentPosition = position;
-                    currentContextLabel = locationInfo && locationInfo.city ? `à ${locationInfo.city}` : 'à proximité';
-                    updateStatus(`🔍 Position détectée : ${locationText}`, 'active');
-                    fetchNearbyEvents(position);
-                },
-                (error) => {
-                    console.error('Erreur de géolocalisation:', error);
-                    let errorMsg = '❌ ';
-                    
-                    switch(error.code) {
-                        case error.PERMISSION_DENIED:
-                            errorMsg += 'Permission de géolocalisation refusée';
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            errorMsg += 'Position non disponible';
-                            break;
-                        case error.TIMEOUT:
-                            errorMsg += 'Délai de géolocalisation dépassé';
-                            break;
-                        default:
-                            errorMsg += 'Erreur de géolocalisation';
-                    }
-                    
-                    updateStatus(errorMsg, 'error');
-                }
-            );
-        }
-
-        // Rechercher des événements pour une ville spécifique
-        function fetchNearbyEventsForCity(cityKey) {
-            const city = CITY_COORDS[cityKey];
-            if (!city) return;
-
-            if (sliderUpdateTimeout) {
-                clearTimeout(sliderUpdateTimeout);
-                sliderUpdateTimeout = null;
-            }
-
-            map.setView([city.latitude, city.longitude], 12);
-
-            currentContextLabel = city.label;
-            currentPosition = {
-                coords: {
-                    latitude: city.latitude,
-                    longitude: city.longitude
-                }
-            };
-
-            fetchNearbyEvents(currentPosition);
-        }
-
-        // Récupérer les événements à proximité
-        async function fetchNearbyEvents(position) {
+        // Récupérer les événements
+        function fetchNearbyEvents(position) {
             if (!position) {
                 updateStatus('❌ Position non disponible', 'error');
                 return;
             }
 
-            try {
-                if (currentFetchController) {
-                    currentFetchController.abort();
-                }
+            if (currentFetchController) currentFetchController.abort();
+            currentFetchController = new AbortController();
 
-                currentFetchController = new AbortController();
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            var placeText = currentContextLabel || 'à proximité';
 
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
+            updateStatus('🔍 Connexion au serveur...', 'active');
 
-                let placeText = currentContextLabel || 'à proximité';
-                updateStatus(`🔍 Connexion au serveur... (peut prendre 30-60s si le serveur était en veille)`, 'active');
+            var url = SERVER_URL + '/api/events/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + currentRadiusKm + '&days=' + currentDays;
 
-                const params = new URLSearchParams();
-                params.append('lat', lat);
-                params.append('lon', lon);
-                params.append('radiusKm', currentRadiusKm);
-                params.append('days', currentDays);
+            var timeoutId = setTimeout(function() { currentFetchController.abort(); }, 90000);
 
-                const timeoutId = setTimeout(() => currentFetchController.abort(), 90000);
+            updateStatus('🔍 Recherche ' + placeText + ' (' + currentRadiusKm + 'km, ' + currentDays + 'j)...', 'active');
 
-                updateStatus(`🔍 Recherche des événements ${placeText} dans un rayon de ${currentRadiusKm} km...`, 'active');
+            fetch(url, { signal: currentFetchController.signal })
+                .then(function(res) {
+                    clearTimeout(timeoutId);
+                    return res.json();
+                })
+                .then(function(result) {
+                    console.log('Résultat API:', result);
+                    
+                    if (result.status !== 'success') {
+                        updateStatus('❌ ' + (result.message || 'Erreur'), 'error');
+                        return;
+                    }
 
-                const res = await fetch(`${SERVER_URL}/api/events/nearby?` + params.toString(), {
-                    signal: currentFetchController.signal
-                });
-                
-                clearTimeout(timeoutId);
+                    var events = result.events || [];
+                    var sources = result.sources || {};
+                    
+                    if (events.length === 0) {
+                        updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
+                        displayEventsOnMap([], lat, lon, currentRadiusKm);
+                        return;
+                    }
 
-                const result = await res.json();
-
-                console.log('Résultat API:', result);
-                
-                // Debug: afficher les sources des premiers événements
-                if (result.events && result.events.length > 0) {
-                    console.log('Premiers événements avec leurs sources:');
-                    result.events.slice(0, 5).forEach((e, i) => {
-                        console.log(`  ${i+1}. "${e.title}" - source: "${e.source}"`);
-                    });
-                }
-
-                if (!res.ok || result.status !== 'success') {
-                    updateStatus('❌ ' + (result.message || 'Erreur lors de la récupération des événements'), 'error');
-                    return;
-                }
-
-                const events = result.events || [];
-                const sources = result.sources || {};
-                
-                if (events.length === 0) {
-                    updateStatus(`🔍 Aucun événement trouvé ${placeText} dans un rayon de ${currentRadiusKm} km`, 'waiting');
-                    displayEventsOnMap([], lat, lon, currentRadiusKm, sources);
-                    return;
-                }
-
-                displayEventsOnMap(events, lat, lon, currentRadiusKm, sources);
-                
-                const dtCount = sources.DATAtourisme || 0;
-                const oaCount = sources.OpenAgenda || 0;
-                updateStatus(`✅ ${events.length} événement(s) trouvé(s) ${placeText} (🔵 ${dtCount} DATAtourisme, 🔴 ${oaCount} OpenAgenda)`, 'active');
-
-            } catch (e) {
-                console.error('Erreur complète:', e);
-                
-                if (e.name === 'AbortError') {
-                    console.log('Requête annulée (nouvelle recherche en cours)');
-                    return;
-                }
-                
-                if (e.name === 'AbortError') {
-                    updateStatus('❌ Timeout: Le serveur met trop de temps à répondre (>90s)', 'error');
-                } else {
+                    displayEventsOnMap(events, lat, lon, currentRadiusKm);
+                    
+                    var dtCount = sources.DATAtourisme || 0;
+                    var oaCount = sources.OpenAgenda || 0;
+                    updateStatus('✅ ' + events.length + ' événement(s) ' + placeText + ' (🔵' + dtCount + ' 🔴' + oaCount + ')', 'active');
+                })
+                .catch(function(e) {
+                    if (e.name === 'AbortError') return;
+                    console.error('Erreur:', e);
                     updateStatus('❌ Erreur: ' + e.message, 'error');
-                }
-                
-                let errorMsg = 'Erreur lors du chargement:\n\n' + e.message;
-                
-                if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-                    errorMsg += '\n\nCauses possibles:\n' +
-                        '1. Le serveur Render est en veille (première requête peut prendre 30-60s)\n' +
-                        '2. Problème de connexion réseau\n' +
-                        '3. CORS non configuré correctement\n\n' +
-                        'Conseil: Réessayez dans quelques secondes si le serveur était en veille.';
-                }
-                
-                console.error('Détails:', errorMsg);
-            }
-        }
-
-        // Réinitialiser la vue de la carte
-        function resetMapView() {
-            if (initialMapBounds && map) {
-                map.fitBounds(initialMapBounds);
-            }
-        }
-
-        // Planification de la mise à jour après déplacement des sliders
-        function scheduleSliderUpdate() {
-            if (!currentPosition) return;
-            
-            if (sliderUpdateTimeout) {
-                clearTimeout(sliderUpdateTimeout);
-            }
-            
-            sliderUpdateTimeout = setTimeout(() => {
-                fetchNearbyEvents(currentPosition);
-            }, SLIDER_DEBOUNCE_MS);
+                });
         }
 
         // Configuration des sliders
         function setupSliders() {
-            const radiusRange = document.getElementById('radiusRange');
-            const daysRange = document.getElementById('daysRange');
-            const radiusValue = document.getElementById('radiusValue');
-            const daysValue = document.getElementById('daysValue');
+            var radiusRange = document.getElementById('radiusRange');
+            var daysRange = document.getElementById('daysRange');
+            var radiusValue = document.getElementById('radiusValue');
+            var daysValue = document.getElementById('daysValue');
 
-            radiusRange.addEventListener('input', () => {
+            radiusRange.addEventListener('input', function() {
                 currentRadiusKm = parseInt(radiusRange.value, 10);
                 radiusValue.textContent = currentRadiusKm;
-                scheduleSliderUpdate();
+                if (currentRadiusCircle) {
+                    currentRadiusCircle.setRadius(currentRadiusKm * 1000);
+                }
             });
 
-            daysRange.addEventListener('input', () => {
+            daysRange.addEventListener('input', function() {
                 currentDays = parseInt(daysRange.value, 10);
                 daysValue.textContent = currentDays;
-                scheduleSliderUpdate();
+            });
+
+            radiusRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
+            });
+
+            daysRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
             });
         }
 
-        // Initialisation au chargement de la page
-        window.addEventListener('load', () => {
+        // Initialisation
+        window.addEventListener('load', function() {
             initMap();
             setupSliders();
-            updateStatus('🔵 Cliquez sur un bouton pour rechercher des événements', 'waiting');
+            updateStatus('👆 Maintenez appuyé sur la carte', 'waiting');
         });
     </script>
 </body>
