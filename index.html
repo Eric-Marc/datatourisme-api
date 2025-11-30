@@ -6,21 +6,11 @@
     <title>Carte des Événements DATAtourisme + OpenAgenda</title>
 
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossorigin=""/>
-
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-            crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
 
     <!-- MarkerCluster CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-
-    <!-- MarkerCluster JS -->
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="anonymous" />
 
     <style>
         * {
@@ -233,6 +223,11 @@
             height: 100%;
             width: 100%;
             cursor: crosshair;
+            /* iOS Safari - désactiver le menu contextuel et les gestes par défaut */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: pan-x pan-y;
         }
 
         /* Indicateur de long-press */
@@ -437,7 +432,7 @@
 
     <div id="stats">
         <div class="stat">
-            <span class="stat-icon">📍</span>
+            <span class="stat-icon">🟣</span>
             <div>
                 <div class="stat-value total" id="event-count">0</div>
                 <div class="stat-label">Total</div>
@@ -479,6 +474,12 @@
             <circle class="center-dot" cx="30" cy="30" r="5"></circle>
         </svg>
     </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+    
+    <!-- MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin="anonymous"></script>
 
     <script>
         // Configuration - URL relative pour le même serveur
@@ -550,10 +551,10 @@
             document.addEventListener('mouseup', onPressEnd);
             document.addEventListener('mousemove', onPressMove);
 
-            // Mobile - tactile
+            // Mobile - tactile (passive: false requis pour preventDefault sur iOS)
             mapEl.addEventListener('touchstart', onTouchStart, { passive: false });
-            document.addEventListener('touchend', onPressEnd);
-            document.addEventListener('touchcancel', onPressEnd);
+            document.addEventListener('touchend', onPressEnd, { passive: true });
+            document.addEventListener('touchcancel', onPressEnd, { passive: true });
             document.addEventListener('touchmove', onTouchMove, { passive: false });
 
             // Annuler lors du déplacement/zoom de la carte
@@ -580,12 +581,19 @@
                 return;
             }
             
+            // iOS: empêcher le menu contextuel natif
+            e.preventDefault();
+            
             onPressStart({ clientX: touch.clientX, clientY: touch.clientY, target: target });
         }
 
         function onTouchMove(e) {
             if (!longPressActive) return;
             if (e.touches.length !== 1) return;
+            
+            // iOS: empêcher le scroll pendant le long-press
+            e.preventDefault();
+            
             var touch = e.touches[0];
             onPressMove({ clientX: touch.clientX, clientY: touch.clientY });
         }
@@ -1062,12 +1070,24 @@
             });
         }
 
-        // Initialisation
-        window.addEventListener('load', function() {
+        // Initialisation - attendre que Leaflet soit disponible
+        function init() {
+            if (typeof L === 'undefined') {
+                // Leaflet pas encore chargé, réessayer dans 100ms
+                setTimeout(init, 100);
+                return;
+            }
             initMap();
             setupSliders();
             updateStatus('👆 Maintenez appuyé sur la carte', 'waiting');
-        });
+        }
+
+        // Lancer l'initialisation quand le DOM est prêt
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
