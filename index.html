@@ -173,7 +173,7 @@
         }
 
         .legend-marker.openagenda {
-            background: #ef4444;
+            background: #f97316;
         }
 
         .legend-marker.center {
@@ -206,12 +206,16 @@
             color: #667eea;
         }
 
+        .stat-value.total {
+            color: #8b5cf6;
+        }
+
         .stat-value.datatourisme {
             color: #3b82f6;
         }
 
         .stat-value.openagenda {
-            color: #ef4444;
+            color: #f97316;
         }
 
         .stat-label {
@@ -309,8 +313,8 @@
         }
 
         .event-popup .source-badge.openagenda {
-            background: #fee2e2;
-            color: #dc2626;
+            background: #ffedd5;
+            color: #c2410c;
         }
 
         .event-popup .venue {
@@ -434,7 +438,7 @@
         <div class="stat">
             <span class="stat-icon">📍</span>
             <div>
-                <div class="stat-value" id="event-count">0</div>
+                <div class="stat-value total" id="event-count">0</div>
                 <div class="stat-label">Total</div>
             </div>
         </div>
@@ -446,7 +450,7 @@
             </div>
         </div>
         <div class="stat">
-            <span class="stat-icon">🔴</span>
+            <span class="stat-icon">🟠</span>
             <div>
                 <div class="stat-value openagenda" id="openagenda-count">0</div>
                 <div class="stat-label">OpenAgenda</div>
@@ -509,7 +513,7 @@
 
         // Créer une icône personnalisée selon la source
         function createCustomIcon(source) {
-            var color = source === 'DATAtourisme' ? '#3b82f6' : '#ef4444';
+            var color = source === 'DATAtourisme' ? '#3b82f6' : '#f97316';
             return L.divIcon({
                 className: 'custom-div-icon',
                 html: '<div style="background:' + color + ';width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
@@ -885,7 +889,7 @@
                     if (dtCount > oaCount) {
                         bgColor = '#3b82f6';
                     } else if (oaCount > dtCount) {
-                        bgColor = '#ef4444';
+                        bgColor = '#f97316';
                     }
                     
                     var count = cluster.getChildCount();
@@ -935,7 +939,7 @@
                 
                 // Badge de source
                 var sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
-                var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🔴 OpenAgenda';
+                var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🟠 OpenAgenda';
                 
                 var popupHtml = '<div class="event-popup">';
                 popupHtml += '<h3>' + (event.title || 'Événement sans titre') + '</h3>';
@@ -1009,7 +1013,1068 @@
                     
                     var dtCount = sources.DATAtourisme || 0;
                     var oaCount = sources.OpenAgenda || 0;
-                    updateStatus('✅ ' + events.length + ' événement(s) ' + placeText + ' (🔵' + dtCount + ' 🔴' + oaCount + ')', 'active');
+                    updateStatus('✅ ' + events.length + ' événement(s) ' + placeText + ' (🔵' + dtCount + ' 🟠' + oaCount + ')', 'active');
+                })
+                .catch(function(e) {
+                    if (e.name === 'AbortError') return;
+                    console.error('Erreur:', e);
+                    updateStatus('❌ Erreur: ' + e.message, 'error');
+                });
+        }
+
+        // Configuration des sliders
+        function setupSliders() {
+            var radiusRange = document.getElementById('radiusRange');
+            var daysRange = document.getElementById('daysRange');
+            var radiusValue = document.getElementById('radiusValue');
+            var daysValue = document.getElementById('daysValue');
+
+            radiusRange.addEventListener('input', function() {
+                currentRadiusKm = parseInt(radiusRange.value, 10);
+                radiusValue.textContent = currentRadiusKm;
+                if (currentRadiusCircle) {
+                    currentRadiusCircle.setRadius(currentRadiusKm * 1000);
+                }
+            });
+
+            daysRange.addEventListener('input', function() {
+                currentDays = parseInt(daysRange.value, 10);
+                daysValue.textContent = currentDays;
+            });
+
+            radiusRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
+            });
+
+            daysRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
+            });
+        }
+
+        // Initialisation
+        window.addEventListener('load', function() {
+            initMap();
+            setupSliders();
+            updateStatus('👆 Maintenez appuyé sur la carte', 'waiting');
+        });
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Carte des Événements DATAtourisme + OpenAgenda</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+
+    <!-- MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+    <!-- MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        #header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        #controls {
+            background: white;
+            padding: 12px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .slider-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            min-width: 60px;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #667eea;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            max-width: 180px;
+        }
+
+        .slider-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #667eea;
+            min-width: 55px;
+        }
+
+        .status {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .status.waiting { background: #fef3c7; color: #92400e; }
+        .status.active  { background: #d1fae5; color: #065f46; }
+        .status.error   { background: #fee2e2; color: #991b1b; }
+        
+        .status.loading {
+            animation: blinkStatus 1s ease-in-out infinite;
+        }
+
+        @keyframes blinkStatus {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.98); }
+        }
+
+        /* Légende des couleurs */
+        .legend {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 8px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #475569;
+        }
+
+        .legend-marker {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .legend-marker.datatourisme {
+            background: #3b82f6;
+        }
+
+        .legend-marker.openagenda {
+            background: #f97316;
+        }
+
+        .legend-marker.center {
+            background: #22c55e;
+        }
+
+        #stats {
+            background: white;
+            padding: 10px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 25px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-icon {
+            font-size: 20px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-value.total {
+            color: #8b5cf6;
+        }
+
+        .stat-value.datatourisme {
+            color: #3b82f6;
+        }
+
+        .stat-value.openagenda {
+            color: #f97316;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        #map-container {
+            position: relative;
+            height: calc(100vh - 240px);
+            width: 100%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            cursor: crosshair;
+        }
+
+        /* Indicateur de long-press */
+        #longpress-indicator {
+            position: fixed;
+            pointer-events: none;
+            z-index: 2000;
+            width: 70px;
+            height: 70px;
+            margin-left: -35px;
+            margin-top: -35px;
+            display: none;
+        }
+
+        #longpress-indicator.visible {
+            display: block;
+        }
+
+        #longpress-indicator svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        #longpress-indicator .bg-circle {
+            fill: none;
+            stroke: rgba(102, 126, 234, 0.3);
+            stroke-width: 6;
+        }
+
+        #longpress-indicator .progress-circle {
+            fill: none;
+            stroke: #667eea;
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-dasharray: 188.5;
+            stroke-dashoffset: 188.5;
+        }
+
+        #longpress-indicator .center-dot {
+            fill: #667eea;
+        }
+
+        .event-popup {
+            max-width: 300px;
+        }
+
+        .event-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .event-popup .date {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .source-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            margin-left: 5px;
+        }
+
+        .event-popup .source-badge.datatourisme {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .event-popup .source-badge.openagenda {
+            background: #ffedd5;
+            color: #c2410c;
+        }
+
+        .event-popup .venue {
+            font-size: 13px;
+            color: #444;
+            margin-bottom: 4px;
+        }
+
+        .event-popup .venue strong {
+            color: #667eea;
+        }
+
+        .event-popup .address {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .distance {
+            font-size: 12px;
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .link {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+            margin-top: 8px;
+            transition: background 0.3s;
+        }
+
+        .event-popup .link:hover {
+            background: #5568d3;
+        }
+
+        .leaflet-popup-content {
+            margin: 15px;
+        }
+
+        /* Instructions flottantes */
+        #map-instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 1000;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        #map-instructions.hidden {
+            opacity: 0;
+        }
+
+        @media (max-width: 768px) {
+            #header h1 { font-size: 20px; }
+            #header p { font-size: 12px; }
+            #stats { gap: 15px; }
+            .stat-value { font-size: 18px; }
+            .control-group { flex-direction: column; align-items: stretch; }
+            .slider-group { min-width: 100%; }
+            #map-container { height: calc(100vh - 290px); }
+            button { width: 100%; }
+            .legend { flex-wrap: wrap; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>🗓️ Événements DATAtourisme + OpenAgenda</h1>
+        <p>Maintenez appuyé 2 secondes sur la carte pour rechercher des événements</p>
+    </div>
+
+    <div id="controls">
+        <div class="control-group">
+            <button id="btnMyPosition" onclick="getUserLocation()">📍 Ma position</button>
+
+            <div class="slider-group">
+                <span class="slider-label">Rayon:</span>
+                <input type="range" id="radiusRange" min="5" max="100" value="30" step="5">
+                <span class="slider-value"><span id="radiusValue">30</span> km</span>
+            </div>
+
+            <div class="slider-group">
+                <span class="slider-label">Période:</span>
+                <input type="range" id="daysRange" min="1" max="30" value="7" step="1">
+                <span class="slider-value"><span id="daysValue">7</span> jours</span>
+            </div>
+
+            <div class="status" id="status">👆 Maintenez appuyé sur la carte</div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-marker datatourisme"></div>
+            <span>DATAtourisme</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-marker openagenda"></div>
+            <span>OpenAgenda</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-marker center"></div>
+            <span>Centre de recherche</span>
+        </div>
+    </div>
+
+    <div id="stats">
+        <div class="stat">
+            <span class="stat-icon">📍</span>
+            <div>
+                <div class="stat-value total" id="event-count">0</div>
+                <div class="stat-label">Total</div>
+            </div>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🔵</span>
+            <div>
+                <div class="stat-value datatourisme" id="datatourisme-count">0</div>
+                <div class="stat-label">DATAtourisme</div>
+            </div>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🟠</span>
+            <div>
+                <div class="stat-value openagenda" id="openagenda-count">0</div>
+                <div class="stat-label">OpenAgenda</div>
+            </div>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🏛️</span>
+            <div>
+                <div class="stat-value" id="venue-count">0</div>
+                <div class="stat-label">Lieux</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="map-instructions">👆 Maintenez appuyé 2s pour sélectionner un point</div>
+    </div>
+
+    <!-- Indicateur de long-press -->
+    <div id="longpress-indicator">
+        <svg viewBox="0 0 60 60">
+            <circle class="bg-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="progress-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="center-dot" cx="30" cy="30" r="5"></circle>
+        </svg>
+    </div>
+
+    <script>
+        // Configuration - URL relative pour le même serveur
+        var SERVER_URL = window.location.origin;
+        var LONGPRESS_DURATION = 2000; // 2 secondes
+        var LONGPRESS_MOVE_THRESHOLD = 80; // pixels - tolérance pour les mouvements involontaires sur mobile
+
+        // État global
+        var map = null;
+        var currentMarkerCluster = null;
+        var currentPosition = null;
+        var currentRadiusKm = 30;
+        var currentDays = 7;
+        var currentContextLabel = '';
+        var currentFetchController = null;
+        var currentRadiusCircle = null;
+        var currentCenterMarker = null;
+
+        // État du long-press
+        var longPressTimer = null;
+        var longPressInterval = null;
+        var longPressStartTime = null;
+        var longPressStartX = 0;
+        var longPressStartY = 0;
+        var longPressLatLng = null;
+        var longPressActive = false;
+        var clearOldSearchTimer = null;
+
+        // Éléments DOM
+        var indicator = document.getElementById('longpress-indicator');
+        var progressCircle = indicator.querySelector('.progress-circle');
+        var mapInstructions = document.getElementById('map-instructions');
+
+        // Créer une icône personnalisée selon la source
+        function createCustomIcon(source) {
+            var color = source === 'DATAtourisme' ? '#3b82f6' : '#f97316';
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div style="background:' + color + ';width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+        }
+
+        // Initialiser la carte
+        function initMap() {
+            map = L.map('map', {
+                center: [46.603354, 1.888334],
+                zoom: 6,
+                tap: true,
+                tapTolerance: 15
+            });
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            setupLongPressEvents();
+        }
+
+        // Configuration des événements long-press
+        function setupLongPressEvents() {
+            var mapEl = document.getElementById('map');
+
+            // Desktop - souris
+            mapEl.addEventListener('mousedown', onPressStart);
+            document.addEventListener('mouseup', onPressEnd);
+            document.addEventListener('mousemove', onPressMove);
+
+            // Mobile - tactile
+            mapEl.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchend', onPressEnd);
+            document.addEventListener('touchcancel', onPressEnd);
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+
+            // Annuler lors du déplacement/zoom de la carte
+            map.on('movestart', cancelLongPress);
+            map.on('zoomstart', cancelLongPress);
+        }
+
+        function onTouchStart(e) {
+            if (e.touches.length !== 1) return;
+            
+            var touch = e.touches[0];
+            var target = document.elementFromPoint(touch.clientX, touch.clientY);
+            
+            // Ne PAS intercepter les touches sur les marqueurs, popups, clusters ou contrôles
+            if (target && (
+                target.closest('.leaflet-marker-icon') ||
+                target.closest('.leaflet-marker-pane') ||
+                target.closest('.leaflet-popup') ||
+                target.closest('.leaflet-popup-pane') ||
+                target.closest('.leaflet-control') ||
+                target.closest('.marker-cluster') ||
+                target.closest('.leaflet-interactive')
+            )) {
+                return;
+            }
+            
+            onPressStart({ clientX: touch.clientX, clientY: touch.clientY, target: target });
+        }
+
+        function onTouchMove(e) {
+            if (!longPressActive) return;
+            if (e.touches.length !== 1) return;
+            var touch = e.touches[0];
+            onPressMove({ clientX: touch.clientX, clientY: touch.clientY });
+        }
+
+        function onPressStart(e) {
+            // Ignorer les clics sur les contrôles Leaflet, marqueurs, popups, clusters
+            if (e.target && (
+                e.target.closest('.leaflet-control') || 
+                e.target.closest('.leaflet-popup') ||
+                e.target.closest('.leaflet-popup-pane') ||
+                e.target.closest('.leaflet-marker-icon') ||
+                e.target.closest('.leaflet-marker-pane') ||
+                e.target.closest('.marker-cluster') ||
+                e.target.closest('.leaflet-interactive')
+            )) {
+                return;
+            }
+
+            // Annuler tout long-press précédent
+            cancelLongPress();
+
+            // Programmer le nettoyage de l'ancienne recherche après 1 seconde
+            clearOldSearchTimer = setTimeout(function() {
+                if (longPressActive) {
+                    clearOldSearch();
+                }
+            }, 1000);
+
+            // Calculer les coordonnées sur la carte
+            var mapContainer = map.getContainer();
+            var rect = mapContainer.getBoundingClientRect();
+            var point = L.point(e.clientX - rect.left, e.clientY - rect.top);
+            
+            // Stocker les infos du nouveau long-press
+            longPressLatLng = map.containerPointToLatLng(point);
+            longPressStartTime = Date.now();
+            longPressStartX = e.clientX;
+            longPressStartY = e.clientY;
+            longPressActive = true;
+
+            // Positionner et afficher l'indicateur
+            indicator.style.left = e.clientX + 'px';
+            indicator.style.top = e.clientY + 'px';
+            progressCircle.style.strokeDashoffset = '188.5';
+            indicator.classList.add('visible');
+
+            // Animation de progression
+            longPressInterval = setInterval(function() {
+                if (!longPressActive) {
+                    clearInterval(longPressInterval);
+                    return;
+                }
+                
+                var elapsed = Date.now() - longPressStartTime;
+                var progress = Math.min(elapsed / LONGPRESS_DURATION, 1);
+                var offset = 188.5 * (1 - progress);
+                progressCircle.style.strokeDashoffset = String(offset);
+            }, 30);
+
+            // Timer pour déclencher la recherche
+            longPressTimer = setTimeout(function() {
+                if (longPressActive && longPressLatLng) {
+                    var lat = longPressLatLng.lat;
+                    var lng = longPressLatLng.lng;
+                    
+                    cancelLongPress();
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lng);
+                }
+            }, LONGPRESS_DURATION);
+        }
+
+        function onPressMove(e) {
+            if (!longPressActive) return;
+
+            var dx = e.clientX - longPressStartX;
+            var dy = e.clientY - longPressStartY;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > LONGPRESS_MOVE_THRESHOLD) {
+                cancelLongPress();
+            }
+        }
+
+        function onPressEnd() {
+            cancelLongPress();
+        }
+
+        function cancelLongPress() {
+            if (longPressTimer !== null) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            if (longPressInterval !== null) {
+                clearInterval(longPressInterval);
+                longPressInterval = null;
+            }
+
+            if (clearOldSearchTimer !== null) {
+                clearTimeout(clearOldSearchTimer);
+                clearOldSearchTimer = null;
+            }
+            
+            longPressActive = false;
+            longPressLatLng = null;
+            longPressStartTime = null;
+            longPressStartX = 0;
+            longPressStartY = 0;
+            
+            indicator.classList.remove('visible');
+            progressCircle.style.strokeDashoffset = '188.5';
+        }
+
+        // Effacer l'ancienne recherche
+        function clearOldSearch() {
+            if (currentMarkerCluster) {
+                map.removeLayer(currentMarkerCluster);
+                currentMarkerCluster = null;
+            }
+            if (currentRadiusCircle) {
+                map.removeLayer(currentRadiusCircle);
+                currentRadiusCircle = null;
+            }
+            if (currentCenterMarker) {
+                map.removeLayer(currentCenterMarker);
+                currentCenterMarker = null;
+            }
+            updateStats([], {});
+        }
+
+        // Quand un point est sélectionné
+        function onLocationSelected(lat, lon) {
+            // Vérifier si en France
+            var isInFrance = (lat >= 41 && lat <= 51) && (lon >= -5 && lon <= 10);
+            if (!isInFrance) {
+                updateStatus('⚠️ Position hors France métropolitaine', 'error');
+                return;
+            }
+
+            updateStatus('🔍 Recherche de la localisation...', 'active');
+            
+            // Géocodage inverse
+            getCityFromCoordinates(lat, lon).then(function(locationInfo) {
+                if (locationInfo && locationInfo.city) {
+                    currentContextLabel = 'à ' + locationInfo.city;
+                } else {
+                    currentContextLabel = 'à cette position';
+                }
+
+                currentPosition = { coords: { latitude: lat, longitude: lon } };
+                fetchNearbyEvents(currentPosition);
+            });
+        }
+
+        // Obtenir la position GPS de l'utilisateur
+        function getUserLocation() {
+            if (!navigator.geolocation) {
+                updateStatus('❌ Géolocalisation non supportée', 'error');
+                return;
+            }
+
+            clearOldSearch();
+            updateStatus('🔍 Recherche de votre position...', 'active');
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    
+                    map.setView([lat, lon], 11);
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lon);
+                },
+                function(error) {
+                    var msg = '❌ ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            msg += 'Permission refusée (activez la localisation)';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            msg += 'Position non disponible';
+                            break;
+                        case error.TIMEOUT:
+                            msg += 'Délai dépassé';
+                            break;
+                        default:
+                            msg += 'Erreur de géolocalisation';
+                    }
+                    updateStatus(msg, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        // Géocodage inverse
+        function getCityFromCoordinates(lat, lon) {
+            return fetch(
+                'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&zoom=10&addressdetails=1',
+                { headers: { 'User-Agent': 'DATAtourisme OpenAgenda Events App' } }
+            )
+            .then(function(response) {
+                if (!response.ok) return null;
+                return response.json();
+            })
+            .then(function(data) {
+                if (!data) return null;
+                var address = data.address || {};
+                var city = address.city || address.town || address.village || 
+                          address.municipality || address.county || address.state;
+                return { city: city, country: address.country || '' };
+            })
+            .catch(function(e) {
+                console.error('Erreur géocodage:', e);
+                return null;
+            });
+        }
+
+        // Mettre à jour le statut
+        function updateStatus(message, type) {
+            type = type || 'waiting';
+            var statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+            
+            if (type === 'active' && message.indexOf('🔍') >= 0) {
+                statusEl.classList.add('loading');
+            }
+        }
+
+        // Mettre à jour les stats
+        function updateStats(events, sources) {
+            var venues = {};
+            
+            for (var i = 0; i < events.length; i++) {
+                if (events[i].locationName) venues[events[i].locationName] = true;
+            }
+
+            document.getElementById('event-count').textContent = events.length;
+            document.getElementById('venue-count').textContent = Object.keys(venues).length;
+            
+            // Compter par source depuis les événements
+            var datatourismeCount = 0;
+            var openagendaCount = 0;
+            
+            for (var j = 0; j < events.length; j++) {
+                var src = events[j].source;
+                if (src === 'OpenAgenda') {
+                    openagendaCount++;
+                } else {
+                    datatourismeCount++; // DATAtourisme ou pas de source
+                }
+            }
+            
+            document.getElementById('datatourisme-count').textContent = datatourismeCount;
+            document.getElementById('openagenda-count').textContent = openagendaCount;
+        }
+
+        // Formater date
+        function formatDate(isoString) {
+            if (!isoString) return 'Date non précisée';
+            try {
+                return new Date(isoString).toLocaleDateString('fr-FR', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Date non précisée';
+            }
+        }
+
+        // Afficher les événements
+        function displayEventsOnMap(events, centerLat, centerLon, radiusKm) {
+            if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
+            if (currentRadiusCircle) map.removeLayer(currentRadiusCircle);
+            if (currentCenterMarker) map.removeLayer(currentCenterMarker);
+
+            // Créer le cluster avec couleurs personnalisées
+            currentMarkerCluster = L.markerClusterGroup({
+                chunkedLoading: true,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                iconCreateFunction: function(cluster) {
+                    var markers = cluster.getAllChildMarkers();
+                    var dtCount = 0;
+                    var oaCount = 0;
+                    
+                    for (var i = 0; i < markers.length; i++) {
+                        if (markers[i].options.source === 'OpenAgenda') {
+                            oaCount++;
+                        } else {
+                            dtCount++;
+                        }
+                    }
+                    
+                    // Couleur dominante
+                    var bgColor = '#667eea';
+                    if (dtCount > oaCount) {
+                        bgColor = '#3b82f6';
+                    } else if (oaCount > dtCount) {
+                        bgColor = '#f97316';
+                    }
+                    
+                    var count = cluster.getChildCount();
+                    var size = count >= 100 ? 50 : (count >= 10 ? 40 : 30);
+                    var fontSize = size > 35 ? 14 : 12;
+                    
+                    return L.divIcon({
+                        html: '<div style="background:' + bgColor + ';width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:' + fontSize + 'px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + count + '</div>',
+                        className: 'marker-cluster',
+                        iconSize: [size, size]
+                    });
+                }
+            });
+
+            if (centerLat && centerLon && radiusKm) {
+                currentRadiusCircle = L.circle([centerLat, centerLon], {
+                    radius: radiusKm * 1000,
+                    color: '#667eea',
+                    fillColor: '#667eea',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    dashArray: '5, 10',
+                    interactive: false
+                }).addTo(map);
+
+                currentCenterMarker = L.marker([centerLat, centerLon], {
+                    icon: L.divIcon({
+                        className: 'center-marker',
+                        html: '<div style="background:#22c55e;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                }).addTo(map).bindPopup('<strong>📍 Point de recherche</strong>');
+            }
+
+            for (var i = 0; i < events.length; i++) {
+                var event = events[i];
+                if (!event.latitude || !event.longitude) continue;
+
+                var source = event.source || 'DATAtourisme';
+                var icon = createCustomIcon(source);
+                
+                var marker = L.marker([event.latitude, event.longitude], {
+                    icon: icon,
+                    source: source
+                });
+                
+                // Badge de source
+                var sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
+                var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🟠 OpenAgenda';
+                
+                var popupHtml = '<div class="event-popup">';
+                popupHtml += '<h3>' + (event.title || 'Événement sans titre') + '</h3>';
+                popupHtml += '<span class="source-badge ' + sourceBadgeClass + '">' + sourceLabel + '</span>';
+                if (event.begin) popupHtml += '<div class="date">📅 ' + formatDate(event.begin) + '</div>';
+                if (event.locationName) popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
+                if (event.address) popupHtml += '<div class="address">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+                if (event.distanceKm !== undefined) popupHtml += '<div class="distance">📏 ' + event.distanceKm + ' km</div>';
+                if (event.agendaTitle) popupHtml += '<div class="address">📚 ' + event.agendaTitle + '</div>';
+                if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
+                popupHtml += '</div>';
+                
+                marker.bindPopup(popupHtml, { maxWidth: 320 });
+                currentMarkerCluster.addLayer(marker);
+            }
+
+            map.addLayer(currentMarkerCluster);
+
+            if (centerLat && centerLon && radiusKm && currentRadiusCircle) {
+                map.fitBounds(currentRadiusCircle.getBounds().pad(0.1));
+            }
+
+            updateStats(events, {});
+        }
+
+        // Récupérer les événements
+        function fetchNearbyEvents(position) {
+            if (!position) {
+                updateStatus('❌ Position non disponible', 'error');
+                return;
+            }
+
+            if (currentFetchController) currentFetchController.abort();
+            currentFetchController = new AbortController();
+
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            var placeText = currentContextLabel || 'à proximité';
+
+            updateStatus('🔍 Connexion au serveur...', 'active');
+
+            var url = SERVER_URL + '/api/events/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + currentRadiusKm + '&days=' + currentDays;
+
+            var timeoutId = setTimeout(function() { currentFetchController.abort(); }, 90000);
+
+            updateStatus('🔍 Recherche ' + placeText + ' (' + currentRadiusKm + 'km, ' + currentDays + 'j)...', 'active');
+
+            fetch(url, { signal: currentFetchController.signal })
+                .then(function(res) {
+                    clearTimeout(timeoutId);
+                    return res.json();
+                })
+                .then(function(result) {
+                    console.log('Résultat API:', result);
+                    
+                    if (result.status !== 'success') {
+                        updateStatus('❌ ' + (result.message || 'Erreur'), 'error');
+                        return;
+                    }
+
+                    var events = result.events || [];
+                    var sources = result.sources || {};
+                    
+                    if (events.length === 0) {
+                        updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
+                        displayEventsOnMap([], lat, lon, currentRadiusKm);
+                        return;
+                    }
+
+                    displayEventsOnMap(events, lat, lon, currentRadiusKm);
+                    
+                    var dtCount = sources.DATAtourisme || 0;
+                    var oaCount = sources.OpenAgenda || 0;
+                    updateStatus('✅ ' + events.length + ' événement(s) ' + placeText + ' (🔵' + dtCount + ' 🟠' + oaCount + ')', 'active');
                 })
                 .catch(function(e) {
                     if (e.name === 'AbortError') return;
