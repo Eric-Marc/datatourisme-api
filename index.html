@@ -999,6 +999,11 @@
                     source: source
                 });
                 
+                // Zoomer sur le marqueur quand on clique dessus
+                marker.on('click', function(e) {
+                    map.setView(e.latlng, 14);
+                });
+                
                 // Badge de source
                 var sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
                 var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🟠 OpenAgenda';
