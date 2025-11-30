@@ -935,13 +935,8 @@
                         }
                     }
                     
-                    // Couleur dominante
-                    var bgColor = '#8b5cf6';
-                    if (dtCount > oaCount) {
-                        bgColor = '#3b82f6';
-                    } else if (oaCount > dtCount) {
-                        bgColor = '#f97316';
-                    }
+                    // Couleur verte pour le total (tous les événements)
+                    var bgColor = '#22c55e';
                     
                     var count = cluster.getChildCount();
                     var size = count >= 100 ? 50 : (count >= 10 ? 40 : 30);
