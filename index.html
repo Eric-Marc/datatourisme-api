@@ -1176,9 +1176,17 @@
                     // Stocker tous les événements
                     allEventsData = events;
                     
+                    // Réinitialiser les événements cinéma
+                    cinemaEventsData = [];
+                    document.getElementById('cinema-count').textContent = '0';
+                    
                     if (events.length === 0) {
                         updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
                         displayEventsOnMap([], lat, lon, currentRadiusKm);
+                        // Charger quand même les cinémas si activé
+                        if (showCinema) {
+                            fetchCinemaEvents(lat, lon, currentRadiusKm);
+                        }
                         return;
                     }
 
@@ -1189,6 +1197,11 @@
                     var dtCount = sources.DATAtourisme || 0;
                     var oaCount = sources.OpenAgenda || 0;
                     updateStatus('✅ ' + events.length + ' événement(s) ' + placeText + ' (🔵' + dtCount + ' 🟠' + oaCount + ')', 'active');
+                    
+                    // Charger les séances de cinéma si le bouton est activé
+                    if (showCinema) {
+                        fetchCinemaEvents(lat, lon, currentRadiusKm);
+                    }
                 })
                 .catch(function(e) {
                     if (e.name === 'AbortError') return;
