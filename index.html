@@ -935,7 +935,7 @@
 
         // Récupérer les événements cinéma
         function fetchCinemaEvents(lat, lon, radiusKm) {
-            var url = '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
+            var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
             
             document.getElementById('status').textContent = '🎬 Chargement des séances de cinéma...';
             
