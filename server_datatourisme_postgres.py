@@ -1,793 +1,1262 @@
-#!/usr/bin/env python3
-"""
-API Flask pour servir les événements DATAtourisme depuis PostgreSQL
-+ OpenAgenda pour une couverture complète
-"""
-
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-from datetime import datetime, timezone, timedelta
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import os
-from urllib.parse import urlparse
-import requests
-import math
-import time
-
-# Allociné API (scraping)
-try:
-    from allocineAPI.allocineAPI import allocineAPI
-    ALLOCINE_AVAILABLE = True
-    print("✅ Allociné API disponible")
-except ImportError:
-    ALLOCINE_AVAILABLE = False
-    print("⚠️ Allociné API non disponible (pip install allocine-seances)")
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app)
-
-# PostgreSQL - Support pour Render et local
-database_url = os.environ.get('DATABASE_URL')
-
-if database_url:
-    url = urlparse(database_url)
-    DB_CONFIG = {
-        'host': url.hostname,
-        'port': url.port or 5432,
-        'database': url.path[1:],
-        'user': url.username,
-        'password': url.password,
-        'sslmode': 'require'
-    }
-    print(f"✅ Connexion à Render: {url.hostname}")
-else:
-    DB_CONFIG = {
-        'host': os.environ.get('DB_HOST', 'localhost'),
-        'port': int(os.environ.get('DB_PORT', 5432)),
-        'database': os.environ.get('DB_NAME', 'datatourisme'),
-        'user': os.environ.get('DB_USER', 'postgres'),
-        'password': os.environ.get('DB_PASSWORD', ''),
-        'sslmode': 'prefer'
-    }
-    print(f"⚠️  Connexion locale: {DB_CONFIG['host']}")
-
-# === OpenAgenda (copié de server.py Gedeon qui fonctionne) ===
-API_KEY = os.environ.get("OPENAGENDA_API_KEY", "a05c8baab2024ef494d3250fe4fec435")
-BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2")
-
-# Valeurs par défaut
-RADIUS_KM_DEFAULT = 30
-DAYS_AHEAD_DEFAULT = 30
-
-# Cache simple en mémoire pour les géocodages Nominatim
-GEOCODE_CACHE = {}
-
-
-# ============================================================================
-# FONCTIONS UTILITAIRES
-# ============================================================================
-
-def get_db_connection():
-    """Crée une connexion à PostgreSQL"""
-    return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
-
-
-# ============================================================================
-# FONCTIONS OPENAGENDA (copiées de server.py Gedeon qui fonctionne)
-# ============================================================================
-
-def calculate_bounding_box(lat, lng, radius_km):
-    """
-    Calculate bounding box coordinates from a center point and radius.
-    """
-    EARTH_RADIUS_KM = 6371.0
-    radius_rad = radius_km / EARTH_RADIUS_KM
-    lat_rad = math.radians(lat)
-
-    lat_delta = math.degrees(radius_rad)
-    min_lat = lat - lat_delta
-    max_lat = lat + lat_delta
-
-    lng_delta = math.degrees(radius_rad / math.cos(lat_rad))
-    min_lng = lng - lng_delta
-    max_lng = lng + lng_delta
-
-    return {
-        'northEast': {'lat': max_lat, 'lng': max_lng},
-        'southWest': {'lat': min_lat, 'lng': min_lng}
-    }
-
-
-def haversine_km(lat1, lon1, lat2, lon2):
-    """Distance en km entre deux points (latitude/longitude)."""
-    R = 6371.0
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-
-def search_agendas(search_term=None, official=None, limit=100):
-    """
-    Recherche d'agendas OpenAgenda.
-    """
-    url = f"{BASE_URL}/agendas"
-    params = {
-        "key": API_KEY,
-        "size": min(limit, 100)  # Maximum 100 par l'API
-    }
-
-    if search_term:
-        params["search"] = search_term
-    if official is not None:
-        params["official"] = 1 if official else 0
-
-    try:
-        r = requests.get(url, params=params, timeout=15)
-        r.raise_for_status()
-        return r.json() or {}
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error searching agendas: {e}")
-        return {"agendas": []}
-
-
-def get_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=100):
-    """
-    Récupère les événements d'un agenda avec filtrage géographique et temporel via l'API.
-    """
-    url = f"{BASE_URL}/agendas/{agenda_uid}/events"
-
-    bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
-    
-    today = datetime.now()
-    today_str = today.strftime('%Y-%m-%d')
-    end_date = today + timedelta(days=days_ahead)
-    end_date_str = end_date.strftime('%Y-%m-%d')
-
-    params = {
-        'key': API_KEY,
-        'size': min(limit, 100),  # Maximum 100 par l'API
-        'detailed': 1,
-        'geo[northEast][lat]': bbox['northEast']['lat'],
-        'geo[northEast][lng]': bbox['northEast']['lng'],
-        'geo[southWest][lat]': bbox['southWest']['lat'],
-        'geo[southWest][lng]': bbox['southWest']['lng'],
-        'timings[gte]': today_str,
-        'timings[lte]': end_date_str,
-    }
-
-    try:
-        r = requests.get(url, params=params, timeout=20)
-        r.raise_for_status()
-        return r.json() or {}
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error fetching events from agenda {agenda_uid}: {e}")
-        return {"events": []}
-
-
-def geocode_address_nominatim(address_str):
-    """
-    Géocode une adresse texte avec Nominatim (OpenStreetMap).
-    """
-    if not address_str:
-        return None, None
-
-    if address_str in GEOCODE_CACHE:
-        return GEOCODE_CACHE[address_str]
-
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {
-        "q": address_str,
-        "format": "json",
-        "limit": 1
-    }
-    headers = {
-        "User-Agent": "datatourisme-openagenda-api/1.0 (eric@ericmahe.com)"
-    }
-
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if not data:
-            GEOCODE_CACHE[address_str] = (None, None)
-            return None, None
-
-        lat = float(data[0]["lat"])
-        lon = float(data[0]["lon"])
-        GEOCODE_CACHE[address_str] = (lat, lon)
-        print(f"🌍 Nominatim geocode OK: '{address_str}' -> ({lat}, {lon})")
-        return lat, lon
-    except requests.RequestException as e:
-        print(f"❌ Nominatim error for '{address_str}': {e}")
-        GEOCODE_CACHE[address_str] = (None, None)
-        return None, None
-    except (KeyError, ValueError) as e:
-        print(f"❌ Nominatim parse error for '{address_str}': {e}")
-        GEOCODE_CACHE[address_str] = (None, None)
-        return None, None
-
-
-def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
-    """
-    Récupère TOUS les événements OpenAgenda dans la zone.
-    Basé sur le code server.py qui fonctionne.
-    """
-    print(f"🔍 OpenAgenda: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
-    print(f"   API_KEY: {API_KEY[:10]}...")
-    print(f"   BASE_URL: {BASE_URL}")
-
-    # 1. Recherche d'agendas (tous les agendas accessibles à la clé API)
-    agendas_result = search_agendas(limit=100)
-    print(f"   Résultat search_agendas: {type(agendas_result)}, clés: {agendas_result.keys() if agendas_result else 'None'}")
-    
-    agendas = agendas_result.get('agendas', []) if agendas_result else []
-    total_agendas = len(agendas)
-
-    print(f"📚 OpenAgenda: {total_agendas} agendas trouvés")
-    
-    if total_agendas > 0:
-        print(f"   Premier agenda: {agendas[0].get('title', 'Sans titre')} (uid: {agendas[0].get('uid')})")
-
-    if not agendas:
-        print("   ⚠️ AUCUN AGENDA TROUVÉ - Vérifier la clé API")
-        return []
-
-    all_events = []
-    agendas_with_events = 0
-
-    for idx, agenda in enumerate(agendas):
-        uid = agenda.get('uid')
-        agenda_slug = agenda.get('slug')
-        title = agenda.get('title', {})
-        if isinstance(title, dict):
-            agenda_title = title.get('fr') or title.get('en') or 'Agenda'
-        else:
-            agenda_title = title or 'Agenda'
-
-        # Récupérer les événements de cet agenda avec filtrage géographique et temporel
-        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead, limit=100)
-        events = events_data.get('events', []) if events_data else []
-
-        if events:
-            agendas_with_events += 1
-            print(f"📖 [{idx+1}/{total_agendas}] {agenda_title}: {len(events)} événements")
-
-        for ev in events:
-            # Récupération du timing
-            timings = ev.get('timings') or []
-            begin_str = None
-            end_str = None
-            if timings:
-                first_timing = timings[0]
-                begin_str = first_timing.get('begin')
-                end_str = first_timing.get('end')
-
-            # Récupération de la localisation
-            loc = ev.get('location') or {}
-            ev_lat = loc.get('latitude')
-            ev_lon = loc.get('longitude')
-
-            # Si OpenAgenda ne fournit pas de lat/lon, on tente Nominatim
-            if ev_lat is None or ev_lon is None:
-                parts = []
-                if loc.get("name"):
-                    parts.append(str(loc["name"]))
-                if loc.get("address"):
-                    parts.append(str(loc["address"]))
-                if loc.get("city"):
-                    parts.append(str(loc["city"]))
-                parts.append("France")
-                address_str = ", ".join(parts)
-
-                geocoded_lat, geocoded_lon = geocode_address_nominatim(address_str)
-                if geocoded_lat is not None and geocoded_lon is not None:
-                    ev_lat = geocoded_lat
-                    ev_lon = geocoded_lon
-                else:
-                    continue
-
-            try:
-                ev_lat = float(ev_lat)
-                ev_lon = float(ev_lon)
-            except (ValueError, TypeError):
-                continue
-
-            # Calcul de la distance exacte
-            dist = haversine_km(center_lat, center_lon, ev_lat, ev_lon)
-
-            # Vérification finale du rayon
-            if dist > radius_km:
-                continue
-
-            title_field = ev.get('title')
-            if isinstance(title_field, dict):
-                ev_title = title_field.get('fr') or title_field.get('en') or 'Événement'
-            else:
-                ev_title = title_field or 'Événement'
-
-            # URL de l'événement
-            event_slug = ev.get('slug')
-            openagenda_url = None
-            if agenda_slug and event_slug:
-                openagenda_url = f"https://openagenda.com/{agenda_slug}/events/{event_slug}?lang=fr"
-
-            all_events.append({
-                "uid": f"oa-{ev.get('uid')}",
-                "title": ev_title,
-                "begin": begin_str,
-                "end": end_str,
-                "locationName": loc.get("name"),
-                "city": loc.get("city"),
-                "address": loc.get("address"),
-                "latitude": ev_lat,
-                "longitude": ev_lon,
-                "distanceKm": round(dist, 1),
-                "openagendaUrl": openagenda_url,
-                "agendaTitle": agenda_title,
-                "source": "OpenAgenda"
-            })
-
-    print(f"✅ OpenAgenda: {len(all_events)} événements trouvés au total")
-    print(f"   📊 {agendas_with_events}/{total_agendas} agendas avaient des événements dans la zone")
-    return all_events
-
-
-# ============================================================================
-# ROUTES
-# ============================================================================
-
-@app.route('/')
-def index():
-    """Page d'accueil"""
-    return send_from_directory('.', 'index.html')
-
-
-@app.route('/api/events/nearby', methods=['GET'])
-def get_nearby_events():
-    """
-    Récupère les événements à proximité d'une position
-    Combine DATAtourisme (PostgreSQL) et OpenAgenda
-    """
-    
-    try:
-        center_lat = request.args.get('lat', type=float)
-        center_lon = request.args.get('lon', type=float)
-        radius_km = request.args.get('radiusKm', RADIUS_KM_DEFAULT, type=int)
-        days_ahead = request.args.get('days', DAYS_AHEAD_DEFAULT, type=int)
-        
-        if center_lat is None or center_lon is None:
-            return jsonify({
-                "status": "error",
-                "message": "Paramètres 'lat' et 'lon' requis"
-            }), 400
-        
-        print(f"🔍 Recherche combinée: ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
-        
-        date_limite = datetime.now().date() + timedelta(days=days_ahead)
-        
-        all_events = []
-        datatourisme_count = 0
-        openagenda_count = 0
-        
-        # ========== 1. DATAtourisme (PostgreSQL) ==========
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            
-            query = """
-                SELECT 
-                    uri as uid,
-                    nom as title,
-                    description,
-                    date_debut as begin,
-                    date_fin as end,
-                    latitude,
-                    longitude,
-                    adresse as address,
-                    commune as city,
-                    code_postal as "postalCode",
-                    contacts,
-                    ST_Distance(
-                        geom::geography,
-                        ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
-                    ) / 1000 as "distanceKm"
-                FROM evenements
-                WHERE ST_DWithin(
-                    geom::geography,
-                    ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
-                    %s
-                )
-                AND (date_debut IS NULL OR date_debut <= %s)
-                AND (date_fin IS NULL OR date_fin >= CURRENT_DATE)
-                ORDER BY "distanceKm", date_debut
-                LIMIT 2000
-            """
-            
-            cur.execute(query, (
-                center_lon, center_lat,
-                center_lon, center_lat,
-                radius_km * 1000,
-                date_limite
-            ))
-            
-            rows = cur.fetchall()
-            
-            for row in rows:
-                event = dict(row)
-                
-                if event.get('begin'):
-                    event['begin'] = event['begin'].isoformat()
-                if event.get('end'):
-                    event['end'] = event['end'].isoformat()
-                
-                if event.get('distanceKm'):
-                    event['distanceKm'] = round(event['distanceKm'], 1)
-                
-                event['locationName'] = event.get('city', '')
-                event['source'] = 'DATAtourisme'
-                event['agendaTitle'] = 'DATAtourisme National'
-                
-                contacts = event.get('contacts', '')
-                event['openagendaUrl'] = ''
-                if contacts and '#' in contacts:
-                    parts = contacts.split('#')
-                    for part in parts:
-                        if part.startswith('http'):
-                            event['openagendaUrl'] = part
-                            break
-                
-                all_events.append(event)
-            
-            datatourisme_count = len(rows)
-            cur.close()
-            conn.close()
-            
-            print(f"✅ DATAtourisme: {datatourisme_count} événements trouvés")
-            
-        except psycopg2.Error as e:
-            print(f"⚠️ Erreur PostgreSQL (DATAtourisme): {e}")
-        
-        # ========== 2. OpenAgenda ==========
-        try:
-            openagenda_events = fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead)
-            openagenda_count = len(openagenda_events)
-            all_events.extend(openagenda_events)
-        except Exception as e:
-            print(f"⚠️ Erreur OpenAgenda: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # ========== 3. Tri par distance puis date ==========
-        all_events.sort(key=lambda e: (e.get("distanceKm") or 999, e.get("begin") or ""))
-        
-        print(f"✅ Total combiné: {len(all_events)} événements (DATAtourisme: {datatourisme_count}, OpenAgenda: {openagenda_count})")
-        
-        return jsonify({
-            "status": "success",
-            "center": {"latitude": center_lat, "longitude": center_lon},
-            "radiusKm": radius_km,
-            "days": days_ahead,
-            "events": all_events,
-            "count": len(all_events),
-            "sources": {
-                "DATAtourisme": datatourisme_count,
-                "OpenAgenda": openagenda_count
-            }
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "status": "error",
-            "message": "Erreur interne du serveur",
-            "details": str(e)
-        }), 500
-
-
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    """Retourne des statistiques sur la base"""
-    
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        cur.execute("SELECT COUNT(*) as total FROM evenements")
-        total = cur.fetchone()['total']
-        
-        cur.execute("""
-            SELECT COUNT(*) as count
-            FROM evenements
-            WHERE date_debut >= CURRENT_DATE
-        """)
-        futurs = cur.fetchone()['count']
-        
-        cur.execute("""
-            SELECT commune, COUNT(*) as count
-            FROM evenements
-            WHERE commune IS NOT NULL
-            GROUP BY commune
-            ORDER BY count DESC
-            LIMIT 10
-        """)
-        top_communes = cur.fetchall()
-        
-        cur.close()
-        conn.close()
-        
-        return jsonify({
-            "status": "success",
-            "total_events": total,
-            "upcoming_events": futurs,
-            "top_communes": [dict(row) for row in top_communes],
-            "sources": ["DATAtourisme", "OpenAgenda"]
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
-
-
-@app.route('/health', methods=['GET'])
-def health():
-    """Endpoint de santé"""
-    
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT 1")
-        cur.close()
-        conn.close()
-        
-        return jsonify({
-            "status": "healthy",
-            "database": "connected",
-            "sources": ["DATAtourisme PostgreSQL", "OpenAgenda", "Allociné" if ALLOCINE_AVAILABLE else "Allociné (non dispo)"]
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            "status": "unhealthy",
-            "database": "disconnected",
-            "error": str(e)
-        }), 500
-
-
-# ============================================================================
-# ALLOCINÉ - CINÉMAS ET SÉANCES
-# ============================================================================
-
-def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
-    """
-    Récupère les séances de cinéma via scraping du site allocine.fr.
-    """
-    if not ALLOCINE_AVAILABLE:
-        print("⚠️ Allociné API non disponible")
-        return []
-    
-    print(f"🎬 Allociné: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km")
-    
-    try:
-        api = allocineAPI()
-        today = datetime.now().strftime("%Y-%m-%d")
-        
-        # Dictionnaire des grandes villes avec leurs IDs Allociné et coordonnées
-        villes_allocine = {
-            'Paris': {'coords': (48.8566, 2.3522)},
-            'Marseille': {'coords': (43.2965, 5.3698)},
-            'Lyon': {'coords': (45.7640, 4.8357)},
-            'Toulouse': {'coords': (43.6047, 1.4442)},
-            'Nice': {'coords': (43.7102, 7.2620)},
-            'Nantes': {'coords': (47.2184, -1.5536)},
-            'Strasbourg': {'coords': (48.5734, 7.7521)},
-            'Montpellier': {'coords': (43.6108, 3.8767)},
-            'Bordeaux': {'coords': (44.8378, -0.5792)},
-            'Lille': {'coords': (50.6292, 3.0573)},
-            'Rennes': {'coords': (48.1173, -1.6778)},
-            'Reims': {'coords': (49.2583, 4.0317)},
-            'Toulon': {'coords': (43.1242, 5.9280)},
-            'Grenoble': {'coords': (45.1885, 5.7245)},
-            'Dijon': {'coords': (47.3220, 5.0415)},
-            'Angers': {'coords': (47.4784, -0.5632)},
-            'Nîmes': {'coords': (43.8367, 4.3601)},
-            'Clermont-Ferrand': {'coords': (45.7772, 3.0870)},
-            'Aix-en-Provence': {'coords': (43.5297, 5.4474)},
-            'Brest': {'coords': (48.3904, -4.4861)},
-            'Tours': {'coords': (47.3941, 0.6848)},
-            'Amiens': {'coords': (49.8941, 2.2958)},
-            'Limoges': {'coords': (45.8336, 1.2611)},
-            'Perpignan': {'coords': (42.6986, 2.8954)},
-            'Metz': {'coords': (49.1193, 6.1757)},
-            'Besançon': {'coords': (47.2378, 6.0241)},
-            'Orléans': {'coords': (47.9029, 1.9093)},
-            'Rouen': {'coords': (49.4432, 1.0993)},
-            'Caen': {'coords': (49.1829, -0.3707)},
-            'Nancy': {'coords': (48.6921, 6.1844)},
-            'Avignon': {'coords': (43.9493, 4.8055)},
-            'Cannes': {'coords': (43.5528, 7.0174)},
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Carte des Événements DATAtourisme + OpenAgenda</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
+
+    <!-- MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="anonymous" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #header img {
+            max-height: 120px;
+            object-fit: cover;
+        }
+
+        #controls {
+            background: white;
+            padding: 12px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .slider-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            min-width: 60px;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #667eea;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            max-width: 180px;
+        }
+
+        .slider-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #667eea;
+            min-width: 55px;
+        }
+
+        .status {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .status.waiting { background: #fef3c7; color: #92400e; }
+        .status.active  { background: #d1fae5; color: #065f46; }
+        .status.error   { background: #fee2e2; color: #991b1b; }
         
-        # Trouver la ville la plus proche
-        best_ville = None
-        best_dist = float('inf')
-        
-        for ville_name, info in villes_allocine.items():
-            vlat, vlon = info['coords']
-            d = haversine_km(center_lat, center_lon, vlat, vlon)
-            if d < best_dist:
-                best_dist = d
-                best_ville = ville_name
-        
-        if best_dist > 100:
-            print(f"   ⚠️ Aucune grande ville à moins de 100km (plus proche: {best_ville} à {best_dist:.0f}km)")
-            # On continue quand même avec la ville la plus proche
-        
-        print(f"   📍 Ville la plus proche: {best_ville} ({best_dist:.0f}km)")
-        
-        # Récupérer les top villes d'Allociné
-        print("   🔍 Récupération des villes Allociné...")
-        top_villes = api.get_top_villes()
-        
-        if not top_villes:
-            print("   ❌ Impossible de récupérer les villes Allociné")
-            return []
-        
-        print(f"   📋 {len(top_villes)} villes disponibles: {[v.get('name') for v in top_villes[:8]]}...")
-        
-        # Trouver l'ID de la ville dans Allociné
-        location_id = None
-        location_name = None
-        
-        for ville in top_villes:
-            ville_allocine_name = ville.get('name', '').lower()
-            if best_ville.lower() in ville_allocine_name or ville_allocine_name in best_ville.lower():
-                location_id = ville.get('id')
-                location_name = ville.get('name')
-                print(f"   ✓ Ville Allociné trouvée: {location_name} (ID: {location_id})")
-                break
-        
-        if not location_id:
-            print(f"   ❌ Ville {best_ville} non trouvée dans Allociné")
-            return []
-        
-        # Récupérer les cinémas de cette ville
-        print(f"   🎥 Récupération des cinémas de {location_name}...")
-        cinemas = api.get_cinema(location_id)
-        
-        if not cinemas:
-            print("   ❌ Aucun cinéma trouvé")
-            return []
-        
-        print(f"   🎥 {len(cinemas)} cinémas trouvés")
-        
-        all_cinema_events = []
-        cinemas_checked = 0
-        cinema_coords = villes_allocine.get(best_ville, {}).get('coords', (center_lat, center_lon))
-        
-        for cinema in cinemas[:15]:  # Limiter à 15 cinémas
-            cinema_name = cinema.get('name', 'Cinéma')
-            cinema_address = cinema.get('address', '')
-            cinema_id = cinema.get('id')
+        .status.loading {
+            animation: blinkStatus 1s ease-in-out infinite;
+        }
+
+        @keyframes blinkStatus {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.98); }
+        }
+
+        /* Légende des couleurs */
+        .legend {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            padding: 8px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #475569;
+        }
+
+        .legend-marker {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .legend-marker.datatourisme {
+            background: #3b82f6;
+        }
+
+        .legend-marker.openagenda {
+            background: #f97316;
+        }
+
+        .legend-marker.center {
+            background: #8b5cf6;
+        }
+
+        #stats {
+            background: white;
+            padding: 10px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .source-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid #e2e8f0;
+            background: #f8fafc;
+            user-select: none;
+        }
+
+        .source-toggle:hover {
+            border-color: #cbd5e1;
+        }
+
+        .source-toggle.active {
+            border-color: #667eea;
+            background: white;
+        }
+
+        .source-toggle.inactive {
+            opacity: 0.5;
+            background: #f1f5f9;
+        }
+
+        .toggle-icon {
+            font-size: 20px;
+        }
+
+        .toggle-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        #toggle-datatourisme .toggle-value {
+            color: #3b82f6;
+        }
+
+        #toggle-openagenda .toggle-value {
+            color: #f97316;
+        }
+
+        #toggle-cinema .toggle-value {
+            color: #800020;
+        }
+
+        .toggle-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .toggle-check {
+            font-size: 16px;
+            color: #22c55e;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .source-toggle.inactive .toggle-check {
+            visibility: hidden;
+        }
+
+        #map-container {
+            position: relative;
+            height: calc(100vh - 240px);
+            width: 100%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            cursor: crosshair;
+            /* iOS Safari - désactiver le menu contextuel et les gestes par défaut */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: pan-x pan-y;
+        }
+
+        /* Marqueurs d'événements - plus gros et clignotants */
+        .event-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.6;
+                transform: scale(0.85);
+            }
+        }
+
+        /* Indicateur de long-press */
+        #longpress-indicator {
+            position: fixed;
+            pointer-events: none;
+            z-index: 2000;
+            width: 70px;
+            height: 70px;
+            margin-left: -35px;
+            margin-top: -35px;
+            display: none;
+        }
+
+        #longpress-indicator.visible {
+            display: block;
+        }
+
+        #longpress-indicator svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        #longpress-indicator .bg-circle {
+            fill: none;
+            stroke: rgba(102, 126, 234, 0.3);
+            stroke-width: 6;
+        }
+
+        #longpress-indicator .progress-circle {
+            fill: none;
+            stroke: #667eea;
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-dasharray: 188.5;
+            stroke-dashoffset: 188.5;
+        }
+
+        #longpress-indicator .center-dot {
+            fill: #667eea;
+        }
+
+        .event-popup {
+            max-width: 300px;
+        }
+
+        .event-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .event-popup .date {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .source-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            margin-left: 5px;
+        }
+
+        .event-popup .source-badge.datatourisme {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .event-popup .source-badge.openagenda {
+            background: #ffedd5;
+            color: #c2410c;
+        }
+
+        .event-popup .venue {
+            font-size: 13px;
+            color: #444;
+            margin-bottom: 4px;
+        }
+
+        .event-popup .venue strong {
+            color: #667eea;
+        }
+
+        .event-popup .address {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .distance {
+            font-size: 12px;
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .link {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+            margin-top: 8px;
+            transition: background 0.3s;
+        }
+
+        .event-popup .link:hover {
+            background: #5568d3;
+        }
+
+        .leaflet-popup-content {
+            margin: 15px;
+        }
+
+        /* Instructions flottantes */
+        #map-instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 1000;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        #map-instructions.hidden {
+            opacity: 0;
+        }
+
+        @media (max-width: 768px) {
+            #header h1 { font-size: 20px; }
+            #header p { font-size: 12px; }
+            #stats { gap: 15px; }
+            .stat-value { font-size: 18px; }
+            .control-group { flex-direction: column; align-items: stretch; }
+            .slider-group { min-width: 100%; }
+            #map-container { height: calc(100vh - 290px); }
+            button { width: 100%; }
+            .legend { flex-wrap: wrap; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <img src="Gedeon_1.jpg" alt="GEDEON - Agenda global des événements" style="width:100%; height:auto; display:block;">
+    </div>
+
+    <div id="controls">
+        <div class="control-group">
+            <button id="btnMyPosition" onclick="getUserLocation()">📍 Ma position</button>
+            <button onclick="resetMapView()" id="resetViewBtn" style="display:none;">🔄 Réinitialiser la vue</button>
+
+            <div class="slider-group">
+                <span class="slider-label">Rayon:</span>
+                <input type="range" id="radiusRange" min="5" max="100" value="30" step="5">
+                <span class="slider-value"><span id="radiusValue">30</span> km</span>
+            </div>
+
+            <div class="slider-group">
+                <span class="slider-label">Période:</span>
+                <input type="range" id="daysRange" min="1" max="30" value="7" step="1">
+                <span class="slider-value"><span id="daysValue">7</span> jours</span>
+            </div>
+
+            <div class="status" id="status">👆 Maintenez appuyé sur la carte</div>
+        </div>
+    </div>
+
+    <div id="stats">
+        <div class="source-toggle active" id="toggle-datatourisme" onclick="toggleSource('datatourisme')">
+            <span class="toggle-icon">🔵</span>
+            <div>
+                <div class="toggle-value" id="datatourisme-count">0</div>
+                <div class="toggle-label">DATAtourisme</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
+        <div class="source-toggle active" id="toggle-openagenda" onclick="toggleSource('openagenda')">
+            <span class="toggle-icon">🟠</span>
+            <div>
+                <div class="toggle-value" id="openagenda-count">0</div>
+                <div class="toggle-label">OpenAgenda</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
+        <div class="source-toggle active" id="toggle-cinema" onclick="toggleCinema()">
+            <span class="toggle-icon">🎬</span>
+            <div>
+                <div class="toggle-value" id="cinema-count">0</div>
+                <div class="toggle-label">Cinéma</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="map-instructions">👆 Maintenez appuyé 2s pour sélectionner un point</div>
+    </div>
+
+    <!-- Indicateur de long-press -->
+    <div id="longpress-indicator">
+        <svg viewBox="0 0 60 60">
+            <circle class="bg-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="progress-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="center-dot" cx="30" cy="30" r="5"></circle>
+        </svg>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+    
+    <!-- MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin="anonymous"></script>
+
+    <script>
+        // Configuration - URL relative pour le même serveur
+        var SERVER_URL = window.location.origin;
+        var LONGPRESS_DURATION = 2000; // 2 secondes
+        var LONGPRESS_MOVE_THRESHOLD = 80; // pixels - tolérance pour les mouvements involontaires sur mobile
+
+        // État global
+        var map = null;
+        var currentMarkerCluster = null;
+        var currentPosition = null;
+        var currentRadiusKm = 30;
+        var currentDays = 7;
+        var currentContextLabel = '';
+        var currentFetchController = null;
+        var currentRadiusCircle = null;
+        var currentCenterMarker = null;
+        var initialMapBounds = null;
+        var allEventsData = []; // Stocke tous les événements reçus
+        var cinemaEventsData = []; // Stocke les événements cinéma
+        var showDatatourisme = true;
+        var showOpenagenda = true;
+        var showCinema = true;
+
+        // État du long-press
+        var longPressTimer = null;
+        var longPressInterval = null;
+        var longPressStartTime = null;
+        var longPressStartX = 0;
+        var longPressStartY = 0;
+        var longPressLatLng = null;
+        var longPressActive = false;
+        var clearOldSearchTimer = null;
+
+        // Éléments DOM
+        var indicator = document.getElementById('longpress-indicator');
+        var progressCircle = indicator.querySelector('.progress-circle');
+        var mapInstructions = document.getElementById('map-instructions');
+
+        // Créer une icône personnalisée selon la source
+        function createCustomIcon(source) {
+            var color;
+            if (source === 'DATAtourisme') {
+                color = '#3b82f6'; // Bleu
+            } else if (source === 'OpenAgenda') {
+                color = '#f97316'; // Orange
+            } else if (source === 'Allocine') {
+                color = '#800020'; // Rouge bordeaux
+            } else {
+                color = '#888888'; // Gris par défaut
+            }
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="event-marker" style="background:' + color + ';"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+        }
+
+        // Initialiser la carte
+        function initMap() {
+            map = L.map('map', {
+                center: [46.603354, 1.888334],
+                zoom: 6,
+                tap: true,
+                tapTolerance: 15
+            });
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            setupLongPressEvents();
+        }
+
+        // Configuration des événements long-press
+        function setupLongPressEvents() {
+            var mapEl = document.getElementById('map');
+
+            // Desktop - souris
+            mapEl.addEventListener('mousedown', onPressStart);
+            document.addEventListener('mouseup', onPressEnd);
+            document.addEventListener('mousemove', onPressMove);
+
+            // Mobile - tactile (passive: false requis pour preventDefault sur iOS)
+            mapEl.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchend', onPressEnd, { passive: true });
+            document.addEventListener('touchcancel', onPressEnd, { passive: true });
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+
+            // Annuler lors du déplacement/zoom de la carte
+            map.on('movestart', cancelLongPress);
+            map.on('zoomstart', cancelLongPress);
+        }
+
+        function onTouchStart(e) {
+            if (e.touches.length !== 1) return;
             
-            cinemas_checked += 1
+            var touch = e.touches[0];
+            var target = document.elementFromPoint(touch.clientX, touch.clientY);
             
-            # Récupérer les films de ce cinéma
-            try:
-                movies = api.get_movies(cinema_id, today)
+            // Ne PAS intercepter les touches sur les marqueurs, popups, clusters ou contrôles
+            if (target && (
+                target.closest('.leaflet-marker-icon') ||
+                target.closest('.leaflet-marker-pane') ||
+                target.closest('.leaflet-popup') ||
+                target.closest('.leaflet-popup-pane') ||
+                target.closest('.leaflet-control') ||
+                target.closest('.marker-cluster') ||
+                target.closest('.leaflet-interactive')
+            )) {
+                return;
+            }
+            
+            // iOS: empêcher le menu contextuel natif
+            e.preventDefault();
+            
+            onPressStart({ clientX: touch.clientX, clientY: touch.clientY, target: target });
+        }
+
+        function onTouchMove(e) {
+            if (!longPressActive) return;
+            if (e.touches.length !== 1) return;
+            
+            // iOS: empêcher le scroll pendant le long-press
+            e.preventDefault();
+            
+            var touch = e.touches[0];
+            onPressMove({ clientX: touch.clientX, clientY: touch.clientY });
+        }
+
+        function onPressStart(e) {
+            // Ignorer les clics sur les contrôles Leaflet, marqueurs, popups, clusters
+            if (e.target && (
+                e.target.closest('.leaflet-control') || 
+                e.target.closest('.leaflet-popup') ||
+                e.target.closest('.leaflet-popup-pane') ||
+                e.target.closest('.leaflet-marker-icon') ||
+                e.target.closest('.leaflet-marker-pane') ||
+                e.target.closest('.marker-cluster') ||
+                e.target.closest('.leaflet-interactive')
+            )) {
+                return;
+            }
+
+            // Annuler tout long-press précédent
+            cancelLongPress();
+
+            // Programmer le nettoyage de l'ancienne recherche après 1 seconde
+            clearOldSearchTimer = setTimeout(function() {
+                if (longPressActive) {
+                    clearOldSearch();
+                }
+            }, 1000);
+
+            // Calculer les coordonnées sur la carte
+            var mapContainer = map.getContainer();
+            var rect = mapContainer.getBoundingClientRect();
+            var point = L.point(e.clientX - rect.left, e.clientY - rect.top);
+            
+            // Stocker les infos du nouveau long-press
+            longPressLatLng = map.containerPointToLatLng(point);
+            longPressStartTime = Date.now();
+            longPressStartX = e.clientX;
+            longPressStartY = e.clientY;
+            longPressActive = true;
+
+            // Positionner et afficher l'indicateur
+            indicator.style.left = e.clientX + 'px';
+            indicator.style.top = e.clientY + 'px';
+            progressCircle.style.strokeDashoffset = '188.5';
+            indicator.classList.add('visible');
+
+            // Animation de progression
+            longPressInterval = setInterval(function() {
+                if (!longPressActive) {
+                    clearInterval(longPressInterval);
+                    return;
+                }
                 
-                if movies:
-                    print(f"   🎬 [{cinemas_checked}] {cinema_name}: {len(movies)} films")
+                var elapsed = Date.now() - longPressStartTime;
+                var progress = Math.min(elapsed / LONGPRESS_DURATION, 1);
+                var offset = 188.5 * (1 - progress);
+                progressCircle.style.strokeDashoffset = String(offset);
+            }, 30);
+
+            // Timer pour déclencher la recherche
+            longPressTimer = setTimeout(function() {
+                if (longPressActive && longPressLatLng) {
+                    var lat = longPressLatLng.lat;
+                    var lng = longPressLatLng.lng;
                     
-                    for movie in movies:
-                        film_title = movie.get('title', 'Film inconnu')
-                        film_id = movie.get('id', '')
+                    cancelLongPress();
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lng);
+                }
+            }, LONGPRESS_DURATION);
+        }
+
+        function onPressMove(e) {
+            if (!longPressActive) return;
+
+            var dx = e.clientX - longPressStartX;
+            var dy = e.clientY - longPressStartY;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > LONGPRESS_MOVE_THRESHOLD) {
+                cancelLongPress();
+            }
+        }
+
+        function onPressEnd() {
+            cancelLongPress();
+        }
+
+        function cancelLongPress() {
+            if (longPressTimer !== null) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            if (longPressInterval !== null) {
+                clearInterval(longPressInterval);
+                longPressInterval = null;
+            }
+
+            if (clearOldSearchTimer !== null) {
+                clearTimeout(clearOldSearchTimer);
+                clearOldSearchTimer = null;
+            }
+            
+            longPressActive = false;
+            longPressLatLng = null;
+            longPressStartTime = null;
+            longPressStartX = 0;
+            longPressStartY = 0;
+            
+            indicator.classList.remove('visible');
+            progressCircle.style.strokeDashoffset = '188.5';
+        }
+
+        // Effacer l'ancienne recherche
+        function clearOldSearch() {
+            if (currentMarkerCluster) {
+                map.removeLayer(currentMarkerCluster);
+                currentMarkerCluster = null;
+            }
+            if (currentRadiusCircle) {
+                map.removeLayer(currentRadiusCircle);
+                currentRadiusCircle = null;
+            }
+            if (currentCenterMarker) {
+                map.removeLayer(currentCenterMarker);
+                currentCenterMarker = null;
+            }
+            allEventsData = [];
+            updateStats([], {});
+        }
+
+        // Quand un point est sélectionné
+        function onLocationSelected(lat, lon) {
+            // Vérifier si en France
+            var isInFrance = (lat >= 41 && lat <= 51) && (lon >= -5 && lon <= 10);
+            if (!isInFrance) {
+                updateStatus('⚠️ Position hors France métropolitaine', 'error');
+                return;
+            }
+
+            updateStatus('🔍 Recherche de la localisation...', 'active');
+            
+            // Géocodage inverse
+            getCityFromCoordinates(lat, lon).then(function(locationInfo) {
+                if (locationInfo && locationInfo.city) {
+                    currentContextLabel = 'à ' + locationInfo.city;
+                } else {
+                    currentContextLabel = 'à cette position';
+                }
+
+                currentPosition = { coords: { latitude: lat, longitude: lon } };
+                fetchNearbyEvents(currentPosition);
+            });
+        }
+
+        // Obtenir la position GPS de l'utilisateur
+        function getUserLocation() {
+            if (!navigator.geolocation) {
+                updateStatus('❌ Géolocalisation non supportée', 'error');
+                return;
+            }
+
+            clearOldSearch();
+            updateStatus('🔍 Recherche de votre position...', 'active');
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    
+                    map.setView([lat, lon], 11);
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lon);
+                },
+                function(error) {
+                    var msg = '❌ ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            msg += 'Permission refusée (activez la localisation)';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            msg += 'Position non disponible';
+                            break;
+                        case error.TIMEOUT:
+                            msg += 'Délai dépassé';
+                            break;
+                        default:
+                            msg += 'Erreur de géolocalisation';
+                    }
+                    updateStatus(msg, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        // Géocodage inverse
+        function getCityFromCoordinates(lat, lon) {
+            return fetch(
+                'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&zoom=10&addressdetails=1',
+                { headers: { 'User-Agent': 'DATAtourisme OpenAgenda Events App' } }
+            )
+            .then(function(response) {
+                if (!response.ok) return null;
+                return response.json();
+            })
+            .then(function(data) {
+                if (!data) return null;
+                var address = data.address || {};
+                var city = address.city || address.town || address.village || 
+                          address.municipality || address.county || address.state;
+                return { city: city, country: address.country || '' };
+            })
+            .catch(function(e) {
+                console.error('Erreur géocodage:', e);
+                return null;
+            });
+        }
+
+        // Mettre à jour le statut
+        function updateStatus(message, type) {
+            type = type || 'waiting';
+            var statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+            
+            if (type === 'active' && message.indexOf('🔍') >= 0) {
+                statusEl.classList.add('loading');
+            }
+        }
+
+        // Mettre à jour les stats (depuis allEventsData pour toujours afficher les totaux)
+        function updateStats(events, sources) {
+            // Compter par source depuis TOUS les événements (pas filtrés)
+            var datatourismeCount = 0;
+            var openagendaCount = 0;
+            
+            for (var j = 0; j < allEventsData.length; j++) {
+                var src = allEventsData[j].source;
+                if (src === 'OpenAgenda') {
+                    openagendaCount++;
+                } else {
+                    datatourismeCount++;
+                }
+            }
+            
+            document.getElementById('datatourisme-count').textContent = datatourismeCount;
+            document.getElementById('openagenda-count').textContent = openagendaCount;
+        }
+
+        // Basculer l'affichage d'une source
+        function toggleSource(source) {
+            var toggleEl = document.getElementById('toggle-' + source);
+            
+            if (source === 'datatourisme') {
+                showDatatourisme = !showDatatourisme;
+                toggleEl.classList.toggle('active', showDatatourisme);
+                toggleEl.classList.toggle('inactive', !showDatatourisme);
+            } else if (source === 'openagenda') {
+                showOpenagenda = !showOpenagenda;
+                toggleEl.classList.toggle('active', showOpenagenda);
+                toggleEl.classList.toggle('inactive', !showOpenagenda);
+            }
+            
+            // Réafficher les événements filtrés
+            if (allEventsData.length > 0 && currentPosition) {
+                var filteredEvents = filterEventsBySource(allEventsData);
+                // Ajouter les événements cinéma si activé
+                if (showCinema && cinemaEventsData.length > 0) {
+                    filteredEvents = filteredEvents.concat(cinemaEventsData);
+                }
+                displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+            }
+        }
+
+        // Toggle spécifique pour le cinéma
+        function toggleCinema() {
+            var toggleEl = document.getElementById('toggle-cinema');
+            showCinema = !showCinema;
+            toggleEl.classList.toggle('active', showCinema);
+            toggleEl.classList.toggle('inactive', !showCinema);
+            
+            // Si on active et qu'on a une position, charger les données cinéma
+            if (showCinema && currentPosition && cinemaEventsData.length === 0) {
+                fetchCinemaEvents(currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+            } else if (currentPosition) {
+                // Réafficher avec/sans cinéma
+                var filteredEvents = filterEventsBySource(allEventsData);
+                if (showCinema && cinemaEventsData.length > 0) {
+                    filteredEvents = filteredEvents.concat(cinemaEventsData);
+                }
+                displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+            }
+        }
+
+        // Récupérer les événements cinéma
+        function fetchCinemaEvents(lat, lon, radiusKm) {
+            var url = '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
+            
+            document.getElementById('status').textContent = '🎬 Chargement des séances de cinéma...';
+            
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.status === 'success') {
+                        cinemaEventsData = data.events || [];
+                        document.getElementById('cinema-count').textContent = cinemaEventsData.length;
                         
-                        all_cinema_events.append({
-                            "uid": f"allocine-{cinema_id}-{film_id}",
-                            "title": f"🎬 {film_title}",
-                            "begin": today,
-                            "end": today,
-                            "locationName": cinema_name,
-                            "city": location_name,
-                            "address": cinema_address,
-                            "latitude": cinema_coords[0],
-                            "longitude": cinema_coords[1],
-                            "distanceKm": round(best_dist, 1),
-                            "openagendaUrl": "",
-                            "agendaTitle": cinema_name,
-                            "source": "Allocine",
-                            "director": movie.get('director', ''),
-                            "genres": movie.get('genres', []),
-                            "runtime": movie.get('runtime', 0),
-                            "poster": movie.get('urlPoster', ''),
-                            "synopsis": movie.get('synopsisFull', '')[:200] if movie.get('synopsisFull') else ''
-                        })
-                else:
-                    print(f"   🎬 [{cinemas_checked}] {cinema_name}: aucun film aujourd'hui")
+                        // Afficher avec les autres événements
+                        var filteredEvents = filterEventsBySource(allEventsData);
+                        if (showCinema) {
+                            filteredEvents = filteredEvents.concat(cinemaEventsData);
+                        }
+                        displayEventsOnMap(filteredEvents, lat, lon, radiusKm);
                         
-            except Exception as e:
-                print(f"      ⚠️ Erreur pour {cinema_name}: {e}")
-                continue
-        
-        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées dans {cinemas_checked} cinémas")
-        return all_cinema_events
-        
-    except Exception as e:
-        print(f"❌ Erreur Allociné: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
+                        document.getElementById('status').textContent = '✅ ' + cinemaEventsData.length + ' séances de cinéma trouvées';
+                    } else {
+                        console.error('Erreur cinéma:', data.message);
+                        document.getElementById('status').textContent = '⚠️ Erreur cinéma: ' + data.message;
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Erreur fetch cinéma:', error);
+                    document.getElementById('status').textContent = '⚠️ Erreur chargement cinéma';
+                });
+        }
 
+        // Filtrer les événements selon les sources sélectionnées
+        function filterEventsBySource(events) {
+            return events.filter(function(e) {
+                if (e.source === 'OpenAgenda') {
+                    return showOpenagenda;
+                } else if (e.source === 'Allocine') {
+                    return showCinema;
+                } else {
+                    return showDatatourisme;
+                }
+            });
+        }
 
-@app.route('/api/cinema/nearby', methods=['GET'])
-def get_nearby_cinema():
-    """
-    Récupère les séances de cinéma à proximité d'une position
-    """
-    try:
-        center_lat = request.args.get('lat', type=float)
-        center_lon = request.args.get('lon', type=float)
-        radius_km = request.args.get('radiusKm', RADIUS_KM_DEFAULT, type=int)
-        
-        if center_lat is None or center_lon is None:
-            return jsonify({
-                "status": "error",
-                "message": "Paramètres 'lat' et 'lon' requis"
-            }), 400
-        
-        cinema_events = fetch_allocine_cinemas(center_lat, center_lon, radius_km)
-        
-        return jsonify({
-            "status": "success",
-            "center": {"latitude": center_lat, "longitude": center_lon},
-            "radiusKm": radius_km,
-            "events": cinema_events,
-            "count": len(cinema_events),
-            "source": "Allocine"
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Erreur: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+        // Formater date
+        function formatDate(isoString) {
+            if (!isoString) return 'Date non précisée';
+            try {
+                return new Date(isoString).toLocaleDateString('fr-FR', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Date non précisée';
+            }
+        }
 
+        // Afficher les événements
+        function displayEventsOnMap(events, centerLat, centerLon, radiusKm) {
+            if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
+            if (currentRadiusCircle) map.removeLayer(currentRadiusCircle);
+            if (currentCenterMarker) map.removeLayer(currentCenterMarker);
 
-# ============================================================================
-# LANCEMENT DU SERVEUR
-# ============================================================================
+            // Créer le cluster avec couleurs personnalisées
+            currentMarkerCluster = L.markerClusterGroup({
+                chunkedLoading: true,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                iconCreateFunction: function(cluster) {
+                    var markers = cluster.getAllChildMarkers();
+                    var dtCount = 0;
+                    var oaCount = 0;
+                    var cinemaCount = 0;
+                    
+                    for (var i = 0; i < markers.length; i++) {
+                        if (markers[i].options.source === 'OpenAgenda') {
+                            oaCount++;
+                        } else if (markers[i].options.source === 'Allocine') {
+                            cinemaCount++;
+                        } else {
+                            dtCount++;
+                        }
+                    }
+                    
+                    var count = cluster.getChildCount();
+                    
+                    // Couleur selon le niveau de regroupement
+                    var bgColor;
+                    var totalEvents = allEventsData.length + cinemaEventsData.length;
+                    
+                    // Si c'est le cluster global (contient tous ou presque tous les événements) → vert
+                    if (count >= totalEvents * 0.8) {
+                        bgColor = '#22c55e'; // Vert pour le total
+                    } else {
+                        // Sinon, couleur selon la source dominante
+                        var maxCount = Math.max(dtCount, oaCount, cinemaCount);
+                        if (maxCount === cinemaCount && cinemaCount > 0) {
+                            bgColor = '#800020'; // Rouge bordeaux Cinéma
+                        } else if (maxCount === oaCount && oaCount > 0) {
+                            bgColor = '#f97316'; // Orange OpenAgenda
+                        } else if (maxCount === dtCount && dtCount > 0) {
+                            bgColor = '#3b82f6'; // Bleu DATAtourisme
+                        } else {
+                            bgColor = '#8b5cf6'; // Violet si égalité
+                        }
+                    }
+                    
+                    var size = count >= 100 ? 50 : (count >= 10 ? 40 : 30);
+                    var fontSize = size > 35 ? 14 : 12;
+                    
+                    return L.divIcon({
+                        html: '<div style="background:' + bgColor + ';width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:' + fontSize + 'px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + count + '</div>',
+                        className: 'marker-cluster',
+                        iconSize: [size, size]
+                    });
+                }
+            });
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    
-    print("="*70)
-    print("🚀 API DATATOURISME + OPENAGENDA + ALLOCINÉ")
-    print("="*70)
-    print(f"Port: {port}")
-    print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
-    print(f"OpenAgenda API: {BASE_URL}")
-    print(f"Allociné: {'Disponible' if ALLOCINE_AVAILABLE else 'Non disponible'}")
-    print(f"Rayon par défaut: {RADIUS_KM_DEFAULT} km")
-    print(f"Période par défaut: {DAYS_AHEAD_DEFAULT} jours")
-    print("="*70)
-    print()
-    
-    app.run(host='0.0.0.0', port=port, debug=True)
+            if (centerLat && centerLon && radiusKm) {
+                currentRadiusCircle = L.circle([centerLat, centerLon], {
+                    radius: radiusKm * 1000,
+                    color: '#667eea',
+                    fillColor: '#667eea',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    dashArray: '5, 10',
+                    interactive: false
+                }).addTo(map);
+
+                currentCenterMarker = L.marker([centerLat, centerLon], {
+                    icon: L.divIcon({
+                        className: 'center-marker',
+                        html: '<div style="background:#22c55e;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                }).addTo(map).bindPopup('<strong>📍 Point de recherche</strong>');
+            }
+
+            for (var i = 0; i < events.length; i++) {
+                var event = events[i];
+                if (!event.latitude || !event.longitude) continue;
+
+                var source = event.source || 'DATAtourisme';
+                var icon = createCustomIcon(source);
+                
+                var marker = L.marker([event.latitude, event.longitude], {
+                    icon: icon,
+                    source: source
+                });
+                
+                // Zoomer sur le marqueur quand on clique dessus
+                marker.on('click', function(e) {
+                    // Zoomer et centrer
+                    map.setView(e.latlng, 14);
+                    // Forcer l'affichage du marqueur hors cluster et ouvrir le popup
+                    setTimeout(function() {
+                        currentMarkerCluster.zoomToShowLayer(marker, function() {
+                            marker.openPopup();
+                        });
+                    }, 300);
+                });
+                
+                // Badge de source
+                var sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
+                var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🟠 OpenAgenda';
+                
+                var popupHtml = '<div class="event-popup">';
+                popupHtml += '<h3>' + (event.title || 'Événement sans titre') + '</h3>';
+                popupHtml += '<span class="source-badge ' + sourceBadgeClass + '">' + sourceLabel + '</span>';
+                if (event.begin) popupHtml += '<div class="date">📅 ' + formatDate(event.begin) + '</div>';
+                if (event.locationName) popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
+                if (event.address) popupHtml += '<div class="address">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+                if (event.distanceKm !== undefined) popupHtml += '<div class="distance">📏 ' + event.distanceKm + ' km</div>';
+                if (event.agendaTitle) popupHtml += '<div class="address">📚 ' + event.agendaTitle + '</div>';
+                if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
+                popupHtml += '</div>';
+                
+                marker.bindPopup(popupHtml, { maxWidth: 320 });
+                currentMarkerCluster.addLayer(marker);
+            }
+
+            map.addLayer(currentMarkerCluster);
+
+            if (centerLat && centerLon && radiusKm && currentRadiusCircle) {
+                map.fitBounds(currentRadiusCircle.getBounds().pad(0.1));
+                initialMapBounds = currentRadiusCircle.getBounds().pad(0.1);
+                document.getElementById('resetViewBtn').style.display = 'inline-block';
+            }
+
+            updateStats(events, {});
+        }
+
+        // Réinitialiser la vue de la carte
+        function resetMapView() {
+            if (initialMapBounds && map) {
+                map.fitBounds(initialMapBounds);
+            }
+        }
+
+        // Récupérer les événements
+        function fetchNearbyEvents(position) {
+            if (!position) {
+                updateStatus('❌ Position non disponible', 'error');
+                return;
+            }
+
+            if (currentFetchController) currentFetchController.abort();
+            currentFetchController = new AbortController();
+
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            var placeText = currentContextLabel || 'à proximité';
+
+            updateStatus('🔍 Connexion au serveur...', 'active');
+
+            var url = SERVER_URL + '/api/events/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + currentRadiusKm + '&days=' + currentDays;
+
+            var timeoutId = setTimeout(function() { currentFetchController.abort(); }, 180000);
+
+            updateStatus('🔍 Recherche ' + placeText + ' (' + currentRadiusKm + 'km, ' + currentDays + 'j)...', 'active');
+
+            fetch(url, { signal: currentFetchController.signal })
+                .then(function(res) {
+                    clearTimeout(timeoutId);
+                    return res.json();
+                })
+                .then(function(result) {
+                    console.log('Résultat API:', result);
+                    
+                    if (result.status !== 'success') {
+                        updateStatus('❌ ' + (result.message || 'Erreur'), 'error');
+                        return;
+                    }
+
+                    var events = result.events || [];
+                    var sources = result.sources || {};
+                    
+                    // Stocker tous les événements
+                    allEventsData = events;
+                    
+                    // Réinitialiser les événements cinéma
+                    cinemaEventsData = [];
+                    document.getElementById('cinema-count').textContent = '0';
+                    
+                    if (events.length === 0) {
+                        updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
+                        displayEventsOnMap([], lat, lon, currentRadiusKm);
+                        // Charger quand même les cinémas si activé
+                        if (showCinema) {
+                            fetchCinemaEvents(lat, lon, currentRadiusKm);
+                        }
+                        return;
+                    }
+
+                    // Filtrer selon les sources sélectionnées
+                    var filteredEvents = filterEventsBySource(events);
+                    displayEventsOnMap(filteredEvents, lat, lon, currentRadiusKm);
+                    
+                    var dtCount = sources.DATAtourisme || 0;
+                    var oaCount = sources.OpenAgenda || 0;
+                    updateStatus('✅ ' + events.length + ' événement(s) ' + placeText + ' (🔵' + dtCount + ' 🟠' + oaCount + ')', 'active');
+                    
+                    // Charger les séances de cinéma si le bouton est activé
+                    if (showCinema) {
+                        fetchCinemaEvents(lat, lon, currentRadiusKm);
+                    }
+                })
+                .catch(function(e) {
+                    if (e.name === 'AbortError') return;
+                    console.error('Erreur:', e);
+                    updateStatus('❌ Erreur: ' + e.message, 'error');
+                });
+        }
+
+        // Configuration des sliders
+        function setupSliders() {
+            var radiusRange = document.getElementById('radiusRange');
+            var daysRange = document.getElementById('daysRange');
+            var radiusValue = document.getElementById('radiusValue');
+            var daysValue = document.getElementById('daysValue');
+
+            radiusRange.addEventListener('input', function() {
+                currentRadiusKm = parseInt(radiusRange.value, 10);
+                radiusValue.textContent = currentRadiusKm;
+                if (currentRadiusCircle) {
+                    currentRadiusCircle.setRadius(currentRadiusKm * 1000);
+                }
+            });
+
+            daysRange.addEventListener('input', function() {
+                currentDays = parseInt(daysRange.value, 10);
+                daysValue.textContent = currentDays;
+            });
+
+            radiusRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
+            });
+
+            daysRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
+            });
+        }
+
+        // Initialisation - attendre que Leaflet soit disponible
+        function init() {
+            if (typeof L === 'undefined') {
+                // Leaflet pas encore chargé, réessayer dans 100ms
+                setTimeout(init, 100);
+                return;
+            }
+            initMap();
+            setupSliders();
+            updateStatus('👆 Maintenez appuyé sur la carte', 'waiting');
+        }
+
+        // Lancer l'initialisation quand le DOM est prêt
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
