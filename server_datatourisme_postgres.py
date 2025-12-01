@@ -574,7 +574,7 @@ def health():
 
 def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
     """
-    Récupère les séances de cinéma via allocine-seances.
+    Récupère les séances de cinéma via scraping du site allocine.fr.
     """
     if not ALLOCINE_AVAILABLE:
         print("⚠️ Allociné API non disponible")
@@ -586,140 +586,128 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
         api = allocineAPI()
         today = datetime.now().strftime("%Y-%m-%d")
         
-        # Récupérer les top villes
-        print("   🔍 Récupération des villes Allociné...")
-        top_villes = api.get_top_villes()
-        print(f"   📍 {len(top_villes)} villes disponibles")
-        
-        if not top_villes:
-            print("   ❌ Aucune ville disponible")
-            return []
-        
-        # Debug: afficher les premières villes
-        print(f"   Premières villes: {[v.get('name') for v in top_villes[:5]]}")
-        
-        # Trouver la ville la plus proche par coordonnées
-        # Mapping des grandes villes françaises avec leurs coordonnées
-        villes_coords = {
-            'paris': (48.8566, 2.3522),
-            'marseille': (43.2965, 5.3698),
-            'lyon': (45.7640, 4.8357),
-            'toulouse': (43.6047, 1.4442),
-            'nice': (43.7102, 7.2620),
-            'nantes': (47.2184, -1.5536),
-            'strasbourg': (48.5734, 7.7521),
-            'montpellier': (43.6108, 3.8767),
-            'bordeaux': (44.8378, -0.5792),
-            'lille': (50.6292, 3.0573),
-            'rennes': (48.1173, -1.6778),
-            'reims': (49.2583, 4.0317),
-            'le havre': (49.4944, 0.1079),
-            'saint-etienne': (45.4397, 4.3872),
-            'toulon': (43.1242, 5.9280),
-            'grenoble': (45.1885, 5.7245),
-            'dijon': (47.3220, 5.0415),
-            'angers': (47.4784, -0.5632),
-            'nimes': (43.8367, 4.3601),
-            'villeurbanne': (45.7676, 4.8798),
-            'clermont-ferrand': (45.7772, 3.0870),
-            'aix-en-provence': (43.5297, 5.4474),
-            'brest': (48.3904, -4.4861),
-            'tours': (47.3941, 0.6848),
-            'amiens': (49.8941, 2.2958),
-            'limoges': (45.8336, 1.2611),
-            'perpignan': (42.6986, 2.8954),
-            'metz': (49.1193, 6.1757),
-            'besancon': (47.2378, 6.0241),
-            'orleans': (47.9029, 1.9093),
-            'rouen': (49.4432, 1.0993),
-            'caen': (49.1829, -0.3707),
-            'nancy': (48.6921, 6.1844),
-            'avignon': (43.9493, 4.8055),
-            'cannes': (43.5528, 7.0174),
-            'antibes': (43.5808, 7.1239),
+        # Dictionnaire des grandes villes avec leurs IDs Allociné et coordonnées
+        villes_allocine = {
+            'Paris': {'coords': (48.8566, 2.3522)},
+            'Marseille': {'coords': (43.2965, 5.3698)},
+            'Lyon': {'coords': (45.7640, 4.8357)},
+            'Toulouse': {'coords': (43.6047, 1.4442)},
+            'Nice': {'coords': (43.7102, 7.2620)},
+            'Nantes': {'coords': (47.2184, -1.5536)},
+            'Strasbourg': {'coords': (48.5734, 7.7521)},
+            'Montpellier': {'coords': (43.6108, 3.8767)},
+            'Bordeaux': {'coords': (44.8378, -0.5792)},
+            'Lille': {'coords': (50.6292, 3.0573)},
+            'Rennes': {'coords': (48.1173, -1.6778)},
+            'Reims': {'coords': (49.2583, 4.0317)},
+            'Toulon': {'coords': (43.1242, 5.9280)},
+            'Grenoble': {'coords': (45.1885, 5.7245)},
+            'Dijon': {'coords': (47.3220, 5.0415)},
+            'Angers': {'coords': (47.4784, -0.5632)},
+            'Nîmes': {'coords': (43.8367, 4.3601)},
+            'Clermont-Ferrand': {'coords': (45.7772, 3.0870)},
+            'Aix-en-Provence': {'coords': (43.5297, 5.4474)},
+            'Brest': {'coords': (48.3904, -4.4861)},
+            'Tours': {'coords': (47.3941, 0.6848)},
+            'Amiens': {'coords': (49.8941, 2.2958)},
+            'Limoges': {'coords': (45.8336, 1.2611)},
+            'Perpignan': {'coords': (42.6986, 2.8954)},
+            'Metz': {'coords': (49.1193, 6.1757)},
+            'Besançon': {'coords': (47.2378, 6.0241)},
+            'Orléans': {'coords': (47.9029, 1.9093)},
+            'Rouen': {'coords': (49.4432, 1.0993)},
+            'Caen': {'coords': (49.1829, -0.3707)},
+            'Nancy': {'coords': (48.6921, 6.1844)},
+            'Avignon': {'coords': (43.9493, 4.8055)},
+            'Cannes': {'coords': (43.5528, 7.0174)},
         }
         
-        # Trouver la ville Allociné la plus proche
+        # Trouver la ville la plus proche
         best_ville = None
         best_dist = float('inf')
         
-        for ville in top_villes:
-            ville_name = ville.get('name', '').lower()
-            
-            # Chercher dans notre mapping
-            for nom, (vlat, vlon) in villes_coords.items():
-                if nom in ville_name or ville_name in nom:
-                    d = haversine_km(center_lat, center_lon, vlat, vlon)
-                    if d < best_dist:
-                        best_dist = d
-                        best_ville = ville
-                    break
+        for ville_name, info in villes_allocine.items():
+            vlat, vlon = info['coords']
+            d = haversine_km(center_lat, center_lon, vlat, vlon)
+            if d < best_dist:
+                best_dist = d
+                best_ville = ville_name
         
-        if not best_ville or best_dist > 100:
-            # Prendre Paris par défaut si rien trouvé à moins de 100km
-            for ville in top_villes:
-                if 'paris' in ville.get('name', '').lower():
-                    best_ville = ville
-                    best_dist = haversine_km(center_lat, center_lon, 48.8566, 2.3522)
-                    print(f"   ⚠️ Utilisation de Paris par défaut ({best_dist:.0f}km)")
-                    break
+        if best_dist > 100:
+            print(f"   ⚠️ Aucune grande ville à moins de 100km (plus proche: {best_ville} à {best_dist:.0f}km)")
+            # On continue quand même avec la ville la plus proche
         
-        if not best_ville:
-            print("   ❌ Aucune ville Allociné trouvée")
+        print(f"   📍 Ville la plus proche: {best_ville} ({best_dist:.0f}km)")
+        
+        # Récupérer les top villes d'Allociné
+        print("   🔍 Récupération des villes Allociné...")
+        top_villes = api.get_top_villes()
+        
+        if not top_villes:
+            print("   ❌ Impossible de récupérer les villes Allociné")
             return []
         
-        location_id = best_ville.get('id')
-        location_name = best_ville.get('name')
-        print(f"   ✓ Ville sélectionnée: {location_name} (ID: {location_id}, {best_dist:.0f}km)")
+        print(f"   📋 {len(top_villes)} villes disponibles: {[v.get('name') for v in top_villes[:8]]}...")
         
-        # Récupérer les cinémas
+        # Trouver l'ID de la ville dans Allociné
+        location_id = None
+        location_name = None
+        
+        for ville in top_villes:
+            ville_allocine_name = ville.get('name', '').lower()
+            if best_ville.lower() in ville_allocine_name or ville_allocine_name in best_ville.lower():
+                location_id = ville.get('id')
+                location_name = ville.get('name')
+                print(f"   ✓ Ville Allociné trouvée: {location_name} (ID: {location_id})")
+                break
+        
+        if not location_id:
+            print(f"   ❌ Ville {best_ville} non trouvée dans Allociné")
+            return []
+        
+        # Récupérer les cinémas de cette ville
+        print(f"   🎥 Récupération des cinémas de {location_name}...")
         cinemas = api.get_cinema(location_id)
-        print(f"   🎥 {len(cinemas)} cinémas trouvés")
         
         if not cinemas:
             print("   ❌ Aucun cinéma trouvé")
             return []
         
+        print(f"   🎥 {len(cinemas)} cinémas trouvés")
+        
         all_cinema_events = []
         cinemas_checked = 0
+        cinema_coords = villes_allocine.get(best_ville, {}).get('coords', (center_lat, center_lon))
         
-        for cinema in cinemas:
+        for cinema in cinemas[:15]:  # Limiter à 15 cinémas
             cinema_name = cinema.get('name', 'Cinéma')
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
             
-            # Pour les cinémas, on utilise le centre comme position approximative
-            # (le géocodage prend trop de temps)
-            cinema_lat = center_lat
-            cinema_lon = center_lon
-            dist = best_dist  # Distance approximative à la ville
-            
             cinemas_checked += 1
             
-            if cinemas_checked > 10:
-                print(f"   ⚠️ Limite de 10 cinémas atteinte")
-                break
-            
-            # Récupérer les films
+            # Récupérer les films de ce cinéma
             try:
                 movies = api.get_movies(cinema_id, today)
                 
                 if movies:
                     print(f"   🎬 [{cinemas_checked}] {cinema_name}: {len(movies)} films")
+                    
                     for movie in movies:
                         film_title = movie.get('title', 'Film inconnu')
+                        film_id = movie.get('id', '')
                         
                         all_cinema_events.append({
-                            "uid": f"allocine-{cinema_id}-{movie.get('id', '')}",
+                            "uid": f"allocine-{cinema_id}-{film_id}",
                             "title": f"🎬 {film_title}",
                             "begin": today,
                             "end": today,
                             "locationName": cinema_name,
                             "city": location_name,
                             "address": cinema_address,
-                            "latitude": cinema_lat,
-                            "longitude": cinema_lon,
-                            "distanceKm": round(dist, 1),
+                            "latitude": cinema_coords[0],
+                            "longitude": cinema_coords[1],
+                            "distanceKm": round(best_dist, 1),
                             "openagendaUrl": "",
                             "agendaTitle": cinema_name,
                             "source": "Allocine",
@@ -730,13 +718,13 @@ def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
                             "synopsis": movie.get('synopsisFull', '')[:200] if movie.get('synopsisFull') else ''
                         })
                 else:
-                    print(f"   🎬 [{cinemas_checked}] {cinema_name}: aucun film")
+                    print(f"   🎬 [{cinemas_checked}] {cinema_name}: aucun film aujourd'hui")
                         
             except Exception as e:
-                print(f"      ⚠️ Erreur films pour {cinema_name}: {e}")
+                print(f"      ⚠️ Erreur pour {cinema_name}: {e}")
                 continue
         
-        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées")
+        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées dans {cinemas_checked} cinémas")
         return all_cinema_events
         
     except Exception as e:
