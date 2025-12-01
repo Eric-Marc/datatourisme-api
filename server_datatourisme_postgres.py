@@ -15,6 +15,15 @@ import requests
 import math
 import time
 
+# Allociné API (scraping)
+try:
+    from allocineAPI.allocineAPI import allocineAPI
+    ALLOCINE_AVAILABLE = True
+    print("✅ Allociné API disponible")
+except ImportError:
+    ALLOCINE_AVAILABLE = False
+    print("⚠️ Allociné API non disponible (pip install allocine-seances)")
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -565,146 +574,171 @@ def health():
 
 def fetch_allocine_cinemas(center_lat, center_lon, radius_km):
     """
-    Récupère les séances de cinéma via l'API Allociné v3.
-    Utilise directement les coordonnées GPS.
+    Récupère les séances de cinéma via allocine-seances.
     """
+    if not ALLOCINE_AVAILABLE:
+        print("⚠️ Allociné API non disponible")
+        return []
+    
     print(f"🎬 Allociné: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km")
     
     try:
+        api = allocineAPI()
         today = datetime.now().strftime("%Y-%m-%d")
         
-        # API Allociné v3 - endpoint showtimelist avec coordonnées GPS
-        base_url = "http://api.allocine.fr/rest/v3/showtimelist"
-        partner = "QUNXZWItQWxsb0Npbuk"
+        # Récupérer les top villes
+        print("   🔍 Récupération des villes Allociné...")
+        top_villes = api.get_top_villes()
+        print(f"   📍 {len(top_villes)} villes disponibles")
         
-        params = {
-            "partner": partner,
-            "lat": center_lat,
-            "long": center_lon,
-            "radius": min(radius_km, 500),  # Max 500km
-            "date": today,
-            "format": "json"
-        }
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36"
-        }
-        
-        print(f"   📡 Appel API: {base_url}")
-        print(f"   📍 Params: lat={center_lat}, long={center_lon}, radius={radius_km}")
-        
-        r = requests.get(base_url, params=params, headers=headers, timeout=30)
-        
-        print(f"   📥 Status: {r.status_code}")
-        
-        if r.status_code != 200:
-            print(f"   ❌ Erreur HTTP: {r.status_code}")
-            print(f"   Response: {r.text[:500]}")
+        if not top_villes:
+            print("   ❌ Aucune ville disponible")
             return []
         
-        data = r.json()
+        # Debug: afficher les premières villes
+        print(f"   Premières villes: {[v.get('name') for v in top_villes[:5]]}")
         
-        if not data:
-            print("   ❌ Réponse vide")
+        # Trouver la ville la plus proche par coordonnées
+        # Mapping des grandes villes françaises avec leurs coordonnées
+        villes_coords = {
+            'paris': (48.8566, 2.3522),
+            'marseille': (43.2965, 5.3698),
+            'lyon': (45.7640, 4.8357),
+            'toulouse': (43.6047, 1.4442),
+            'nice': (43.7102, 7.2620),
+            'nantes': (47.2184, -1.5536),
+            'strasbourg': (48.5734, 7.7521),
+            'montpellier': (43.6108, 3.8767),
+            'bordeaux': (44.8378, -0.5792),
+            'lille': (50.6292, 3.0573),
+            'rennes': (48.1173, -1.6778),
+            'reims': (49.2583, 4.0317),
+            'le havre': (49.4944, 0.1079),
+            'saint-etienne': (45.4397, 4.3872),
+            'toulon': (43.1242, 5.9280),
+            'grenoble': (45.1885, 5.7245),
+            'dijon': (47.3220, 5.0415),
+            'angers': (47.4784, -0.5632),
+            'nimes': (43.8367, 4.3601),
+            'villeurbanne': (45.7676, 4.8798),
+            'clermont-ferrand': (45.7772, 3.0870),
+            'aix-en-provence': (43.5297, 5.4474),
+            'brest': (48.3904, -4.4861),
+            'tours': (47.3941, 0.6848),
+            'amiens': (49.8941, 2.2958),
+            'limoges': (45.8336, 1.2611),
+            'perpignan': (42.6986, 2.8954),
+            'metz': (49.1193, 6.1757),
+            'besancon': (47.2378, 6.0241),
+            'orleans': (47.9029, 1.9093),
+            'rouen': (49.4432, 1.0993),
+            'caen': (49.1829, -0.3707),
+            'nancy': (48.6921, 6.1844),
+            'avignon': (43.9493, 4.8055),
+            'cannes': (43.5528, 7.0174),
+            'antibes': (43.5808, 7.1239),
+        }
+        
+        # Trouver la ville Allociné la plus proche
+        best_ville = None
+        best_dist = float('inf')
+        
+        for ville in top_villes:
+            ville_name = ville.get('name', '').lower()
+            
+            # Chercher dans notre mapping
+            for nom, (vlat, vlon) in villes_coords.items():
+                if nom in ville_name or ville_name in nom:
+                    d = haversine_km(center_lat, center_lon, vlat, vlon)
+                    if d < best_dist:
+                        best_dist = d
+                        best_ville = ville
+                    break
+        
+        if not best_ville or best_dist > 100:
+            # Prendre Paris par défaut si rien trouvé à moins de 100km
+            for ville in top_villes:
+                if 'paris' in ville.get('name', '').lower():
+                    best_ville = ville
+                    best_dist = haversine_km(center_lat, center_lon, 48.8566, 2.3522)
+                    print(f"   ⚠️ Utilisation de Paris par défaut ({best_dist:.0f}km)")
+                    break
+        
+        if not best_ville:
+            print("   ❌ Aucune ville Allociné trouvée")
             return []
         
-        # Parser la réponse
-        feed = data.get('feed', {})
-        theaters = feed.get('theaterShowtimes', [])
+        location_id = best_ville.get('id')
+        location_name = best_ville.get('name')
+        print(f"   ✓ Ville sélectionnée: {location_name} (ID: {location_id}, {best_dist:.0f}km)")
         
-        print(f"   🎥 {len(theaters)} cinémas avec séances trouvés")
+        # Récupérer les cinémas
+        cinemas = api.get_cinema(location_id)
+        print(f"   🎥 {len(cinemas)} cinémas trouvés")
         
-        if not theaters:
-            print("   ❌ Aucun cinéma trouvé dans la réponse")
-            # Debug: afficher la structure de la réponse
-            print(f"   Debug keys: {data.keys()}")
-            if 'feed' in data:
-                print(f"   Feed keys: {feed.keys()}")
+        if not cinemas:
+            print("   ❌ Aucun cinéma trouvé")
             return []
         
         all_cinema_events = []
+        cinemas_checked = 0
         
-        for theater_data in theaters[:20]:  # Limiter à 20 cinémas
-            place = theater_data.get('place', {})
-            theater = place.get('theater', {})
+        for cinema in cinemas:
+            cinema_name = cinema.get('name', 'Cinéma')
+            cinema_address = cinema.get('address', '')
+            cinema_id = cinema.get('id')
             
-            theater_name = theater.get('name', 'Cinéma inconnu')
-            theater_code = theater.get('code', '')
-            theater_address = theater.get('address', '')
-            theater_city = theater.get('city', '')
-            theater_lat = theater.get('geoloc', {}).get('lat')
-            theater_lon = theater.get('geoloc', {}).get('long')
+            # Pour les cinémas, on utilise le centre comme position approximative
+            # (le géocodage prend trop de temps)
+            cinema_lat = center_lat
+            cinema_lon = center_lon
+            dist = best_dist  # Distance approximative à la ville
             
-            # Distance
-            if theater_lat and theater_lon:
-                dist = haversine_km(center_lat, center_lon, float(theater_lat), float(theater_lon))
-            else:
-                dist = 0
-                theater_lat = center_lat
-                theater_lon = center_lon
+            cinemas_checked += 1
             
-            # Parcourir les films de ce cinéma
-            movie_showtimes = theater_data.get('movieShowtimes', [])
+            if cinemas_checked > 10:
+                print(f"   ⚠️ Limite de 10 cinémas atteinte")
+                break
             
-            print(f"   🎬 {theater_name}: {len(movie_showtimes)} films ({dist:.1f}km)")
-            
-            for movie_showtime in movie_showtimes:
-                on_show = movie_showtime.get('onShow', {})
-                movie = on_show.get('movie', {})
+            # Récupérer les films
+            try:
+                movies = api.get_movies(cinema_id, today)
                 
-                film_title = movie.get('title', 'Film inconnu')
-                film_code = movie.get('code', '')
-                director = ''
-                directors = movie.get('castingShort', {}).get('directors', '')
-                if directors:
-                    director = directors
-                
-                genres = []
-                for genre in movie.get('genre', []):
-                    genres.append(genre.get('$', ''))
-                
-                runtime = movie.get('runtime', 0)
-                poster = movie.get('poster', {}).get('href', '')
-                synopsis = movie.get('synopsis', '')[:200] if movie.get('synopsis') else ''
-                
-                # Horaires
-                showtimes = movie_showtime.get('scr', [])
-                horaires = []
-                for st in showtimes[:5]:  # Max 5 horaires
-                    horaire = st.get('t', '')
-                    if horaire:
-                        horaires.append(horaire)
-                
-                horaires_str = ', '.join(horaires) if horaires else 'Voir horaires'
-                
-                all_cinema_events.append({
-                    "uid": f"allocine-{theater_code}-{film_code}",
-                    "title": f"🎬 {film_title}",
-                    "begin": today,
-                    "end": today,
-                    "locationName": theater_name,
-                    "city": theater_city,
-                    "address": theater_address,
-                    "latitude": float(theater_lat) if theater_lat else center_lat,
-                    "longitude": float(theater_lon) if theater_lon else center_lon,
-                    "distanceKm": round(dist, 1),
-                    "openagendaUrl": f"https://www.allocine.fr/film/fichefilm_gen_cfilm={film_code}.html" if film_code else "",
-                    "agendaTitle": theater_name,
-                    "source": "Allocine",
-                    "director": director,
-                    "genres": genres,
-                    "runtime": runtime,
-                    "poster": poster,
-                    "synopsis": synopsis,
-                    "horaires": horaires_str
-                })
+                if movies:
+                    print(f"   🎬 [{cinemas_checked}] {cinema_name}: {len(movies)} films")
+                    for movie in movies:
+                        film_title = movie.get('title', 'Film inconnu')
+                        
+                        all_cinema_events.append({
+                            "uid": f"allocine-{cinema_id}-{movie.get('id', '')}",
+                            "title": f"🎬 {film_title}",
+                            "begin": today,
+                            "end": today,
+                            "locationName": cinema_name,
+                            "city": location_name,
+                            "address": cinema_address,
+                            "latitude": cinema_lat,
+                            "longitude": cinema_lon,
+                            "distanceKm": round(dist, 1),
+                            "openagendaUrl": "",
+                            "agendaTitle": cinema_name,
+                            "source": "Allocine",
+                            "director": movie.get('director', ''),
+                            "genres": movie.get('genres', []),
+                            "runtime": movie.get('runtime', 0),
+                            "poster": movie.get('urlPoster', ''),
+                            "synopsis": movie.get('synopsisFull', '')[:200] if movie.get('synopsisFull') else ''
+                        })
+                else:
+                    print(f"   🎬 [{cinemas_checked}] {cinema_name}: aucun film")
+                        
+            except Exception as e:
+                print(f"      ⚠️ Erreur films pour {cinema_name}: {e}")
+                continue
         
         print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées")
         return all_cinema_events
         
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Erreur réseau Allociné: {e}")
-        return []
     except Exception as e:
         print(f"❌ Erreur Allociné: {e}")
         import traceback
