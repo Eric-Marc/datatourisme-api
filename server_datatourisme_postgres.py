@@ -14,6 +14,7 @@ import os
 from urllib.parse import urlparse
 import requests
 import math
+import time
 
 # Allociné API (allocine-seances)
 try:
@@ -23,6 +24,28 @@ try:
 except ImportError:
     ALLOCINE_AVAILABLE = False
     print("⚠️ Allociné API non disponible (pip install allocine-seances)")
+
+print(f"📍 {len(KNOWN_CINEMAS_GPS)} cinémas avec coordonnées pré-calculées")
+
+# ============================================================================
+# CINÉMAS PARIS - COORDONNÉES PRÉ-CALCULÉES
+# ============================================================================
+
+KNOWN_CINEMAS_GPS = {
+    # Paris intra-muros (75)
+    'ugc ciné cité les halles': (48.8619, 2.3466),
+    'pathé beaugrenelle': (48.8478, 2.2820),
+    'mk2 bibliothèque': (48.8338, 2.3761),
+    'mk2 quai de seine': (48.8840, 2.3719),
+    'mk2 nation': (48.8482, 2.3969),
+    'gaumont champs-élysées': (48.8698, 2.3046),
+    'gaumont opéra': (48.8716, 2.3315),
+    'ugc montparnasse': (48.8422, 2.3244),
+    'le grand rex': (48.8707, 2.3477),
+    'pathé levallois': (48.8920, 2.2883),
+    'pathé boulogne': (48.8342, 2.2411),
+    'pathé la villette': (48.8938, 2.3889),
+}
 
 # ============================================================================
 # CONFIGURATION
@@ -562,14 +585,34 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
             
-            # Géocoder l'adresse du cinéma pour obtenir ses coordonnées
-            if cinema_address:
-                # Construire une adresse complète pour le géocodage
+            if not cinema_name:
+                continue
+            
+            # 1. ESSAYER d'abord les coordonnées pré-calculées
+            name_lower = cinema_name.lower().strip()
+            cinema_lat, cinema_lon = None, None
+            
+            # Chercher correspondance exacte
+            if name_lower in KNOWN_CINEMAS_GPS:
+                cinema_lat, cinema_lon = KNOWN_CINEMAS_GPS[name_lower]
+                print(f"   ✓ {cinema_name}: coordonnées pré-calculées")
+            else:
+                # Chercher correspondance partielle
+                for known_name, coords in KNOWN_CINEMAS_GPS.items():
+                    if known_name in name_lower or name_lower.startswith(known_name[:10]):
+                        cinema_lat, cinema_lon = coords
+                        print(f"   ✓ {cinema_name}: match partiel '{known_name}'")
+                        break
+            
+            # 2. Si pas trouvé, GÉOCODER avec Nominatim
+            if not cinema_lat and cinema_address:
                 full_address = f"{cinema_address}, France"
                 cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
                 geocoded_count += 1
-                
-                if cinema_lat and cinema_lon:
+                time.sleep(0.1)  # Rate limit
+            
+            # 3. Si on a des coordonnées (pré-calc ou géocodées), calculer distance
+            if cinema_lat and cinema_lon:
                     # Calculer la distance
                     dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
                     
