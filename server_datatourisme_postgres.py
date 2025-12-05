@@ -613,6 +613,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         print(f"⚠️ Cela peut prendre 1-2 minutes pour Paris...")
         
         for cinema in all_cinemas:
+            cinema_name = cinema.get('name', '')
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
             
