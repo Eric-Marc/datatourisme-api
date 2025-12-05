@@ -671,11 +671,11 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         for i, c in enumerate(nearby_cinemas[:5]):
             print(f"   {i+1}. {c['name']}: {c['distance']:.1f}km")
         
-        # 6. RÉCUPÉRER LES SÉANCES pour TOUS les cinémas trouvés (pas de limite)
+        # 6. RÉCUPÉRER LES FILMS pour TOUS les cinémas trouvés (pas de limite)
         all_cinema_events = []
         cinemas_with_showtimes = 0
         
-        print(f"🎬 Récupération des séances pour {len(nearby_cinemas)} cinémas...")
+        print(f"🎬 Récupération des films pour {len(nearby_cinemas)} cinémas...")
         
         for cinema_info in nearby_cinemas:  # TOUS les cinémas (pas de limite)
             cinema_id = cinema_info['id']
@@ -723,7 +723,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                             "longitude": cinema_lon,
                             "distanceKm": round(cinema_dist, 1),
                             "openagendaUrl": "",
-                            "agendaTitle": f"Séances {cinema_name}",
+                            "agendaTitle": f"Films {cinema_name}",
                             "source": "Allocine",
                             "description": f"{duration} - {versions_str}"
                         }
@@ -734,7 +734,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                 print(f"   ❌ Erreur pour {cinema_name}: {e}")
                 continue
         
-        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées dans {cinemas_with_showtimes} cinémas")
+        print(f"✅ Allociné: {len(all_cinema_events)} films trouvés dans {cinemas_with_showtimes} cinémas")
         return all_cinema_events
         
     except Exception as e:
