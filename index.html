@@ -874,11 +874,14 @@
             // Compter par source depuis les événements VISIBLES sur la carte (pas tous)
             var datatourismeCount = 0;
             var openagendaCount = 0;
+            var cinemaCount = 0;
             
             for (var j = 0; j < events.length; j++) {
                 var src = events[j].source;
                 if (src === 'OpenAgenda') {
                     openagendaCount++;
+                } else if (src === 'Allocine') {
+                    cinemaCount++;
                 } else {
                     datatourismeCount++;
                 }
@@ -886,6 +889,7 @@
             
             document.getElementById('datatourisme-count').textContent = datatourismeCount;
             document.getElementById('openagenda-count').textContent = openagendaCount;
+            document.getElementById('cinema-count').textContent = cinemaCount;
         }
 
         // Basculer l'affichage d'une source
@@ -932,6 +936,9 @@
                     filteredEvents = filteredEvents.concat(cinemaEventsData);
                 }
                 displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+                
+                // Mettre à jour les compteurs (cinéma inclus dans updateStats)
+                updateStats(filteredEvents, {});
             }
         }
 
@@ -946,7 +953,6 @@
                 .then(function(data) {
                     if (data.status === 'success') {
                         cinemaEventsData = data.events || [];
-                        document.getElementById('cinema-count').textContent = cinemaEventsData.length;
                         
                         // Afficher avec les autres événements
                         var filteredEvents = filterEventsBySource(allEventsData);
@@ -955,15 +961,21 @@
                         }
                         displayEventsOnMap(filteredEvents, lat, lon, radiusKm);
                         
+                        // Mettre à jour le compteur cinéma avec ce qui est VISIBLE sur la carte
+                        var visibleCinemaEvents = showCinema ? cinemaEventsData : [];
+                        document.getElementById('cinema-count').textContent = visibleCinemaEvents.length;
+                        
                         // Compter le nombre de cinémas uniques
                         var cinemas = {};
-                        for (var i = 0; i < cinemaEventsData.length; i++) {
-                            var locKey = cinemaEventsData[i].latitude + ',' + cinemaEventsData[i].longitude;
+                        for (var i = 0; i < visibleCinemaEvents.length; i++) {
+                            var locKey = visibleCinemaEvents[i].latitude + ',' + visibleCinemaEvents[i].longitude;
                             cinemas[locKey] = (cinemas[locKey] || 0) + 1;
                         }
                         var nbCinemas = Object.keys(cinemas).length;
                         
-                        document.getElementById('status').textContent = '✅ ' + cinemaEventsData.length + ' film(s) dans ' + nbCinemas + ' cinéma(s)';
+                        if (visibleCinemaEvents.length > 0) {
+                            document.getElementById('status').textContent = '✅ ' + visibleCinemaEvents.length + ' film(s) dans ' + nbCinemas + ' cinéma(s)';
+                        }
                     } else {
                         console.error('Erreur cinéma:', data.message);
                         document.getElementById('status').textContent = '⚠️ Erreur cinéma: ' + data.message;
