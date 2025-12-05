@@ -158,7 +158,28 @@ def reverse_geocode_department(lat, lon):
         data = r.json()
         address = data.get("address", {})
         
-        dept_name = address.get("county") or address.get("state_district") or address.get("state")
+        # Priorités d'extraction :
+        # 1. city (pour Paris, Lyon, Marseille qui sont ville+département)
+        # 2. county (département classique)
+        # 3. state_district (fallback)
+        # 4. state (région, dernier recours)
+        city = address.get("city", "")
+        county = address.get("county", "")
+        state_district = address.get("state_district", "")
+        state = address.get("state", "")
+        
+        # Cas spéciaux : grandes villes = départements
+        if city in ["Paris", "Lyon", "Marseille"]:
+            dept_name = city
+        elif county:
+            dept_name = county
+        elif state_district:
+            dept_name = state_district
+        else:
+            dept_name = state
+        
+        print(f"🗺️ Nominatim: city={city}, county={county}, state_district={state_district}, state={state} → {dept_name}")
+        
         GEOCODE_CACHE[cache_key] = dept_name
         return dept_name
     except Exception as e:
@@ -305,6 +326,14 @@ def get_department_id_allocine(dept_name):
     if not ALLOCINE_AVAILABLE:
         return None
     
+    # Mapping manuel pour cas spéciaux
+    MANUAL_MAPPING = {
+        'paris': 'paris',
+        'île-de-france': 'paris',  # Si Nominatim retourne la région
+        'lyon': 'rhône',
+        'marseille': 'bouches-du-rhône',
+    }
+    
     # Charger les départements une seule fois
     if not DEPARTMENT_CACHE:
         try:
@@ -313,12 +342,17 @@ def get_department_id_allocine(dept_name):
             for d in depts:
                 name = d.get('name', '').lower()
                 DEPARTMENT_CACHE[name] = d.get('id')
+                print(f"   📍 Département AlloCiné: {name} (ID: {d.get('id')})")
         except Exception as e:
             print(f"❌ Erreur chargement départements Allociné: {e}")
             return None
     
-    # Recherche
+    # Recherche avec mapping manuel d'abord
     dept_lower = dept_name.lower()
+    if dept_lower in MANUAL_MAPPING:
+        dept_lower = MANUAL_MAPPING[dept_lower]
+    
+    # Recherche exacte
     if dept_lower in DEPARTMENT_CACHE:
         return DEPARTMENT_CACHE[dept_lower]
     
