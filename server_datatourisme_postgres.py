@@ -527,7 +527,15 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         
         # 4. FILTRER par distance et trier par proximité
         nearby_cinemas = []
+        geocoded_count = 0
+        max_geocode = 20  # Limiter à 20 cinémas pour éviter timeout
+        
+        print(f"🔍 Géocodage des cinémas (max {max_geocode}/{len(all_cinemas)})...")
+        
         for cinema in all_cinemas:
+            if geocoded_count >= max_geocode:
+                break
+                
             cinema_name = cinema.get('name', '')
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
@@ -537,6 +545,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                 # Construire une adresse complète pour le géocodage
                 full_address = f"{cinema_address}, France"
                 cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
+                geocoded_count += 1
                 
                 if cinema_lat and cinema_lon:
                     # Calculer la distance
@@ -553,6 +562,10 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                             'lon': cinema_lon,
                             'distance': dist
                         })
+                
+                # Petit délai pour respecter rate limit Nominatim (1 req/sec)
+                import time
+                time.sleep(0.1)  # 100ms entre chaque requête
         
         if not nearby_cinemas:
             print(f"❌ Aucun cinéma trouvé dans un rayon de {radius_km}km")
