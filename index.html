@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Carte des Événements DATAtourisme + OpenAgenda</title>
+    <title>Carte des Événements DATAtourisme + OpenAgenda + Cinéma</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
@@ -1074,46 +1074,97 @@
                 }).addTo(map).bindPopup('<strong>📍 Point de recherche</strong>');
             }
 
+            // ========================================================================
+            // CORRECTION : Grouper les événements par lieu (latitude + longitude)
+            // ========================================================================
+            var eventsByLocation = {};
             for (var i = 0; i < events.length; i++) {
                 var event = events[i];
                 if (!event.latitude || !event.longitude) continue;
-
-                var source = event.source || 'DATAtourisme';
+                
+                var locKey = event.latitude.toFixed(6) + ',' + event.longitude.toFixed(6);
+                if (!eventsByLocation[locKey]) {
+                    eventsByLocation[locKey] = [];
+                }
+                eventsByLocation[locKey].push(event);
+            }
+            
+            // Créer un marqueur par lieu (avec tous les événements de ce lieu)
+            for (var locKey in eventsByLocation) {
+                var eventsAtLocation = eventsByLocation[locKey];
+                if (eventsAtLocation.length === 0) continue;
+                
+                var firstEvent = eventsAtLocation[0];
+                var source = firstEvent.source || 'DATAtourisme';
                 var icon = createCustomIcon(source);
                 
-                var marker = L.marker([event.latitude, event.longitude], {
+                var marker = L.marker([firstEvent.latitude, firstEvent.longitude], {
                     icon: icon,
                     source: source
                 });
                 
-                // Zoomer sur le marqueur quand on clique dessus
-                marker.on('click', function(e) {
-                    // Zoomer et centrer
-                    map.setView(e.latlng, 14);
-                    // Forcer l'affichage du marqueur hors cluster et ouvrir le popup
-                    setTimeout(function() {
-                        currentMarkerCluster.zoomToShowLayer(marker, function() {
-                            marker.openPopup();
-                        });
-                    }, 300);
-                });
-                
-                // Badge de source
-                var sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : 'openagenda';
-                var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : '🟠 OpenAgenda';
-                
+                // Construire le popup avec TOUS les événements de ce lieu
                 var popupHtml = '<div class="event-popup">';
-                popupHtml += '<h3>' + (event.title || 'Événement sans titre') + '</h3>';
-                popupHtml += '<span class="source-badge ' + sourceBadgeClass + '">' + sourceLabel + '</span>';
-                if (event.begin) popupHtml += '<div class="date">📅 ' + formatDate(event.begin) + '</div>';
-                if (event.locationName) popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
-                if (event.address) popupHtml += '<div class="address">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
-                if (event.distanceKm !== undefined) popupHtml += '<div class="distance">📏 ' + event.distanceKm + ' km</div>';
-                if (event.agendaTitle) popupHtml += '<div class="address">📚 ' + event.agendaTitle + '</div>';
-                if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
+                
+                // CAS SPÉCIAL : Cinéma avec plusieurs films
+                if (source === 'Allocine' && eventsAtLocation.length > 1) {
+                    popupHtml += '<h3>🎬 ' + firstEvent.locationName + '</h3>';
+                    popupHtml += '<span class="source-badge" style="background:#ffe4e6;color:#800020;">🎬 Cinéma</span>';
+                    if (firstEvent.address) popupHtml += '<div class="address">' + firstEvent.address + '</div>';
+                    if (firstEvent.distanceKm !== undefined) popupHtml += '<div class="distance">📏 ' + firstEvent.distanceKm + ' km</div>';
+                    
+                    // Liste des films avec scroll
+                    popupHtml += '<div style="margin-top:10px;max-height:300px;overflow-y:auto;">';
+                    popupHtml += '<strong>' + eventsAtLocation.length + ' films à l\'affiche :</strong><br>';
+                    for (var j = 0; j < eventsAtLocation.length; j++) {
+                        var film = eventsAtLocation[j];
+                        var filmTitle = film.title.replace('🎬 ', '');
+                        popupHtml += '<div style="margin:8px 0;padding:8px;background:#f9fafb;border-left:3px solid #800020;border-radius:4px;">';
+                        popupHtml += '<strong style="color:#800020;">' + filmTitle + '</strong><br>';
+                        if (film.description) {
+                            popupHtml += '<span style="font-size:11px;color:#666;line-height:1.4;">' + film.description + '</span>';
+                        }
+                        popupHtml += '</div>';
+                    }
+                    popupHtml += '</div>';
+                } else {
+                    // CAS NORMAL : DATAtourisme / OpenAgenda (ou cinéma avec 1 seul film)
+                    var sourceBadgeClass = source === 'DATAtourisme' ? 'datatourisme' : (source === 'Allocine' ? '' : 'openagenda');
+                    var sourceLabel = source === 'DATAtourisme' ? '🔵 DATAtourisme' : (source === 'Allocine' ? '🎬 Cinéma' : '🟠 OpenAgenda');
+                    
+                    // Afficher tous les événements
+                    for (var j = 0; j < eventsAtLocation.length; j++) {
+                        var event = eventsAtLocation[j];
+                        if (j > 0) popupHtml += '<hr style="margin:10px 0;border:none;border-top:1px solid #e5e7eb;">';
+                        
+                        var eventTitle = event.title || 'Événement sans titre';
+                        if (source === 'Allocine') {
+                            eventTitle = eventTitle.replace('🎬 ', '');
+                        }
+                        
+                        popupHtml += '<h3>' + eventTitle + '</h3>';
+                        
+                        if (source === 'Allocine') {
+                            popupHtml += '<span class="source-badge" style="background:#ffe4e6;color:#800020;">' + sourceLabel + '</span>';
+                        } else {
+                            popupHtml += '<span class="source-badge ' + sourceBadgeClass + '">' + sourceLabel + '</span>';
+                        }
+                        
+                        if (event.begin) popupHtml += '<div class="date">📅 ' + formatDate(event.begin) + '</div>';
+                        if (event.locationName) popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
+                        if (event.address) popupHtml += '<div class="address">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+                        if (event.distanceKm !== undefined) popupHtml += '<div class="distance">📏 ' + event.distanceKm + ' km</div>';
+                        if (source === 'Allocine' && event.description) {
+                            popupHtml += '<div class="address" style="font-size:11px;line-height:1.4;color:#666;">' + event.description + '</div>';
+                        }
+                        if (event.agendaTitle) popupHtml += '<div class="address">📚 ' + event.agendaTitle + '</div>';
+                        if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
+                    }
+                }
+                
                 popupHtml += '</div>';
                 
-                marker.bindPopup(popupHtml, { maxWidth: 320 });
+                marker.bindPopup(popupHtml, { maxWidth: 400, maxHeight: 450 });
                 currentMarkerCluster.addLayer(marker);
             }
 
