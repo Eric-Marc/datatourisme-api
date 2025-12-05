@@ -498,49 +498,106 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         api = allocineAPI()
         today = date.today().strftime("%Y-%m-%d")
         
-        # 1. DÉTERMINER LE DÉPARTEMENT à partir des coordonnées GPS
+        # 1. DÉTERMINER LA VILLE/DÉPARTEMENT à partir des coordonnées GPS
         dept_name = reverse_geocode_department(center_lat, center_lon)
         if not dept_name:
             print("⚠️ Impossible de déterminer le département")
             return []
         
-        print(f"📍 Département détecté: {dept_name}")
+        print(f"📍 Localisation détectée: {dept_name}")
         
-        # 2. DÉPARTEMENTS À CHERCHER (cas spécial Paris = plusieurs départements)
-        dept_ids_to_search = []
+        # 2. STRATÉGIE DE RECHERCHE selon la localisation
+        all_cinemas = []
         dept_lower = dept_name.lower().strip()
         
-        # Cas spécial: Paris = chercher dans tous les départements IDF proches
+        # CAS SPÉCIAL PARIS : Utiliser l'API par VILLE (plus de cinémas)
         if dept_lower in ['paris', 'île-de-france']:
-            print("🏙️ Paris détecté → recherche dans les départements limitrophes")
+            print("🏙️ Paris détecté → recherche par ville + départements IDF")
+            
+            # 2a. PARIS VILLE (via get_top_villes)
+            try:
+                print("   🔍 Recherche Paris ville...")
+                top_villes = api.get_top_villes()
+                paris_id = None
+                for ville in top_villes:
+                    if "Paris" in ville.get('name', ''):
+                        paris_id = ville.get('id')
+                        print(f"   ✓ Paris ville trouvée (ID: {paris_id})")
+                        break
+                
+                if paris_id:
+                    cinemas_paris = api.get_cinema(paris_id)
+                    if cinemas_paris:
+                        print(f"   ✓ {len(cinemas_paris)} cinémas Paris ville")
+                        all_cinemas.extend(cinemas_paris)
+            except Exception as e:
+                print(f"   ⚠️ Erreur Paris ville: {e}")
+            
+            # 2b. DÉPARTEMENTS IDF (via get_department)
             idf_depts = ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne', 
                          'seine-et-marne', 'yvelines', 'essonne', 'val-d\'oise']
-            for d in idf_depts:
-                dept_id = get_department_id_allocine(d)
-                if dept_id:
-                    dept_ids_to_search.append((d, dept_id))
-        else:
-            # Cas normal: un seul département
-            dept_id = get_department_id_allocine(dept_name)
-            if dept_id:
-                dept_ids_to_search.append((dept_name, dept_id))
+            for dept in idf_depts:
+                try:
+                    dept_id = get_department_id_allocine(dept)
+                    if dept_id:
+                        cinemas = api.get_cinema(dept_id)
+                        if cinemas:
+                            print(f"   📍 {dept}: {len(cinemas)} cinémas")
+                            all_cinemas.extend(cinemas)
+                except Exception as e:
+                    print(f"   ⚠️ Erreur {dept}: {e}")
         
-        if not dept_ids_to_search:
-            print(f"⚠️ Aucun département AlloCiné trouvé pour '{dept_name}'")
-            return []
-        
-        print(f"🔍 Recherche dans {len(dept_ids_to_search)} département(s)")
-        
-        # 3. RÉCUPÉRER TOUS les cinémas des départements
-        all_cinemas = []
-        for dept_label, dept_id in dept_ids_to_search:
+        # CAS GRANDES VILLES : Essayer ville d'abord, puis département
+        elif dept_lower in ['lyon', 'marseille', 'toulouse', 'nice', 'nantes', 
+                           'montpellier', 'strasbourg', 'bordeaux', 'lille']:
+            print(f"🌆 Grande ville détectée ({dept_name})")
+            
+            # Essayer par ville
             try:
-                cinemas = api.get_cinema(dept_id)
-                if cinemas:
-                    print(f"   📍 {dept_label}: {len(cinemas)} cinémas")
-                    all_cinemas.extend(cinemas)
+                print("   🔍 Recherche par ville...")
+                top_villes = api.get_top_villes()
+                city_id = None
+                for ville in top_villes:
+                    ville_name = ville.get('name', '').lower()
+                    if dept_lower in ville_name:
+                        city_id = ville.get('id')
+                        print(f"   ✓ Ville trouvée: {ville.get('name')} (ID: {city_id})")
+                        break
+                
+                if city_id:
+                    cinemas_ville = api.get_cinema(city_id)
+                    if cinemas_ville:
+                        print(f"   ✓ {len(cinemas_ville)} cinémas (ville)")
+                        all_cinemas.extend(cinemas_ville)
             except Exception as e:
-                print(f"   ⚠️ Erreur {dept_label}: {e}")
+                print(f"   ⚠️ Erreur ville: {e}")
+            
+            # Fallback : département
+            if not all_cinemas:
+                dept_id = get_department_id_allocine(dept_name)
+                if dept_id:
+                    try:
+                        cinemas = api.get_cinema(dept_id)
+                        if cinemas:
+                            print(f"   ✓ {len(cinemas)} cinémas (département)")
+                            all_cinemas.extend(cinemas)
+                    except Exception as e:
+                        print(f"   ⚠️ Erreur département: {e}")
+        
+        # CAS NORMAL : Recherche par département uniquement
+        else:
+            dept_id = get_department_id_allocine(dept_name)
+            if not dept_id:
+                print(f"⚠️ Département '{dept_name}' non trouvé dans AlloCiné")
+                return []
+            
+            try:
+                all_cinemas = api.get_cinema(dept_id)
+                if all_cinemas:
+                    print(f"📍 {dept_name}: {len(all_cinemas)} cinémas")
+            except Exception as e:
+                print(f"⚠️ Erreur département: {e}")
+                return []
         
         if not all_cinemas:
             print("❌ Aucun cinéma trouvé")
