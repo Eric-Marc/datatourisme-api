@@ -525,15 +525,37 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         
         print(f"🎥 {len(all_cinemas)} cinémas au total")
         
-        # 4. FILTRER par distance et trier par proximité
+        # 4. PRIORISER les cinémas (pour Paris : trier par code postal proche)
+        if dept_lower in ['paris', 'île-de-france'] and len(all_cinemas) > 50:
+            print(f"🏙️ Paris détecté : priorisation par proximité...")
+            # Extraire codes postaux et calculer distance approximative
+            def get_priority_score(cinema):
+                addr = cinema.get('address', '').lower()
+                # Chercher code postal Paris intra-muros (75xxx)
+                if '75' in addr and 'paris' in addr:
+                    return 1  # Priorité max
+                # Hauts-de-Seine proche (92xxx)
+                elif '92' in addr or 'boulogne' in addr or 'neuilly' in addr:
+                    return 2
+                # Val-de-Marne/Seine-Saint-Denis proche
+                elif '93' in addr or '94' in addr:
+                    return 3
+                else:
+                    return 10  # Loin
+            
+            all_cinemas.sort(key=get_priority_score)
+            print(f"   ✓ {len([c for c in all_cinemas if get_priority_score(c) <= 3])} cinémas prioritaires")
+        
+        # 5. FILTRER par distance et trier par proximité
         nearby_cinemas = []
         geocoded_count = 0
-        max_geocode = 20  # Limiter à 20 cinémas pour éviter timeout
+        max_geocode = 30  # Augmenter à 30 pour Paris
         
         print(f"🔍 Géocodage des cinémas (max {max_geocode}/{len(all_cinemas)})...")
         
         for cinema in all_cinemas:
             if geocoded_count >= max_geocode:
+                print(f"   ⚠️ Limite atteinte ({max_geocode} cinémas géocodés)")
                 break
                 
             cinema_name = cinema.get('name', '')
@@ -615,7 +637,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                         
                         versions_str = " | ".join(versions) if versions else "Horaires non disponibles"
                         
-                        all_cinema_events.append({
+                        event = {
                             "uid": f"allocine-{cinema_id}-{film_title[:20]}",
                             "title": f"🎬 {film_title}",
                             "begin": today,
@@ -630,7 +652,9 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                             "agendaTitle": f"Séances {cinema_name}",
                             "source": "Allocine",
                             "description": f"{duration} - {versions_str}"
-                        })
+                        }
+                        all_cinema_events.append(event)
+                        print(f"      + {film_title[:30]}")
                     
             except Exception as e:
                 print(f"   ❌ Erreur pour {cinema_name}: {e}")
