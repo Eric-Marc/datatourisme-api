@@ -871,12 +871,12 @@
 
         // Mettre à jour les stats (depuis allEventsData pour toujours afficher les totaux)
         function updateStats(events, sources) {
-            // Compter par source depuis TOUS les événements (pas filtrés)
+            // Compter par source depuis les événements VISIBLES sur la carte (pas tous)
             var datatourismeCount = 0;
             var openagendaCount = 0;
             
-            for (var j = 0; j < allEventsData.length; j++) {
-                var src = allEventsData[j].source;
+            for (var j = 0; j < events.length; j++) {
+                var src = events[j].source;
                 if (src === 'OpenAgenda') {
                     openagendaCount++;
                 } else {
@@ -910,6 +910,8 @@
                     filteredEvents = filteredEvents.concat(cinemaEventsData);
                 }
                 displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
+                // Mettre à jour les compteurs avec les événements visibles
+                updateStats(filteredEvents, {});
             }
         }
 
@@ -1184,6 +1186,7 @@
                 document.getElementById('resetViewBtn').style.display = 'inline-block';
             }
 
+            // Mettre à jour les stats avec les événements AFFICHÉS
             updateStats(events, {});
         }
 
