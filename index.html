@@ -1025,6 +1025,8 @@
                 spiderfyOnMaxZoom: true,
                 showCoverageOnHover: false,
                 zoomToBoundsOnClick: true,
+                spiderfyDistanceMultiplier: 2,  // Plus d'espace entre marqueurs éclatés
+                disableClusteringAtZoom: 18,    // Désactiver cluster au zoom max
                 iconCreateFunction: function(cluster) {
                     var markers = cluster.getAllChildMarkers();
                     var dtCount = 0;
@@ -1186,7 +1188,14 @@
                 
                 popupHtml += '</div>';
                 
-                marker.bindPopup(popupHtml, { maxWidth: 400, maxHeight: 450 });
+                marker.bindPopup(popupHtml, { 
+                    maxWidth: 400, 
+                    maxHeight: 450,
+                    closeButton: true,        // Garder le bouton X
+                    autoClose: false,         // Ne pas fermer automatiquement
+                    closeOnClick: false,      // Ne pas fermer au clic sur carte
+                    keepInView: true          // Garder visible dans la vue
+                });
                 currentMarkerCluster.addLayer(marker);
             }
 
