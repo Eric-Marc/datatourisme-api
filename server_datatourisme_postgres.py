@@ -326,41 +326,52 @@ def get_department_id_allocine(dept_name):
     if not ALLOCINE_AVAILABLE:
         return None
     
-    # Mapping manuel pour cas spéciaux
+    # Mapping manuel - ATTENTION: AlloCiné n'a pas "Paris" mais les départements IDF
     MANUAL_MAPPING = {
-        'paris': 'paris',
-        'île-de-france': 'paris',  # Si Nominatim retourne la région
-        'lyon': 'rhône',
-        'marseille': 'bouches-du-rhône',
+        'paris': ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne'],  # Paris → départements voisins
+        'île-de-france': ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne'],
+        'lyon': ['rhône'],
+        'marseille': ['bouches-du-rhône'],
+        'vaucluse': ['vaucluse'],
     }
     
     # Charger les départements une seule fois
     if not DEPARTMENT_CACHE:
+        print("🔄 Chargement des départements AlloCiné...")
         try:
             api = allocineAPI()
             depts = api.get_departements()
             for d in depts:
-                name = d.get('name', '').lower()
-                DEPARTMENT_CACHE[name] = d.get('id')
-                print(f"   📍 Département AlloCiné: {name} (ID: {d.get('id')})")
+                name = d.get('name', '').lower().strip()
+                dept_id = d.get('id')
+                DEPARTMENT_CACHE[name] = dept_id
+            print(f"✅ {len(DEPARTMENT_CACHE)} départements chargés")
         except Exception as e:
             print(f"❌ Erreur chargement départements Allociné: {e}")
             return None
     
-    # Recherche avec mapping manuel d'abord
-    dept_lower = dept_name.lower()
-    if dept_lower in MANUAL_MAPPING:
-        dept_lower = MANUAL_MAPPING[dept_lower]
+    dept_lower = dept_name.lower().strip()
     
-    # Recherche exacte
+    # 1. Recherche via mapping manuel - retourne le PREMIER département trouvé
+    if dept_lower in MANUAL_MAPPING:
+        possible_names = MANUAL_MAPPING[dept_lower]
+        for pname in possible_names:
+            if pname in DEPARTMENT_CACHE:
+                print(f"✅ Mapping manuel: '{dept_name}' → '{pname}' (ID: {DEPARTMENT_CACHE[pname]})")
+                return DEPARTMENT_CACHE[pname]
+    
+    # 2. Recherche exacte
     if dept_lower in DEPARTMENT_CACHE:
         return DEPARTMENT_CACHE[dept_lower]
     
-    # Recherche partielle
+    # 3. Recherche partielle
     for name, dept_id in DEPARTMENT_CACHE.items():
         if dept_lower in name or name in dept_lower:
+            print(f"✅ Matching partiel: '{dept_name}' → '{name}' (ID: {dept_id})")
             return dept_id
     
+    print(f"❌ Département '{dept_name}' non trouvé.")
+    print(f"   Départements disponibles: essonne, hauts-de-seine, seine-saint-denis, val-de-marne, yvelines, etc.")
     return None
 
 
@@ -472,25 +483,51 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         
         print(f"📍 Département détecté: {dept_name}")
         
-        # 2. TROUVER L'ID du département AlloCiné
-        dept_id = get_department_id_allocine(dept_name)
-        if not dept_id:
-            print(f"⚠️ Département '{dept_name}' non trouvé dans AlloCiné")
+        # 2. DÉPARTEMENTS À CHERCHER (cas spécial Paris = plusieurs départements)
+        dept_ids_to_search = []
+        dept_lower = dept_name.lower().strip()
+        
+        # Cas spécial: Paris = chercher dans tous les départements IDF proches
+        if dept_lower in ['paris', 'île-de-france']:
+            print("🏙️ Paris détecté → recherche dans les départements limitrophes")
+            idf_depts = ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne', 
+                         'seine-et-marne', 'yvelines', 'essonne', 'val-d\'oise']
+            for d in idf_depts:
+                dept_id = get_department_id_allocine(d)
+                if dept_id:
+                    dept_ids_to_search.append((d, dept_id))
+        else:
+            # Cas normal: un seul département
+            dept_id = get_department_id_allocine(dept_name)
+            if dept_id:
+                dept_ids_to_search.append((dept_name, dept_id))
+        
+        if not dept_ids_to_search:
+            print(f"⚠️ Aucun département AlloCiné trouvé pour '{dept_name}'")
             return []
         
-        print(f"✅ ID département AlloCiné: {dept_id}")
+        print(f"🔍 Recherche dans {len(dept_ids_to_search)} département(s)")
         
-        # 3. RÉCUPÉRER TOUS les cinémas du département
-        cinemas = api.get_cinema(dept_id)
-        if not cinemas:
-            print("❌ Aucun cinéma dans ce département")
+        # 3. RÉCUPÉRER TOUS les cinémas des départements
+        all_cinemas = []
+        for dept_label, dept_id in dept_ids_to_search:
+            try:
+                cinemas = api.get_cinema(dept_id)
+                if cinemas:
+                    print(f"   📍 {dept_label}: {len(cinemas)} cinémas")
+                    all_cinemas.extend(cinemas)
+            except Exception as e:
+                print(f"   ⚠️ Erreur {dept_label}: {e}")
+        
+        if not all_cinemas:
+            print("❌ Aucun cinéma trouvé")
             return []
         
-        print(f"🎥 {len(cinemas)} cinémas dans le département {dept_name}")
+        print(f"🎥 {len(all_cinemas)} cinémas au total")
         
         # 4. FILTRER par distance et trier par proximité
         nearby_cinemas = []
-        for cinema in cinemas:
+        for cinema in all_cinemas:
             cinema_name = cinema.get('name', '')
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
@@ -498,7 +535,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
             # Géocoder l'adresse du cinéma pour obtenir ses coordonnées
             if cinema_address:
                 # Construire une adresse complète pour le géocodage
-                full_address = f"{cinema_address}, {dept_name}, France"
+                full_address = f"{cinema_address}, France"
                 cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
                 
                 if cinema_lat and cinema_lon:
@@ -516,13 +553,6 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                             'lon': cinema_lon,
                             'distance': dist
                         })
-                        print(f"   ✓ {cinema_name}: {dist:.1f}km")
-                    else:
-                        print(f"   ✗ {cinema_name}: {dist:.1f}km (hors rayon)")
-                else:
-                    print(f"   ⚠️ {cinema_name}: impossible de géocoder l'adresse")
-            else:
-                print(f"   ⚠️ {cinema_name}: pas d'adresse")
         
         if not nearby_cinemas:
             print(f"❌ Aucun cinéma trouvé dans un rayon de {radius_km}km")
@@ -532,6 +562,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         nearby_cinemas.sort(key=lambda c: c['distance'])
         
         print(f"✅ {len(nearby_cinemas)} cinémas dans le rayon de {radius_km}km")
+        for i, c in enumerate(nearby_cinemas[:5]):
+            print(f"   {i+1}. {c['name']}: {c['distance']:.1f}km")
         
         # 6. RÉCUPÉRER LES SÉANCES pour chaque cinéma (limiter à 10 max)
         all_cinema_events = []
@@ -586,8 +618,6 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                             "source": "Allocine",
                             "description": f"{duration} - {versions_str}"
                         })
-                else:
-                    print(f"   ⚠️ {cinema_name} ({cinema_dist:.1f}km): aucune séance aujourd'hui")
                     
             except Exception as e:
                 print(f"   ❌ Erreur pour {cinema_name}: {e}")
