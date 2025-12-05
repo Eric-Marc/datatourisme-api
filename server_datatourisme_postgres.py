@@ -25,8 +25,6 @@ except ImportError:
     ALLOCINE_AVAILABLE = False
     print("⚠️ Allociné API non disponible (pip install allocine-seances)")
 
-print(f"📍 {len(KNOWN_CINEMAS_GPS)} cinémas avec coordonnées pré-calculées")
-
 # ============================================================================
 # CINÉMAS PARIS - COORDONNÉES PRÉ-CALCULÉES
 # ============================================================================
@@ -46,6 +44,8 @@ KNOWN_CINEMAS_GPS = {
     'pathé boulogne': (48.8342, 2.2411),
     'pathé la villette': (48.8938, 2.3889),
 }
+
+print(f"📍 {len(KNOWN_CINEMAS_GPS)} cinémas avec coordonnées pré-calculées")
 
 # ============================================================================
 # CONFIGURATION
@@ -627,10 +627,6 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                             'lon': cinema_lon,
                             'distance': dist
                         })
-                
-                # Petit délai pour respecter rate limit Nominatim (1 req/sec)
-                import time
-                time.sleep(0.1)  # 100ms entre chaque requête
         
         if not nearby_cinemas:
             print(f"❌ Aucun cinéma trouvé dans un rayon de {radius_km}km")
