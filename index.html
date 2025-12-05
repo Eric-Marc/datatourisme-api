@@ -481,7 +481,7 @@
             <span class="toggle-icon">🎬</span>
             <div>
                 <div class="toggle-value" id="cinema-count">0</div>
-                <div class="toggle-label">Cinéma</div>
+                <div class="toggle-label">Séances</div>
             </div>
             <span class="toggle-check">✓</span>
         </div>
@@ -953,7 +953,15 @@
                         }
                         displayEventsOnMap(filteredEvents, lat, lon, radiusKm);
                         
-                        document.getElementById('status').textContent = '✅ ' + cinemaEventsData.length + ' séances de cinéma trouvées';
+                        // Compter le nombre de cinémas uniques
+                        var cinemas = {};
+                        for (var i = 0; i < cinemaEventsData.length; i++) {
+                            var locKey = cinemaEventsData[i].latitude + ',' + cinemaEventsData[i].longitude;
+                            cinemas[locKey] = (cinemas[locKey] || 0) + 1;
+                        }
+                        var nbCinemas = Object.keys(cinemas).length;
+                        
+                        document.getElementById('status').textContent = '✅ ' + cinemaEventsData.length + ' séance(s) dans ' + nbCinemas + ' cinéma(s)';
                     } else {
                         console.error('Erreur cinéma:', data.message);
                         document.getElementById('status').textContent = '⚠️ Erreur cinéma: ' + data.message;
