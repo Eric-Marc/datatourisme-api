@@ -426,84 +426,96 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
     
     print(f"🎬 Allociné: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km")
     
-    # Grandes villes de référence avec coordonnées
-    villes_ref = {
-        'Paris': (48.8566, 2.3522),
-        'Marseille': (43.2965, 5.3698),
-        'Lyon': (45.7640, 4.8357),
-        'Toulouse': (43.6047, 1.4442),
-        'Nice': (43.7102, 7.2620),
-        'Nantes': (47.2184, -1.5536),
-        'Strasbourg': (48.5734, 7.7521),
-        'Montpellier': (43.6108, 3.8767),
-        'Bordeaux': (44.8378, -0.5792),
-        'Lille': (50.6292, 3.0573),
-    }
-    
-    # Trouver la ville la plus proche
-    best_ville = None
-    best_dist = float('inf')
-    best_coords = None
-    
-    for ville_name, (vlat, vlon) in villes_ref.items():
-        d = haversine_km(center_lat, center_lon, vlat, vlon)
-        if d < best_dist:
-            best_dist = d
-            best_ville = ville_name
-            best_coords = (vlat, vlon)
-    
-    if best_dist > 100:
-        print(f"⚠️ Aucune grande ville à moins de 100km")
-        return []
-    
-    print(f"📍 Ville la plus proche: {best_ville} ({best_dist:.0f}km)")
-    
     try:
         api = allocineAPI()
         today = date.today().strftime("%Y-%m-%d")
         
-        # Récupérer les villes AlloCiné
-        top_villes = api.get_top_villes()
-        if not top_villes:
-            print("❌ Impossible de récupérer les villes AlloCiné")
+        # 1. DÉTERMINER LE DÉPARTEMENT à partir des coordonnées GPS
+        dept_name = reverse_geocode_department(center_lat, center_lon)
+        if not dept_name:
+            print("⚠️ Impossible de déterminer le département")
             return []
         
-        # Trouver l'ID de la ville
-        location_id = None
-        location_name = None
+        print(f"📍 Département détecté: {dept_name}")
         
-        for ville in top_villes:
-            ville_allocine = ville.get('name', '').lower()
-            if best_ville.lower() in ville_allocine or ville_allocine in best_ville.lower():
-                location_id = ville.get('id')
-                location_name = ville.get('name')
-                break
-        
-        if not location_id:
-            print(f"❌ Ville {best_ville} non trouvée dans AlloCiné")
+        # 2. TROUVER L'ID du département AlloCiné
+        dept_id = get_department_id_allocine(dept_name)
+        if not dept_id:
+            print(f"⚠️ Département '{dept_name}' non trouvé dans AlloCiné")
             return []
         
-        # Récupérer les cinémas
-        cinemas = api.get_cinema(location_id)
+        print(f"✅ ID département AlloCiné: {dept_id}")
+        
+        # 3. RÉCUPÉRER TOUS les cinémas du département
+        cinemas = api.get_cinema(dept_id)
         if not cinemas:
-            print("❌ Aucun cinéma trouvé")
+            print("❌ Aucun cinéma dans ce département")
             return []
         
-        print(f"🎥 {len(cinemas)} cinémas trouvés")
+        print(f"🎥 {len(cinemas)} cinémas dans le département {dept_name}")
         
-        all_cinema_events = []
-        
-        # Limiter à 10 cinémas pour ne pas surcharger
-        for cinema in cinemas[:10]:
-            cinema_name = cinema.get('name', 'Cinéma')
+        # 4. FILTRER par distance et trier par proximité
+        nearby_cinemas = []
+        for cinema in cinemas:
+            cinema_name = cinema.get('name', '')
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
+            
+            # Géocoder l'adresse du cinéma pour obtenir ses coordonnées
+            if cinema_address:
+                # Construire une adresse complète pour le géocodage
+                full_address = f"{cinema_address}, {dept_name}, France"
+                cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
+                
+                if cinema_lat and cinema_lon:
+                    # Calculer la distance
+                    dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
+                    
+                    # Garder uniquement les cinémas dans le rayon
+                    if dist <= radius_km:
+                        nearby_cinemas.append({
+                            'cinema': cinema,
+                            'id': cinema_id,
+                            'name': cinema_name,
+                            'address': cinema_address,
+                            'lat': cinema_lat,
+                            'lon': cinema_lon,
+                            'distance': dist
+                        })
+                        print(f"   ✓ {cinema_name}: {dist:.1f}km")
+                    else:
+                        print(f"   ✗ {cinema_name}: {dist:.1f}km (hors rayon)")
+                else:
+                    print(f"   ⚠️ {cinema_name}: impossible de géocoder l'adresse")
+            else:
+                print(f"   ⚠️ {cinema_name}: pas d'adresse")
+        
+        if not nearby_cinemas:
+            print(f"❌ Aucun cinéma trouvé dans un rayon de {radius_km}km")
+            return []
+        
+        # 5. TRIER par distance (les plus proches d'abord)
+        nearby_cinemas.sort(key=lambda c: c['distance'])
+        
+        print(f"✅ {len(nearby_cinemas)} cinémas dans le rayon de {radius_km}km")
+        
+        # 6. RÉCUPÉRER LES SÉANCES pour chaque cinéma (limiter à 10 max)
+        all_cinema_events = []
+        cinemas_with_showtimes = 0
+        
+        for cinema_info in nearby_cinemas[:10]:  # Maximum 10 cinémas
+            cinema_id = cinema_info['id']
+            cinema_name = cinema_info['name']
+            cinema_lat = cinema_info['lat']
+            cinema_lon = cinema_info['lon']
+            cinema_dist = cinema_info['distance']
             
             try:
                 showtimes = api.get_showtime(cinema_id, today)
                 
                 if showtimes:
-                    print(f"   🎬 {cinema_name}: {len(showtimes)} films")
+                    cinemas_with_showtimes += 1
+                    print(f"   🎬 {cinema_name} ({cinema_dist:.1f}km): {len(showtimes)} films")
                     
                     for show in showtimes:
                         film_title = show.get('title', 'Film')
@@ -530,21 +542,24 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                             "begin": today,
                             "end": today,
                             "locationName": cinema_name,
-                            "city": location_name,
-                            "address": cinema_address,
-                            "latitude": best_coords[0],
-                            "longitude": best_coords[1],
-                            "distanceKm": round(best_dist, 1),
+                            "city": dept_name,
+                            "address": cinema_info['address'],
+                            "latitude": cinema_lat,
+                            "longitude": cinema_lon,
+                            "distanceKm": round(cinema_dist, 1),
                             "openagendaUrl": "",
                             "agendaTitle": f"Séances {cinema_name}",
                             "source": "Allocine",
                             "description": f"{duration} - {versions_str}"
                         })
+                else:
+                    print(f"   ⚠️ {cinema_name} ({cinema_dist:.1f}km): aucune séance aujourd'hui")
+                    
             except Exception as e:
-                print(f"   ⚠️ Erreur pour {cinema_name}: {e}")
+                print(f"   ❌ Erreur pour {cinema_name}: {e}")
                 continue
         
-        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées")
+        print(f"✅ Allociné: {len(all_cinema_events)} séances trouvées dans {cinemas_with_showtimes} cinémas")
         return all_cinema_events
         
     except Exception as e:
