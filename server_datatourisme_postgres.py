@@ -605,40 +605,14 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         
         print(f"🎥 {len(all_cinemas)} cinémas au total")
         
-        # 4. PRIORISER les cinémas (pour Paris : trier par code postal proche)
-        if dept_lower in ['paris', 'île-de-france'] and len(all_cinemas) > 50:
-            print(f"🏙️ Paris détecté : priorisation par proximité...")
-            # Extraire codes postaux et calculer distance approximative
-            def get_priority_score(cinema):
-                addr = cinema.get('address', '').lower()
-                # Chercher code postal Paris intra-muros (75xxx)
-                if '75' in addr and 'paris' in addr:
-                    return 1  # Priorité max
-                # Hauts-de-Seine proche (92xxx)
-                elif '92' in addr or 'boulogne' in addr or 'neuilly' in addr:
-                    return 2
-                # Val-de-Marne/Seine-Saint-Denis proche
-                elif '93' in addr or '94' in addr:
-                    return 3
-                else:
-                    return 10  # Loin
-            
-            all_cinemas.sort(key=get_priority_score)
-            print(f"   ✓ {len([c for c in all_cinemas if get_priority_score(c) <= 3])} cinémas prioritaires")
-        
-        # 5. FILTRER par distance et trier par proximité
+        # 3. GÉOCODER TOUS LES CINÉMAS (pas de limite)
         nearby_cinemas = []
         geocoded_count = 0
-        max_geocode = 30  # Augmenter à 30 pour Paris
         
-        print(f"🔍 Géocodage des cinémas (max {max_geocode}/{len(all_cinemas)})...")
+        print(f"🔍 Géocodage de TOUS les cinémas ({len(all_cinemas)})...")
+        print(f"⚠️ Cela peut prendre 1-2 minutes pour Paris...")
         
         for cinema in all_cinemas:
-            if geocoded_count >= max_geocode:
-                print(f"   ⚠️ Limite atteinte ({max_geocode} cinémas géocodés)")
-                break
-                
-            cinema_name = cinema.get('name', '')
             cinema_address = cinema.get('address', '')
             cinema_id = cinema.get('id')
             
@@ -696,11 +670,13 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         for i, c in enumerate(nearby_cinemas[:5]):
             print(f"   {i+1}. {c['name']}: {c['distance']:.1f}km")
         
-        # 6. RÉCUPÉRER LES SÉANCES pour chaque cinéma (limiter à 10 max)
+        # 6. RÉCUPÉRER LES SÉANCES pour TOUS les cinémas trouvés (pas de limite)
         all_cinema_events = []
         cinemas_with_showtimes = 0
         
-        for cinema_info in nearby_cinemas[:10]:  # Maximum 10 cinémas
+        print(f"🎬 Récupération des séances pour {len(nearby_cinemas)} cinémas...")
+        
+        for cinema_info in nearby_cinemas:  # TOUS les cinémas (pas de limite)
             cinema_id = cinema_info['id']
             cinema_name = cinema_info['name']
             cinema_lat = cinema_info['lat']
@@ -709,6 +685,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
             
             try:
                 showtimes = api.get_showtime(cinema_id, today)
+                time.sleep(0.05)  # Petit délai pour éviter rate limit AlloCiné
                 
                 if showtimes:
                     cinemas_with_showtimes += 1
