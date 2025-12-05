@@ -481,7 +481,7 @@
             <span class="toggle-icon">🎬</span>
             <div>
                 <div class="toggle-value" id="cinema-count">0</div>
-                <div class="toggle-label">Séances</div>
+                <div class="toggle-label">Films</div>
             </div>
             <span class="toggle-check">✓</span>
         </div>
@@ -939,7 +939,7 @@
         function fetchCinemaEvents(lat, lon, radiusKm) {
             var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
             
-            document.getElementById('status').textContent = '🎬 Chargement des séances de cinéma...';
+            document.getElementById('status').textContent = '🎬 Chargement des films au cinéma...';
             
             fetch(url)
                 .then(function(response) { return response.json(); })
@@ -963,7 +963,7 @@
                         }
                         var nbCinemas = Object.keys(cinemas).length;
                         
-                        document.getElementById('status').textContent = '✅ ' + cinemaEventsData.length + ' séance(s) dans ' + nbCinemas + ' cinéma(s)';
+                        document.getElementById('status').textContent = '✅ ' + cinemaEventsData.length + ' film(s) dans ' + nbCinemas + ' cinéma(s)';
                     } else {
                         console.error('Erreur cinéma:', data.message);
                         document.getElementById('status').textContent = '⚠️ Erreur cinéma: ' + data.message;
