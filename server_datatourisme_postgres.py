@@ -25,6 +25,7 @@ import math
 import time
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import pickle
 
 # Allociné API
 try:
@@ -643,15 +644,224 @@ def find_cinema_allocine(dept_id, target_name):
     return None
 
 
+def load_cinema_geocode_cache():
+    """🚀 OPTIMISATION : Charge le cache des cinémas géocodés"""
+    global CINEMA_CACHE
+    
+    cache_file = "/tmp/allocine_cinemas_geocoded.pkl"
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'rb') as f:
+                loaded = pickle.load(f)
+                CINEMA_CACHE.update(loaded)
+                print(f"   💾 Cache cinémas chargé : {len(loaded)} cinémas")
+        except Exception as e:
+            print(f"   ⚠️ Erreur lecture cache: {e}")
+
+
+def save_cinema_geocode_cache():
+    """Sauvegarde le cache des cinémas"""
+    cache_file = "/tmp/allocine_cinemas_geocoded.pkl"
+    try:
+        with open(cache_file, 'wb') as f:
+            pickle.dump(CINEMA_CACHE, f)
+    except Exception:
+        pass
+
+
+def get_cinema_coords(cinema_id, cinema_name, cinema_address):
+    """Récupère les coordonnées avec cache persistant"""
+    
+    cache_key = f"coords:{cinema_id}:{cinema_name}"
+    if cache_key in CINEMA_CACHE:
+        return CINEMA_CACHE[cache_key]
+    
+    name_lower = cinema_name.lower().strip()
+    if name_lower in KNOWN_CINEMAS_GPS:
+        coords = KNOWN_CINEMAS_GPS[name_lower]
+        CINEMA_CACHE[cache_key] = coords
+        return coords
+    
+    for known_name, coords in KNOWN_CINEMAS_GPS.items():
+        if known_name in name_lower or name_lower.startswith(known_name[:10]):
+            CINEMA_CACHE[cache_key] = coords
+            return coords
+    
+    if cinema_address:
+        cinema_lat, cinema_lon = geocode_address_nominatim(f"{cinema_address}, France")
+        if cinema_lat:
+            coords = (cinema_lat, cinema_lon)
+            CINEMA_CACHE[cache_key] = coords
+            save_cinema_geocode_cache()
+            time.sleep(0.1)
+            return coords
+    
+    return None, None
+
+
+def fetch_showtime_for_cinema(cinema_info, today):
+    """Worker pour récupérer les séances d'un cinéma"""
+    try:
+        api = allocineAPI()
+        showtimes = api.get_showtime(cinema_info['id'], today)
+        return cinema_info, showtimes
+    except:
+        return cinema_info, []
+
+
 def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
-    """Récupère les cinémas et séances AlloCiné dans une zone."""
+    """
+    🚀 VERSION OPTIMISÉE Allociné
+    
+    Optimisations :
+    1. Parallélisation get_showtime (10 workers)
+    2. Cache persistant des cinémas
+    3. Limite à 30 cinémas max
+    """
     if not ALLOCINE_AVAILABLE:
         return []
     
-    print(f"🎬 Allociné: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km")
+    print(f"🎬 Allociné (optimisé): {center_lat}, {center_lon}, {radius_km}km")
+    start_time = time.time()
     
-    # (Code simplifié - même logique qu'avant)
-    return []
+    try:
+        api = allocineAPI()
+        today = date.today().strftime("%Y-%m-%d")
+        
+        dept_name = reverse_geocode_department(center_lat, center_lon)
+        if not dept_name:
+            return []
+        
+        all_cinemas = []
+        dept_lower = dept_name.lower().strip()
+        
+        if dept_lower in ['paris', 'île-de-france']:
+            try:
+                top_villes = api.get_top_villes()
+                for ville in top_villes:
+                    if "Paris" in ville.get('name', ''):
+                        cinemas = api.get_cinema(ville.get('id'))
+                        if cinemas:
+                            all_cinemas.extend(cinemas)
+                        break
+            except:
+                pass
+            
+            for dept in ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne']:
+                try:
+                    dept_id = get_department_id_allocine(dept)
+                    if dept_id:
+                        cinemas = api.get_cinema(dept_id)
+                        if cinemas:
+                            all_cinemas.extend(cinemas)
+                except:
+                    pass
+        else:
+            dept_id = get_department_id_allocine(dept_name)
+            if dept_id:
+                try:
+                    all_cinemas = api.get_cinema(dept_id)
+                except:
+                    pass
+        
+        if not all_cinemas:
+            return []
+        
+        # Géocodage avec cache
+        nearby_cinemas = []
+        for cinema in all_cinemas:
+            cinema_name = cinema.get('name', '')
+            cinema_address = cinema.get('address', '')
+            cinema_id = cinema.get('id')
+            
+            if not cinema_name:
+                continue
+            
+            cinema_lat, cinema_lon = get_cinema_coords(cinema_id, cinema_name, cinema_address)
+            
+            if cinema_lat and cinema_lon:
+                dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
+                if dist <= radius_km:
+                    nearby_cinemas.append({
+                        'id': cinema_id,
+                        'name': cinema_name,
+                        'address': cinema_address,
+                        'lat': cinema_lat,
+                        'lon': cinema_lon,
+                        'distance': dist
+                    })
+        
+        if not nearby_cinemas:
+            return []
+        
+        nearby_cinemas.sort(key=lambda c: c['distance'])
+        
+        # Limite à 30 cinémas
+        if len(nearby_cinemas) > 30:
+            nearby_cinemas = nearby_cinemas[:30]
+        
+        # 🚀 Parallélisation get_showtime
+        all_cinema_events = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {
+                executor.submit(fetch_showtime_for_cinema, cinema, today): cinema 
+                for cinema in nearby_cinemas
+            }
+            
+            for future in as_completed(futures):
+                try:
+                    cinema_info, showtimes = future.result(timeout=10)
+                    
+                    if showtimes:
+                        for show in showtimes:
+                            film_title = show.get('title', 'Film')
+                            duration = show.get('duration', '')
+                            
+                            vf = show.get('VF', [])
+                            vo = show.get('VO', [])
+                            vost = show.get('VOST', [])
+                            
+                            versions = []
+                            if vf:
+                                versions.append(f"VF: {', '.join(vf[:3])}")
+                            if vo:
+                                versions.append(f"VO: {', '.join(vo[:3])}")
+                            if vost:
+                                versions.append(f"VOST: {', '.join(vost[:3])}")
+                            
+                            versions_str = " | ".join(versions) if versions else "Horaires non disponibles"
+                            
+                            event = {
+                                "uid": f"allocine-{cinema_info['id']}-{film_title[:20]}",
+                                "title": f"🎬 {film_title}",
+                                "begin": today,
+                                "end": today,
+                                "locationName": cinema_info['name'],
+                                "city": dept_name,
+                                "address": cinema_info['address'],
+                                "latitude": cinema_info['lat'],
+                                "longitude": cinema_info['lon'],
+                                "distanceKm": round(cinema_info['distance'], 1),
+                                "openagendaUrl": "",
+                                "agendaTitle": f"Films {cinema_info['name']}",
+                                "source": "Allocine",
+                                "description": f"{duration} - {versions_str}"
+                            }
+                            all_cinema_events.append(event)
+                except:
+                    pass
+        
+        elapsed = time.time() - start_time
+        print(f"   ⚡ Allociné: {len(all_cinema_events)} films en {elapsed:.1f}s")
+        return all_cinema_events
+        
+    except Exception as e:
+        print(f"   ❌ Erreur Allociné: {e}")
+        return []
+
+
+# Charger le cache au démarrage
+load_cinema_geocode_cache()
 
 
 # ============================================================================
