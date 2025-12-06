@@ -818,12 +818,19 @@
         function fetchCinemaEvents(lat, lon, radiusKm) {
             var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
             
+            // Mettre le compteur à jour immédiatement pour montrer qu'on cherche
+            document.getElementById('cinema-count').textContent = '...';
+            
             fetch(url)
                 .then(function(response) { return response.json(); })
                 .then(function(data) {
                     if (data.status === 'success') {
                         cinemaEventsData = data.events || [];
                         
+                        // 🎯 MISE À JOUR IMMÉDIATE du compteur
+                        document.getElementById('cinema-count').textContent = cinemaEventsData.length;
+                        
+                        // Afficher avec les autres événements
                         var filteredEvents = allEventsData.filter(function(e) {
                             return e.source !== 'Allocine';
                         });
@@ -838,6 +845,7 @@
                 })
                 .catch(function(error) {
                     console.error('Erreur fetch cinéma:', error);
+                    document.getElementById('cinema-count').textContent = '0';
                 });
         }
 
