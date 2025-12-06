@@ -482,7 +482,7 @@
         
         // 🎯 Adapter selon l'appareil
         var LONGPRESS_DURATION = DEVICE_INFO.isMobile ? 1500 : 2000;  // 1.5s mobile, 2s desktop
-        var LONGPRESS_MOVE_THRESHOLD = 80;
+        var LONGPRESS_MOVE_THRESHOLD = DEVICE_INFO.isMobile ? 30 : 15;  // 30px mobile (plus tolérant), 15px desktop (plus précis)
 
         // État global
         var map = null;
