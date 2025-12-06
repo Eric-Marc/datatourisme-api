@@ -202,7 +202,36 @@
         }
 
         #toggle-cinema .toggle-value {
-            color: #800020;
+            color: #9333ea;  /* 🎬 Mauve/violet pour les films */
+        }
+        
+        #toggle-cinema .toggle-icon {
+            color: #9333ea;  /* 🎬 Mauve/violet pour l'icône */
+        }
+        
+        /* 🎬 Animation de chargement des films */
+        .source-toggle.loading {
+            animation: pulseLoading 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulseLoading {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.7);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 0 0 0 10px rgba(147, 51, 234, 0);
+            }
+        }
+        
+        .source-toggle.loading .toggle-value {
+            animation: blinkValue 0.8s ease-in-out infinite;
+        }
+        
+        @keyframes blinkValue {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
         }
 
         #map-container {
@@ -894,19 +923,26 @@
         function fetchCinemaEvents(lat, lon, radiusKm) {
             var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
             
-            // Mettre le compteur à jour immédiatement pour montrer qu'on cherche
+            // 🎬 ANIMATION : Ajouter la classe loading
+            var toggleCinema = document.getElementById('toggle-cinema');
+            toggleCinema.classList.add('loading');
+            
+            // Mettre le compteur à "..." pour montrer qu'on cherche
             document.getElementById('cinema-count').textContent = '...';
             
             fetch(url)
                 .then(function(response) { return response.json(); })
                 .then(function(data) {
+                    // 🎬 ANIMATION : Retirer la classe loading
+                    toggleCinema.classList.remove('loading');
+                    
                     if (data.status === 'success') {
                         cinemaEventsData = data.events || [];
                         
                         // 🎯 MISE À JOUR IMMÉDIATE du compteur
                         document.getElementById('cinema-count').textContent = cinemaEventsData.length;
                         
-                        // Afficher avec les autres événements
+                        // 🗺️ MISE À JOUR DE LA CARTE avec les films
                         var filteredEvents = allEventsData.filter(function(e) {
                             return e.source !== 'Allocine';
                         });
@@ -920,6 +956,9 @@
                     }
                 })
                 .catch(function(error) {
+                    // 🎬 ANIMATION : Retirer la classe loading en cas d'erreur
+                    toggleCinema.classList.remove('loading');
+                    
                     console.error('Erreur fetch cinéma:', error);
                     document.getElementById('cinema-count').textContent = '0';
                 });
