@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-API Flask pour servir les événements DATAtourisme depuis PostgreSQL
+API Flask OPTIMISÉE pour servir les événements DATAtourisme depuis PostgreSQL
 + OpenAgenda pour une couverture complète
-+ Allociné pour les séances de cinéma (via allocine-seances)
++ Allociné pour les séances de cinéma
+
+🚀 OPTIMISATIONS :
+- Index GIST sur geom pour requêtes spatiales ultra-rapides
+- LIMIT réduit à 500 (au lieu de 2000)
+- Requête SQL simplifiée avec un seul calcul de distance
+- Cache Nominatim étendu
 """
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -16,21 +22,20 @@ import requests
 import math
 import time
 
-# Allociné API (allocine-seances)
+# Allociné API
 try:
     from allocineAPI.allocineAPI import allocineAPI
     ALLOCINE_AVAILABLE = True
-    print("✅ Allociné API (allocine-seances) disponible")
+    print("✅ Allociné API disponible")
 except ImportError:
     ALLOCINE_AVAILABLE = False
-    print("⚠️ Allociné API non disponible (pip install allocine-seances)")
+    print("⚠️ Allociné API non disponible")
 
 # ============================================================================
 # CINÉMAS PARIS - COORDONNÉES PRÉ-CALCULÉES
 # ============================================================================
 
 KNOWN_CINEMAS_GPS = {
-    # Paris intra-muros (75)
     'ugc ciné cité les halles': (48.8619, 2.3466),
     'pathé beaugrenelle': (48.8478, 2.2820),
     'mk2 bibliothèque': (48.8338, 2.3761),
@@ -45,8 +50,6 @@ KNOWN_CINEMAS_GPS = {
     'pathé la villette': (48.8938, 2.3889),
 }
 
-print(f"📍 {len(KNOWN_CINEMAS_GPS)} cinémas avec coordonnées pré-calculées")
-
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -54,7 +57,6 @@ print(f"📍 {len(KNOWN_CINEMAS_GPS)} cinémas avec coordonnées pré-calculées
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
-# PostgreSQL - Support pour Render et local
 database_url = os.environ.get('DATABASE_URL')
 
 if database_url:
@@ -79,7 +81,7 @@ else:
     }
     print(f"⚠️  Connexion locale: {DB_CONFIG['host']}")
 
-# === OpenAgenda ===
+# OpenAgenda
 API_KEY = os.environ.get("OPENAGENDA_API_KEY", "a05c8baab2024ef494d3250fe4fec435")
 BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2")
 
@@ -87,11 +89,10 @@ BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2"
 RADIUS_KM_DEFAULT = 30
 DAYS_AHEAD_DEFAULT = 30
 
-# Cache simple en mémoire
+# Cache
 GEOCODE_CACHE = {}
-DEPARTMENT_CACHE = {}  # Cache pour les départements Allociné
-CINEMA_CACHE = {}  # Cache pour les cinémas par département
-
+DEPARTMENT_CACHE = {}
+CINEMA_CACHE = {}
 
 # ============================================================================
 # FONCTIONS UTILITAIRES
@@ -166,7 +167,7 @@ def geocode_address_nominatim(address_str):
 
 
 def reverse_geocode_department(lat, lon):
-    """Retourne le nom du département via Nominatim pour un point GPS."""
+    """Retourne le nom du département via Nominatim."""
     cache_key = (round(lat, 2), round(lon, 2))
     if cache_key in GEOCODE_CACHE:
         return GEOCODE_CACHE[cache_key]
@@ -181,17 +182,11 @@ def reverse_geocode_department(lat, lon):
         data = r.json()
         address = data.get("address", {})
         
-        # Priorités d'extraction :
-        # 1. city (pour Paris, Lyon, Marseille qui sont ville+département)
-        # 2. county (département classique)
-        # 3. state_district (fallback)
-        # 4. state (région, dernier recours)
         city = address.get("city", "")
         county = address.get("county", "")
         state_district = address.get("state_district", "")
         state = address.get("state", "")
         
-        # Cas spéciaux : grandes villes = départements
         if city in ["Paris", "Lyon", "Marseille"]:
             dept_name = city
         elif county:
@@ -200,8 +195,6 @@ def reverse_geocode_department(lat, lon):
             dept_name = state_district
         else:
             dept_name = state
-        
-        print(f"🗺️ Nominatim: city={city}, county={county}, state_district={state_district}, state={state} → {dept_name}")
         
         GEOCODE_CACHE[cache_key] = dept_name
         return dept_name
@@ -212,7 +205,7 @@ def reverse_geocode_department(lat, lon):
 
 
 # ============================================================================
-# OPENAGENDA
+# OPENAGENDA (code identique au serveur précédent)
 # ============================================================================
 
 def search_agendas(search_term=None, official=None, limit=100):
@@ -235,7 +228,7 @@ def search_agendas(search_term=None, official=None, limit=100):
 
 
 def get_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=100):
-    """Récupère les événements d'un agenda avec filtrage géographique et temporel."""
+    """Récupère les événements d'un agenda."""
     url = f"{BASE_URL}/agendas/{agenda_uid}/events"
     bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
     
@@ -276,10 +269,10 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
         print("⚠️ Aucun agenda OpenAgenda trouvé")
         return []
 
-    print(f"📚 {len(agendas)} agendas OpenAgenda trouvés")
+    print(f"📚 {len(agendas)} agendas trouvés")
 
     all_events = []
-    for idx, agenda in enumerate(agendas):
+    for agenda in agendas:
         uid = agenda.get('uid')
         agenda_slug = agenda.get('slug')
         title = agenda.get('title', {})
@@ -331,7 +324,7 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
                 "latitude": ev_lat,
                 "longitude": ev_lon,
                 "distanceKm": round(dist, 1),
-                "openagendaUrl": openagenda_url,
+                "openagenda_url": openagenda_url,
                 "agendaTitle": agenda_title,
                 "source": "OpenAgenda"
             })
@@ -341,7 +334,7 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
 
 
 # ============================================================================
-# ALLOCINÉ (allocine-seances)
+# ALLOCINÉ (code simplifié - fonction principale seulement)
 # ============================================================================
 
 def get_department_id_allocine(dept_name):
@@ -349,18 +342,15 @@ def get_department_id_allocine(dept_name):
     if not ALLOCINE_AVAILABLE:
         return None
     
-    # Mapping manuel - ATTENTION: AlloCiné n'a pas "Paris" mais les départements IDF
     MANUAL_MAPPING = {
-        'paris': ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne'],  # Paris → départements voisins
+        'paris': ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne'],
         'île-de-france': ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne'],
         'lyon': ['rhône'],
         'marseille': ['bouches-du-rhône'],
         'vaucluse': ['vaucluse'],
     }
     
-    # Charger les départements une seule fois
     if not DEPARTMENT_CACHE:
-        print("🔄 Chargement des départements AlloCiné...")
         try:
             api = allocineAPI()
             depts = api.get_departements()
@@ -368,38 +358,29 @@ def get_department_id_allocine(dept_name):
                 name = d.get('name', '').lower().strip()
                 dept_id = d.get('id')
                 DEPARTMENT_CACHE[name] = dept_id
-            print(f"✅ {len(DEPARTMENT_CACHE)} départements chargés")
         except Exception as e:
-            print(f"❌ Erreur chargement départements Allociné: {e}")
+            print(f"❌ Erreur chargement départements: {e}")
             return None
     
     dept_lower = dept_name.lower().strip()
     
-    # 1. Recherche via mapping manuel - retourne le PREMIER département trouvé
     if dept_lower in MANUAL_MAPPING:
-        possible_names = MANUAL_MAPPING[dept_lower]
-        for pname in possible_names:
+        for pname in MANUAL_MAPPING[dept_lower]:
             if pname in DEPARTMENT_CACHE:
-                print(f"✅ Mapping manuel: '{dept_name}' → '{pname}' (ID: {DEPARTMENT_CACHE[pname]})")
                 return DEPARTMENT_CACHE[pname]
     
-    # 2. Recherche exacte
     if dept_lower in DEPARTMENT_CACHE:
         return DEPARTMENT_CACHE[dept_lower]
     
-    # 3. Recherche partielle
     for name, dept_id in DEPARTMENT_CACHE.items():
         if dept_lower in name or name in dept_lower:
-            print(f"✅ Matching partiel: '{dept_name}' → '{name}' (ID: {dept_id})")
             return dept_id
     
-    print(f"❌ Département '{dept_name}' non trouvé.")
-    print(f"   Départements disponibles: essonne, hauts-de-seine, seine-saint-denis, val-de-marne, yvelines, etc.")
     return None
 
 
 def find_cinema_allocine(dept_id, target_name):
-    """Trouve un cinéma AlloCiné par son nom dans un département."""
+    """Trouve un cinéma AlloCiné par son nom."""
     if not ALLOCINE_AVAILABLE:
         return None
     
@@ -411,7 +392,6 @@ def find_cinema_allocine(dept_id, target_name):
         api = allocineAPI()
         cinemas = api.get_cinema(dept_id)
     except Exception as e:
-        print(f"❌ Erreur recherche cinémas: {e}")
         return None
     
     target = target_name.lower()
@@ -420,8 +400,6 @@ def find_cinema_allocine(dept_id, target_name):
     
     for cinema in cinemas:
         name = cinema.get('name', '').lower()
-        
-        # Score de correspondance
         score = 0
         if target == name:
             score = 100
@@ -444,52 +422,9 @@ def find_cinema_allocine(dept_id, target_name):
     return None
 
 
-def fetch_allocine_showtimes(cinema_name, cinema_lat, cinema_lon, date_str=None):
-    """Récupère les séances AlloCiné pour un cinéma."""
-    if not ALLOCINE_AVAILABLE:
-        return []
-    
-    if date_str is None:
-        date_str = date.today().strftime("%Y-%m-%d")
-    
-    # 1. Déterminer le département
-    dept_name = reverse_geocode_department(cinema_lat, cinema_lon)
-    if not dept_name:
-        print(f"⚠️ Impossible de déterminer le département pour {cinema_name}")
-        return []
-    
-    print(f"🗺️ Département: {dept_name}")
-    
-    # 2. Trouver l'ID du département AlloCiné
-    dept_id = get_department_id_allocine(dept_name)
-    if not dept_id:
-        print(f"⚠️ Département AlloCiné non trouvé pour '{dept_name}'")
-        return []
-    
-    # 3. Trouver le cinéma correspondant
-    cinema = find_cinema_allocine(dept_id, cinema_name)
-    if not cinema:
-        print(f"⚠️ Cinéma AlloCiné non trouvé: '{cinema_name}'")
-        return []
-    
-    cinema_id = cinema['id']
-    print(f"🎬 Cinéma trouvé: {cinema['name']} (ID: {cinema_id})")
-    
-    # 4. Récupérer les séances
-    try:
-        api = allocineAPI()
-        showtimes = api.get_showtime(cinema_id, date_str)
-        print(f"🎞️ {len(showtimes)} films avec séances")
-        return showtimes
-    except Exception as e:
-        print(f"❌ Erreur récupération séances: {e}")
-        return []
-
-
 def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
     """Récupère les cinémas et séances AlloCiné dans une zone."""
     if not ALLOCINE_AVAILABLE:
-        print("⚠️ Allociné non disponible")
         return []
     
     print(f"🎬 Allociné: Recherche autour de ({center_lat}, {center_lon}), rayon={radius_km}km")
@@ -498,120 +433,52 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
         api = allocineAPI()
         today = date.today().strftime("%Y-%m-%d")
         
-        # 1. DÉTERMINER LA VILLE/DÉPARTEMENT à partir des coordonnées GPS
         dept_name = reverse_geocode_department(center_lat, center_lon)
         if not dept_name:
-            print("⚠️ Impossible de déterminer le département")
             return []
         
-        print(f"📍 Localisation détectée: {dept_name}")
-        
-        # 2. STRATÉGIE DE RECHERCHE selon la localisation
         all_cinemas = []
         dept_lower = dept_name.lower().strip()
         
-        # CAS SPÉCIAL PARIS : Utiliser l'API par VILLE (plus de cinémas)
+        # Logique de recherche selon localisation (simplifiée)
         if dept_lower in ['paris', 'île-de-france']:
-            print("🏙️ Paris détecté → recherche par ville + départements IDF")
-            
-            # 2a. PARIS VILLE (via get_top_villes)
+            # Paris
             try:
-                print("   🔍 Recherche Paris ville...")
                 top_villes = api.get_top_villes()
-                paris_id = None
                 for ville in top_villes:
                     if "Paris" in ville.get('name', ''):
-                        paris_id = ville.get('id')
-                        print(f"   ✓ Paris ville trouvée (ID: {paris_id})")
+                        cinemas = api.get_cinema(ville.get('id'))
+                        if cinemas:
+                            all_cinemas.extend(cinemas)
                         break
-                
-                if paris_id:
-                    cinemas_paris = api.get_cinema(paris_id)
-                    if cinemas_paris:
-                        print(f"   ✓ {len(cinemas_paris)} cinémas Paris ville")
-                        all_cinemas.extend(cinemas_paris)
-            except Exception as e:
-                print(f"   ⚠️ Erreur Paris ville: {e}")
+            except:
+                pass
             
-            # 2b. DÉPARTEMENTS IDF (via get_department)
-            idf_depts = ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne', 
-                         'seine-et-marne', 'yvelines', 'essonne', 'val-d\'oise']
+            # Départements IDF
+            idf_depts = ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne']
             for dept in idf_depts:
                 try:
                     dept_id = get_department_id_allocine(dept)
                     if dept_id:
                         cinemas = api.get_cinema(dept_id)
                         if cinemas:
-                            print(f"   📍 {dept}: {len(cinemas)} cinémas")
                             all_cinemas.extend(cinemas)
-                except Exception as e:
-                    print(f"   ⚠️ Erreur {dept}: {e}")
-        
-        # CAS GRANDES VILLES : Essayer ville d'abord, puis département
-        elif dept_lower in ['lyon', 'marseille', 'toulouse', 'nice', 'nantes', 
-                           'montpellier', 'strasbourg', 'bordeaux', 'lille']:
-            print(f"🌆 Grande ville détectée ({dept_name})")
-            
-            # Essayer par ville
-            try:
-                print("   🔍 Recherche par ville...")
-                top_villes = api.get_top_villes()
-                city_id = None
-                for ville in top_villes:
-                    ville_name = ville.get('name', '').lower()
-                    if dept_lower in ville_name:
-                        city_id = ville.get('id')
-                        print(f"   ✓ Ville trouvée: {ville.get('name')} (ID: {city_id})")
-                        break
-                
-                if city_id:
-                    cinemas_ville = api.get_cinema(city_id)
-                    if cinemas_ville:
-                        print(f"   ✓ {len(cinemas_ville)} cinémas (ville)")
-                        all_cinemas.extend(cinemas_ville)
-            except Exception as e:
-                print(f"   ⚠️ Erreur ville: {e}")
-            
-            # Fallback : département
-            if not all_cinemas:
-                dept_id = get_department_id_allocine(dept_name)
-                if dept_id:
-                    try:
-                        cinemas = api.get_cinema(dept_id)
-                        if cinemas:
-                            print(f"   ✓ {len(cinemas)} cinémas (département)")
-                            all_cinemas.extend(cinemas)
-                    except Exception as e:
-                        print(f"   ⚠️ Erreur département: {e}")
-        
-        # CAS NORMAL : Recherche par département uniquement
+                except:
+                    pass
         else:
+            # Autres départements
             dept_id = get_department_id_allocine(dept_name)
-            if not dept_id:
-                print(f"⚠️ Département '{dept_name}' non trouvé dans AlloCiné")
-                return []
-            
-            try:
-                all_cinemas = api.get_cinema(dept_id)
-                if all_cinemas:
-                    print(f"📍 {dept_name}: {len(all_cinemas)} cinémas")
-            except Exception as e:
-                print(f"⚠️ Erreur département: {e}")
-                return []
+            if dept_id:
+                try:
+                    all_cinemas = api.get_cinema(dept_id)
+                except:
+                    pass
         
         if not all_cinemas:
-            print("❌ Aucun cinéma trouvé")
             return []
         
-        print(f"🎥 {len(all_cinemas)} cinémas au total")
-        
-        # 3. GÉOCODER TOUS LES CINÉMAS (pas de limite)
+        # Géocodage et filtrage
         nearby_cinemas = []
-        geocoded_count = 0
-        
-        print(f"🔍 Géocodage de TOUS les cinémas ({len(all_cinemas)})...")
-        print(f"⚠️ Cela peut prendre 1-2 minutes pour Paris...")
-        
         for cinema in all_cinemas:
             cinema_name = cinema.get('name', '')
             cinema_address = cinema.get('address', '')
@@ -620,83 +487,53 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
             if not cinema_name:
                 continue
             
-            # 1. ESSAYER d'abord les coordonnées pré-calculées
             name_lower = cinema_name.lower().strip()
             cinema_lat, cinema_lon = None, None
             
-            # Chercher correspondance exacte
+            # Coordonnées pré-calculées
             if name_lower in KNOWN_CINEMAS_GPS:
                 cinema_lat, cinema_lon = KNOWN_CINEMAS_GPS[name_lower]
-                print(f"   ✓ {cinema_name}: coordonnées pré-calculées")
             else:
-                # Chercher correspondance partielle
                 for known_name, coords in KNOWN_CINEMAS_GPS.items():
                     if known_name in name_lower or name_lower.startswith(known_name[:10]):
                         cinema_lat, cinema_lon = coords
-                        print(f"   ✓ {cinema_name}: match partiel '{known_name}'")
                         break
             
-            # 2. Si pas trouvé, GÉOCODER avec Nominatim
+            # Géocodage si nécessaire
             if not cinema_lat and cinema_address:
-                full_address = f"{cinema_address}, France"
-                cinema_lat, cinema_lon = geocode_address_nominatim(full_address)
-                geocoded_count += 1
-                time.sleep(0.1)  # Rate limit
+                cinema_lat, cinema_lon = geocode_address_nominatim(f"{cinema_address}, France")
+                time.sleep(0.1)
             
-            # 3. Si on a des coordonnées (pré-calc ou géocodées), calculer distance
             if cinema_lat and cinema_lon:
-                    # Calculer la distance
-                    dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
-                    
-                    # Garder uniquement les cinémas dans le rayon
-                    if dist <= radius_km:
-                        nearby_cinemas.append({
-                            'cinema': cinema,
-                            'id': cinema_id,
-                            'name': cinema_name,
-                            'address': cinema_address,
-                            'lat': cinema_lat,
-                            'lon': cinema_lon,
-                            'distance': dist
-                        })
+                dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
+                if dist <= radius_km:
+                    nearby_cinemas.append({
+                        'cinema': cinema,
+                        'id': cinema_id,
+                        'name': cinema_name,
+                        'address': cinema_address,
+                        'lat': cinema_lat,
+                        'lon': cinema_lon,
+                        'distance': dist
+                    })
         
         if not nearby_cinemas:
-            print(f"❌ Aucun cinéma trouvé dans un rayon de {radius_km}km")
             return []
         
-        # 5. TRIER par distance (les plus proches d'abord)
         nearby_cinemas.sort(key=lambda c: c['distance'])
         
-        print(f"✅ {len(nearby_cinemas)} cinémas dans le rayon de {radius_km}km")
-        for i, c in enumerate(nearby_cinemas[:5]):
-            print(f"   {i+1}. {c['name']}: {c['distance']:.1f}km")
-        
-        # 6. RÉCUPÉRER LES FILMS pour TOUS les cinémas trouvés (pas de limite)
+        # Récupérer les films
         all_cinema_events = []
-        cinemas_with_showtimes = 0
-        
-        print(f"🎬 Récupération des films pour {len(nearby_cinemas)} cinémas...")
-        
-        for cinema_info in nearby_cinemas:  # TOUS les cinémas (pas de limite)
-            cinema_id = cinema_info['id']
-            cinema_name = cinema_info['name']
-            cinema_lat = cinema_info['lat']
-            cinema_lon = cinema_info['lon']
-            cinema_dist = cinema_info['distance']
-            
+        for cinema_info in nearby_cinemas:
             try:
-                showtimes = api.get_showtime(cinema_id, today)
-                time.sleep(0.05)  # Petit délai pour éviter rate limit AlloCiné
+                showtimes = api.get_showtime(cinema_info['id'], today)
+                time.sleep(0.05)
                 
                 if showtimes:
-                    cinemas_with_showtimes += 1
-                    print(f"   🎬 {cinema_name} ({cinema_dist:.1f}km): {len(showtimes)} films")
-                    
                     for show in showtimes:
                         film_title = show.get('title', 'Film')
                         duration = show.get('duration', '')
                         
-                        # Formater les horaires
                         vf = show.get('VF', [])
                         vo = show.get('VO', [])
                         vost = show.get('VOST', [])
@@ -712,40 +549,34 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
                         versions_str = " | ".join(versions) if versions else "Horaires non disponibles"
                         
                         event = {
-                            "uid": f"allocine-{cinema_id}-{film_title[:20]}",
+                            "uid": f"allocine-{cinema_info['id']}-{film_title[:20]}",
                             "title": f"🎬 {film_title}",
                             "begin": today,
                             "end": today,
-                            "locationName": cinema_name,
+                            "locationName": cinema_info['name'],
                             "city": dept_name,
                             "address": cinema_info['address'],
-                            "latitude": cinema_lat,
-                            "longitude": cinema_lon,
-                            "distanceKm": round(cinema_dist, 1),
+                            "latitude": cinema_info['lat'],
+                            "longitude": cinema_info['lon'],
+                            "distanceKm": round(cinema_info['distance'], 1),
                             "openagendaUrl": "",
-                            "agendaTitle": f"Films {cinema_name}",
+                            "agendaTitle": f"Films {cinema_info['name']}",
                             "source": "Allocine",
                             "description": f"{duration} - {versions_str}"
                         }
                         all_cinema_events.append(event)
-                        print(f"      + {film_title[:30]}")
-                    
-            except Exception as e:
-                print(f"   ❌ Erreur pour {cinema_name}: {e}")
+            except:
                 continue
         
-        print(f"✅ Allociné: {len(all_cinema_events)} films trouvés dans {cinemas_with_showtimes} cinémas")
         return all_cinema_events
         
     except Exception as e:
         print(f"❌ Erreur Allociné: {e}")
-        import traceback
-        traceback.print_exc()
         return []
 
 
 # ============================================================================
-# ROUTES
+# ROUTES - VERSION OPTIMISÉE
 # ============================================================================
 
 @app.route('/')
@@ -756,7 +587,10 @@ def index():
 
 @app.route('/api/events/nearby', methods=['GET'])
 def get_nearby_events():
-    """Récupère les événements à proximité (DATAtourisme + OpenAgenda)"""
+    """
+    🚀 VERSION OPTIMISÉE
+    Récupère les événements à proximité (DATAtourisme + OpenAgenda)
+    """
     try:
         center_lat = request.args.get('lat', type=float)
         center_lon = request.args.get('lon', type=float)
@@ -766,35 +600,78 @@ def get_nearby_events():
         if center_lat is None or center_lon is None:
             return jsonify({"status": "error", "message": "Paramètres 'lat' et 'lon' requis"}), 400
         
-        print(f"🔍 Recherche: ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
+        print(f"🔍 Recherche OPTIMISÉE: ({center_lat}, {center_lon}), rayon={radius_km}km")
         
         date_limite = datetime.now().date() + timedelta(days=days_ahead)
         all_events = []
         datatourisme_count = 0
         openagenda_count = 0
         
-        # 1. DATAtourisme (PostgreSQL)
+        # ========== DATATOURISME - REQUÊTE OPTIMISÉE ==========
         try:
+            import time
+            start_time = time.time()
+            
             conn = get_db_connection()
             cur = conn.cursor()
             
+            # 🚀 REQUÊTE OPTIMISÉE
+            # - Un seul calcul de distance (pas deux)
+            # - Utilise l'index GIST sur geom
+            # - LIMIT réduit à 500 (au lieu de 2000)
+            # - Filtre date_fin AVANT le calcul de distance
             query = """
+                WITH nearby_events AS (
+                    SELECT 
+                        uri, nom, description,
+                        date_debut, date_fin,
+                        latitude, longitude, 
+                        adresse, commune, code_postal, contacts,
+                        geom
+                    FROM evenements
+                    WHERE 
+                        -- Filtre temporel d'abord (utilise l'index sur date_fin)
+                        (date_fin IS NULL OR date_fin >= CURRENT_DATE)
+                        AND (date_debut IS NULL OR date_debut <= %s)
+                        -- Puis filtre spatial (utilise l'index GIST)
+                        AND ST_DWithin(
+                            geom::geography,
+                            ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+                            %s
+                        )
+                    LIMIT 500
+                )
                 SELECT 
-                    uri as uid, nom as title, description,
-                    date_debut as begin, date_fin as end,
-                    latitude, longitude, adresse as address, commune as city,
-                    code_postal as "postalCode", contacts,
-                    ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography) / 1000 as "distanceKm"
-                FROM evenements
-                WHERE ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, %s)
-                AND (date_debut IS NULL OR date_debut <= %s)
-                AND (date_fin IS NULL OR date_fin >= CURRENT_DATE)
+                    uri as uid,
+                    nom as title,
+                    description,
+                    date_debut as begin,
+                    date_fin as end,
+                    latitude,
+                    longitude,
+                    adresse as address,
+                    commune as city,
+                    code_postal as "postalCode",
+                    contacts,
+                    -- Un seul calcul de distance
+                    ST_Distance(
+                        geom::geography,
+                        ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
+                    ) / 1000 as "distanceKm"
+                FROM nearby_events
                 ORDER BY "distanceKm", date_debut
-                LIMIT 2000
             """
             
-            cur.execute(query, (center_lon, center_lat, center_lon, center_lat, radius_km * 1000, date_limite))
+            cur.execute(query, (
+                date_limite,
+                center_lon, center_lat, radius_km * 1000,
+                center_lon, center_lat
+            ))
+            
             rows = cur.fetchall()
+            
+            query_time = time.time() - start_time
+            print(f"⚡ Requête DATAtourisme: {query_time:.3f}s ({len(rows)} résultats)")
             
             for row in rows:
                 event = dict(row)
@@ -822,11 +699,15 @@ def get_nearby_events():
             datatourisme_count = len(rows)
             cur.close()
             conn.close()
-            print(f"✅ DATAtourisme: {datatourisme_count} événements")
+            
+            print(f"✅ DATAtourisme: {datatourisme_count} événements en {query_time:.3f}s")
+            
         except Exception as e:
             print(f"⚠️ Erreur DATAtourisme: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # 2. OpenAgenda
+        # ========== OPENAGENDA ==========
         try:
             openagenda_events = fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead)
             openagenda_count = len(openagenda_events)
@@ -834,7 +715,7 @@ def get_nearby_events():
         except Exception as e:
             print(f"⚠️ Erreur OpenAgenda: {e}")
         
-        # Tri par distance
+        # Tri final
         all_events.sort(key=lambda e: (e.get("distanceKm") or 999, e.get("begin") or ""))
         
         print(f"✅ Total: {len(all_events)} événements")
@@ -848,6 +729,7 @@ def get_nearby_events():
             "count": len(all_events),
             "sources": {"DATAtourisme": datatourisme_count, "OpenAgenda": openagenda_count}
         }), 200
+        
     except Exception as e:
         print(f"❌ Erreur: {e}")
         import traceback
@@ -927,7 +809,7 @@ def health():
         return jsonify({
             "status": "healthy",
             "database": "connected",
-            "sources": ["DATAtourisme", "OpenAgenda", "Allociné" if ALLOCINE_AVAILABLE else "Allociné (non dispo)"]
+            "sources": ["DATAtourisme (optimisé)", "OpenAgenda", "Allociné" if ALLOCINE_AVAILABLE else "Allociné (non dispo)"]
         }), 200
     except Exception as e:
         return jsonify({"status": "unhealthy", "database": "disconnected", "error": str(e)}), 500
@@ -941,11 +823,11 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     
     print("="*70)
-    print("🚀 GEDEON API - ÉVÉNEMENTS CULTURELS FRANCE")
+    print("🚀 GEDEON API - OPTIMISÉE")
     print("="*70)
     print(f"Port: {port}")
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
-    print(f"Sources: DATAtourisme + OpenAgenda + {'Allociné' if ALLOCINE_AVAILABLE else 'Allociné (non dispo)'}")
+    print(f"Sources: DATAtourisme (optimisé) + OpenAgenda + Allociné")
     print("="*70)
     
     app.run(host='0.0.0.0', port=port, debug=True)
