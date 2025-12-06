@@ -90,6 +90,18 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+        
+        /* 🎯 Boutons avec icônes uniquement (carrés et compacts) */
+        #btnMyPosition,
+        #resetViewBtn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
 
         input[type="range"] {
             flex: 1;
@@ -359,6 +371,14 @@
             .slider-group { min-width: 100%; }
             #map-container { height: calc(100vh - 180px); }  /* 🎯 Ajusté */
             button { width: 100%; padding: 8px 12px; font-size: 13px; }  /* 🎯 Légèrement plus grand sur mobile pour touch */
+            
+            /* 🎯 Boutons icônes restent carrés sur mobile */
+            #btnMyPosition,
+            #resetViewBtn {
+                width: 36px;
+                height: 36px;
+                font-size: 20px;
+            }
         }
         
         /* 🎯 Styles spécifiques selon l'appareil */
@@ -387,8 +407,8 @@
 
     <div id="controls">
         <div class="control-group">
-            <button id="btnMyPosition" onclick="getUserLocation()">📍 Ma position</button>
-            <button onclick="resetMapView()" id="resetViewBtn" style="display:none;">🔄 Réinitialiser la vue</button>
+            <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
+            <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
 
             <div class="slider-group">
                 <span class="slider-label">Rayon:</span>
