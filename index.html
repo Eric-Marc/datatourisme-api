@@ -30,22 +30,22 @@
         }
 
         #header img {
-            max-height: 120px;
+            max-height: 60px;  /* 🎯 Réduit de 120px à 60px */
             object-fit: cover;
         }
 
         #controls {
             background: white;
-            padding: 12px 20px;
+            padding: 8px 12px;  /* 🎯 Réduit de 12px 20px à 8px 12px */
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
         .control-group {
             display: flex;
-            gap: 15px;
+            gap: 8px;  /* 🎯 Réduit de 15px à 8px */
             flex-wrap: wrap;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 6px;  /* 🎯 Réduit de 10px à 6px */
         }
 
         .control-group:last-child {
@@ -55,23 +55,23 @@
         .slider-group {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 6px;  /* 🎯 Réduit de 10px à 6px */
             flex: 1;
-            min-width: 200px;
+            min-width: 150px;  /* 🎯 Réduit de 200px à 150px */
         }
 
         .slider-label {
-            font-size: 14px;
+            font-size: 12px;  /* 🎯 Réduit de 14px à 12px */
             font-weight: 600;
             color: #666;
-            min-width: 60px;
+            min-width: 50px;  /* 🎯 Réduit de 60px à 50px */
         }
 
         button {
             border: none;
-            border-radius: 8px;
-            padding: 10px 16px;
-            font-size: 14px;
+            border-radius: 6px;  /* 🎯 Réduit de 8px à 6px */
+            padding: 6px 12px;  /* 🎯 Réduit de 10px 16px à 6px 12px */
+            font-size: 12px;  /* 🎯 Réduit de 14px à 12px */
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
@@ -93,20 +93,20 @@
 
         input[type="range"] {
             flex: 1;
-            max-width: 180px;
+            max-width: 140px;  /* 🎯 Réduit de 180px à 140px */
         }
 
         .slider-value {
-            font-size: 14px;
+            font-size: 12px;  /* 🎯 Réduit de 14px à 12px */
             font-weight: bold;
             color: #667eea;
             min-width: 55px;
         }
 
         .status {
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 13px;
+            padding: 5px 10px;  /* 🎯 Réduit de 8px 12px à 5px 10px */
+            border-radius: 5px;  /* 🎯 Réduit de 6px à 5px */
+            font-size: 11px;  /* 🎯 Réduit de 13px à 11px */
             font-weight: 500;
             transition: all 0.3s;
             flex-shrink: 0;
@@ -128,10 +128,10 @@
         /* Stats simplifiés */
         #stats {
             background: white;
-            padding: 10px 20px;
+            padding: 6px 12px;  /* 🎯 Réduit de 10px 20px à 6px 12px */
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             display: flex;
-            gap: 15px;
+            gap: 10px;  /* 🎯 Réduit de 15px à 10px */
             flex-wrap: wrap;
             align-items: center;
         }
@@ -139,9 +139,9 @@
         .source-toggle {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 10px 15px;
-            border-radius: 10px;
+            gap: 6px;  /* 🎯 Réduit de 10px à 6px */
+            padding: 6px 10px;  /* 🎯 Réduit de 10px 15px à 6px 10px */
+            border-radius: 8px;  /* 🎯 Réduit de 10px à 8px */
             cursor: pointer;
             transition: all 0.3s;
             border: 2px solid #e2e8f0;
@@ -164,25 +164,25 @@
         }
 
         .toggle-icon {
-            font-size: 20px;
+            font-size: 16px;  /* 🎯 Réduit de 20px à 16px */
         }
 
         .toggle-value {
-            font-size: 20px;
+            font-size: 16px;  /* 🎯 Réduit de 20px à 16px */
             font-weight: bold;
             color: #667eea;
         }
 
         .toggle-label {
-            font-size: 12px;
+            font-size: 10px;  /* 🎯 Réduit de 12px à 10px */
             color: #666;
         }
 
         .toggle-check {
-            font-size: 16px;
+            font-size: 14px;  /* 🎯 Réduit de 16px à 14px */
             color: #22c55e;
             font-weight: bold;
-            margin-left: 5px;
+            margin-left: 3px;  /* 🎯 Réduit de 5px à 3px */
         }
 
         .source-toggle.inactive .toggle-check {
@@ -195,7 +195,7 @@
 
         #map-container {
             position: relative;
-            height: calc(100vh - 200px);
+            height: calc(100vh - 150px);  /* 🎯 Réduit de 200px à 150px */
             width: 100%;
         }
 
@@ -351,13 +351,32 @@
         }
 
         @media (max-width: 768px) {
-            #header h1 { font-size: 20px; }
-            #header p { font-size: 12px; }
-            #stats { gap: 15px; }
+            #header h1 { font-size: 18px; }  /* 🎯 Encore plus petit */
+            #header p { font-size: 11px; }
+            #header img { max-height: 50px; }  /* 🎯 Encore plus petit sur mobile */
+            #stats { gap: 8px; padding: 5px 10px; }  /* 🎯 Plus compact */
             .control-group { flex-direction: column; align-items: stretch; }
             .slider-group { min-width: 100%; }
-            #map-container { height: calc(100vh - 250px); }
-            button { width: 100%; }
+            #map-container { height: calc(100vh - 180px); }  /* 🎯 Ajusté */
+            button { width: 100%; padding: 8px 12px; font-size: 13px; }  /* 🎯 Légèrement plus grand sur mobile pour touch */
+        }
+        
+        /* 🎯 Styles spécifiques selon l'appareil */
+        body.mobile .event-popup {
+            max-width: 260px;
+        }
+        
+        body.mobile #map-instructions {
+            font-size: 11px;  /* 🎯 Plus petit */
+            padding: 6px 12px;  /* 🎯 Plus compact */
+        }
+        
+        body.mobile .status {
+            font-size: 10px;  /* 🎯 Plus petit */
+        }
+        
+        body.desktop #map-instructions {
+            font-size: 12px;  /* 🎯 Ajusté */
         }
     </style>
 </head>
@@ -428,9 +447,41 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin="anonymous"></script>
 
     <script>
+        // 📱 DÉTECTION D'APPAREIL
+        var DEVICE_INFO = (function() {
+            var isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            var screenWidth = window.innerWidth;
+            
+            var type = 'desktop';
+            if (isMobileUA && screenWidth < 768) {
+                type = 'mobile';
+            } else if (isMobileUA && screenWidth >= 768 && screenWidth < 1024) {
+                type = 'tablet';
+            }
+            
+            return {
+                type: type,
+                isMobile: type === 'mobile',
+                isTablet: type === 'tablet',
+                isDesktop: type === 'desktop',
+                hasTouch: isTouchDevice,
+                width: screenWidth,
+                height: window.innerHeight
+            };
+        })();
+        
+        // Ajouter classe CSS au body
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.add(DEVICE_INFO.type);
+            console.log('📱 Device detected:', DEVICE_INFO);
+        });
+        
         // Configuration
         var SERVER_URL = window.location.origin;
-        var LONGPRESS_DURATION = 2000;
+        
+        // 🎯 Adapter selon l'appareil
+        var LONGPRESS_DURATION = DEVICE_INFO.isMobile ? 1500 : 2000;  // 1.5s mobile, 2s desktop
         var LONGPRESS_MOVE_THRESHOLD = 80;
 
         // État global
@@ -983,14 +1034,17 @@
                 
                 popupHtml += '</div>';
                 
-                marker.bindPopup(popupHtml, { 
-                    maxWidth: 400, 
-                    maxHeight: 450,
+                // 🎯 Options de popup adaptées selon l'appareil
+                var popupOptions = {
+                    maxWidth: DEVICE_INFO.isMobile ? 280 : 400,
+                    maxHeight: DEVICE_INFO.isMobile ? 350 : 450,
                     closeButton: true,
-                    autoClose: true,        // ✅ Ferme quand on ouvre un autre popup
-                    closeOnClick: false,    // Ne pas fermer si on clique sur la carte (évite fermeture accidentelle)
+                    autoClose: true,
+                    closeOnClick: DEVICE_INFO.isMobile,  // Ferme au click sur mobile
                     keepInView: true
-                });
+                };
+                
+                marker.bindPopup(popupHtml, popupOptions);
                 currentMarkerCluster.addLayer(marker);
             }
 
@@ -1125,6 +1179,13 @@
             }
             initMap();
             setupSliders();
+            
+            // 🎯 Adapter le message selon l'appareil
+            var instructionText = DEVICE_INFO.isMobile 
+                ? '👆 Maintenez appuyé 1s pour sélectionner'
+                : '👆 Maintenez appuyé 2s pour sélectionner un point';
+            document.getElementById('map-instructions').textContent = instructionText;
+            
             updateStatus('👆 Maintenez appuyé sur la carte', 'waiting');
         }
 
