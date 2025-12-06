@@ -987,14 +987,29 @@
                     maxWidth: 400, 
                     maxHeight: 450,
                     closeButton: true,
-                    autoClose: false,
-                    closeOnClick: false,
+                    autoClose: true,        // ✅ Ferme quand on ouvre un autre popup
+                    closeOnClick: false,    // Ne pas fermer si on clique sur la carte (évite fermeture accidentelle)
                     keepInView: true
                 });
                 currentMarkerCluster.addLayer(marker);
             }
 
             map.addLayer(currentMarkerCluster);
+
+            // 🎯 Fermer les popups quand on clique sur la carte (pas sur un marqueur)
+            map.on('click', function(e) {
+                // Vérifier qu'on n'a pas cliqué sur un marqueur
+                var clickedOnMarker = false;
+                map.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker && layer.getPopup && layer.getPopup()) {
+                        clickedOnMarker = true;
+                    }
+                });
+                
+                if (!clickedOnMarker) {
+                    map.closePopup();
+                }
+            });
 
             if (centerLat && centerLon && radiusKm && currentRadiusCircle) {
                 map.fitBounds(currentRadiusCircle.getBounds().pad(0.1));
