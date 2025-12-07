@@ -122,20 +122,6 @@ KNOWN_CINEMAS_GPS = {
     'gaumont wilson': (43.6070, 1.4480),
 }
 
-# Départements adjacents
-ADJACENT_DEPTS = {
-    "75": ["92", "93", "94"],
-    "92": ["75", "93", "94", "78", "91"],
-    "93": ["75", "92", "94", "77", "95"],
-    "94": ["75", "92", "93", "77", "91"],
-    "69": ["01", "38", "42", "71"],
-    "13": ["83", "84", "30", "04"],
-    "31": ["09", "11", "32", "81", "82"],
-    "33": ["17", "24", "40", "47"],
-    "59": ["62", "02", "80"],
-    "06": ["83", "04"],
-}
-
 
 # ============================================================================
 # FONCTIONS UTILITAIRES
@@ -588,8 +574,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     if is_in_idf(dept_name, postcode):
         dept_ids = IDF_DEPARTMENTS.copy()
         print(f"   📍 Zone IDF → {len(dept_ids)} départements")
-    elif radius_km > 30 and dept_code and dept_code in ADJACENT_DEPTS:
-        for adj_code in ADJACENT_DEPTS[dept_code]:
+    elif radius_km > 30 and dept_code and dept_code in ADJACENT_DEPARTMENTS:
+        for adj_code in ADJACENT_DEPARTMENTS[dept_code]:
             adj_id = POSTCODE_TO_ALLOCINE.get(adj_code)
             if adj_id and adj_id not in dept_ids:
                 dept_ids.append(adj_id)
