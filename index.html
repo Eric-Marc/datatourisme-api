@@ -1390,7 +1390,13 @@
 
         function resetMapView() {
             if (initialMapBounds && map) {
-                map.fitBounds(initialMapBounds);
+                // 🎯 Fermer le popup AVANT de recentrer la carte
+                map.closePopup();
+                
+                // Petit délai pour laisser le popup se fermer
+                setTimeout(function() {
+                    map.fitBounds(initialMapBounds);
+                }, 50);
             }
         }
 
