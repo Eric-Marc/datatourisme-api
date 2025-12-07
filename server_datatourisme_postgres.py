@@ -520,9 +520,55 @@ def fetch_movies_for_cinema(cinema_info, today_str):
     """Worker pour récupérer les films d'un cinéma."""
     try:
         api = allocineAPI()
-        movies = api.get_movies(cinema_info['id'], today_str)
-        return cinema_info, movies
-    except Exception:
+        cinema_id = cinema_info['id']
+        
+        # Essayer d'abord get_showtime (plus fiable)
+        try:
+            showtimes = api.get_showtime(cinema_id, today_str)
+            if showtimes:
+                # Convertir showtimes en format compatible
+                movies = []
+                for show in showtimes:
+                    # Extraire les horaires
+                    vf = show.get('VF', [])
+                    vo = show.get('VO', [])
+                    vost = show.get('VOST', [])
+                    
+                    versions = []
+                    if vf:
+                        versions.append(f"VF: {', '.join(vf[:3])}")
+                    if vo:
+                        versions.append(f"VO: {', '.join(vo[:3])}")
+                    if vost:
+                        versions.append(f"VOST: {', '.join(vost[:3])}")
+                    
+                    movies.append({
+                        'title': show.get('title', 'Film'),
+                        'runtime': 0,  # Non disponible avec get_showtime
+                        'genres': [],
+                        'urlPoster': '',
+                        'director': '',
+                        'isPremiere': False,
+                        'weeklyOuting': False,
+                        'showtimes_str': " | ".join(versions) if versions else "Horaires non disponibles",
+                        'duration': show.get('duration', ''),
+                    })
+                return cinema_info, movies
+        except Exception as e:
+            print(f"      ⚠️ get_showtime({cinema_id}) failed: {e}")
+        
+        # Fallback sur get_movies (données enrichies mais moins fiable)
+        try:
+            movies = api.get_movies(cinema_id, today_str)
+            if movies:
+                return cinema_info, movies
+        except Exception as e:
+            print(f"      ⚠️ get_movies({cinema_id}) failed: {e}")
+        
+        return cinema_info, []
+        
+    except Exception as e:
+        print(f"      ❌ Erreur cinéma {cinema_info.get('name')}: {e}")
         return cinema_info, []
 
 
@@ -643,13 +689,22 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                 cinema_info, movies = future.result(timeout=15)
                 
                 if movies:
+                    print(f"      🎬 {cinema_info['name']}: {len(movies)} films")
                     for movie in movies:
+                        # Gestion de la durée (deux formats possibles)
                         runtime = movie.get('runtime', 0)
-                        if runtime:
+                        duration_str = movie.get('duration', '')  # Format texte de get_showtime
+                        
+                        if runtime and isinstance(runtime, int):
                             h, m = runtime // 3600, (runtime % 3600) // 60
                             duration = f"{h}h{m:02d}" if h else f"{m}min"
+                        elif duration_str:
+                            duration = duration_str
                         else:
                             duration = ""
+                        
+                        # Gestion des horaires (de get_showtime)
+                        showtimes_str = movie.get('showtimes_str', '')
                         
                         genres = movie.get('genres', [])
                         genres_str = ", ".join(genres[:3]) if genres else ""
@@ -663,6 +718,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                             desc_parts.append("🌟 Avant-première")
                         if movie.get('weeklyOuting'):
                             desc_parts.append("🆕 Sortie")
+                        if showtimes_str:
+                            desc_parts.append(showtimes_str)
                         
                         event = {
                             "uid": f"allocine-{cinema_info['id']}-{movie.get('title', '')[:20]}",
@@ -678,14 +735,16 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                             "openagendaUrl": "",
                             "agendaTitle": f"Cinéma {cinema_info['name']}",
                             "source": "Allocine",
-                            "description": " • ".join(desc_parts),
+                            "description": " • ".join(desc_parts) if desc_parts else "Séances disponibles",
                             "poster": movie.get('urlPoster', ''),
                             "genres": genres,
                         }
                         all_events.append(event)
+                else:
+                    print(f"      ⚠️ {cinema_info['name']}: 0 films")
                         
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"      ❌ Erreur future: {e}")
     
     save_cinema_coords_cache()
     
