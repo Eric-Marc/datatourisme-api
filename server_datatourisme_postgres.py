@@ -160,9 +160,13 @@ def reverse_geocode_nominatim(lat, lon):
     Récupère les infos de localisation via Nominatim.
     Retourne: (dept_name, postcode, city)
     """
-    cache_key = (round(lat, 2), round(lon, 2))
+    # Cache avec précision à 3 décimales (~100m) au lieu de 2 (~1km)
+    cache_key = (round(lat, 3), round(lon, 3))
     if cache_key in GEOCODE_CACHE:
-        return GEOCODE_CACHE[cache_key]
+        cached = GEOCODE_CACHE[cache_key]
+        # Vérifier que c'est bien un tuple de 3 éléments (pas un ancien format)
+        if isinstance(cached, tuple) and len(cached) == 3:
+            return cached
     
     url = "https://nominatim.openstreetmap.org/reverse"
     params = {"lat": lat, "lon": lon, "format": "json", "zoom": 10, "addressdetails": 1}
@@ -191,7 +195,7 @@ def reverse_geocode_nominatim(lat, lon):
         return result
         
     except Exception as e:
-        print(f"   ⚠️ Erreur Nominatim: {e}")
+        print(f"   ⚠️ Erreur Nominatim reverse: {e}")
         GEOCODE_CACHE[cache_key] = (None, None, None)
         return (None, None, None)
 
@@ -589,6 +593,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     # 1. Récupérer localisation via Nominatim
     dept_name, postcode, city = reverse_geocode_nominatim(center_lat, center_lon)
     
+    print(f"   📍 Nominatim: dept='{dept_name}', postcode='{postcode}', city='{city}'")
+    
     if not dept_name and not postcode:
         print("   ⚠️ Localisation non trouvée")
         return []
@@ -604,17 +610,21 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
             dept_code = postcode[:2]
         
         primary_id = get_allocine_dept_id_from_postcode(postcode)
+        print(f"   🔍 Postcode '{postcode}' → dept_code='{dept_code}' → ID='{primary_id}'")
         if primary_id:
             dept_ids.append(primary_id)
     
     if not dept_ids and dept_name:
         primary_id = get_allocine_dept_id(dept_name)
+        print(f"   🔍 Dept name '{dept_name}' → ID='{primary_id}'")
         if primary_id:
             dept_ids.append(primary_id)
     
     if not dept_ids:
         print(f"   ⚠️ Département non mappé: {dept_name} / {postcode}")
         return []
+    
+    print(f"   ✅ Départements à rechercher: {dept_ids}")
     
     # 3. Étendre la recherche si IDF ou grand rayon
     if is_in_idf(dept_name, postcode):
