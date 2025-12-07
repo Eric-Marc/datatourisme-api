@@ -642,6 +642,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     nearby_cinemas = []
     seen_ids = set()
     
+    print(f"   🔍 Géocodage de {len(all_cinemas)} cinémas...")
+    
     for cinema in all_cinemas:
         cinema_id = cinema.get('id')
         if not cinema_id or cinema_id in seen_ids:
@@ -652,8 +654,10 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
         cinema_address = cinema.get('address', '')
         
         lat, lon = geocode_cinema(cinema_name, cinema_address)
+        
         if lat and lon:
             dist = haversine_km(center_lat, center_lon, lat, lon)
+            print(f"      📍 {cinema_name}: ({lat:.4f}, {lon:.4f}) → {dist:.1f}km")
             if dist <= radius_km:
                 nearby_cinemas.append({
                     'id': cinema_id,
@@ -663,6 +667,10 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                     'lon': lon,
                     'distance': dist
                 })
+            else:
+                print(f"         ❌ Hors rayon ({dist:.1f}km > {radius_km}km)")
+        else:
+            print(f"      ⚠️ {cinema_name}: géocodage échoué (adresse: {cinema_address})")
     
     print(f"   📍 {len(nearby_cinemas)} cinémas dans le rayon")
     
