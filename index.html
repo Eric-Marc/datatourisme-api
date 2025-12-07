@@ -30,22 +30,22 @@
         }
 
         #header img {
-            max-height: 60px;  /* 🎯 Réduit de 120px à 60px */
+            max-height: 60px;
             object-fit: cover;
         }
 
         #controls {
             background: white;
-            padding: 8px 12px;  /* 🎯 Réduit de 12px 20px à 8px 12px */
+            padding: 8px 12px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
         .control-group {
             display: flex;
-            gap: 8px;  /* 🎯 Réduit de 15px à 8px */
+            gap: 8px;
             flex-wrap: wrap;
             align-items: center;
-            margin-bottom: 6px;  /* 🎯 Réduit de 10px à 6px */
+            margin-bottom: 6px;
         }
 
         .control-group:last-child {
@@ -55,23 +55,23 @@
         .slider-group {
             display: flex;
             align-items: center;
-            gap: 6px;  /* 🎯 Réduit de 10px à 6px */
+            gap: 6px;
             flex: 1;
-            min-width: 150px;  /* 🎯 Réduit de 200px à 150px */
+            min-width: 150px;
         }
 
         .slider-label {
-            font-size: 12px;  /* 🎯 Réduit de 14px à 12px */
+            font-size: 12px;
             font-weight: 600;
             color: #666;
-            min-width: 50px;  /* 🎯 Réduit de 60px à 50px */
+            min-width: 50px;
         }
 
         button {
             border: none;
-            border-radius: 6px;  /* 🎯 Réduit de 8px à 6px */
-            padding: 6px 12px;  /* 🎯 Réduit de 10px 16px à 6px 12px */
-            font-size: 12px;  /* 🎯 Réduit de 14px à 12px */
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
@@ -91,7 +91,6 @@
             cursor: not-allowed;
         }
         
-        /* 🎯 Boutons avec icônes uniquement (carrés et compacts) */
         #btnMyPosition,
         #resetViewBtn {
             width: 32px;
@@ -105,20 +104,20 @@
 
         input[type="range"] {
             flex: 1;
-            max-width: 140px;  /* 🎯 Réduit de 180px à 140px */
+            max-width: 140px;
         }
 
         .slider-value {
-            font-size: 12px;  /* 🎯 Réduit de 14px à 12px */
+            font-size: 12px;
             font-weight: bold;
             color: #667eea;
             min-width: 55px;
         }
 
         .status {
-            padding: 5px 10px;  /* 🎯 Réduit de 8px 12px à 5px 10px */
-            border-radius: 5px;  /* 🎯 Réduit de 6px à 5px */
-            font-size: 11px;  /* 🎯 Réduit de 13px à 11px */
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 11px;
             font-weight: 500;
             transition: all 0.3s;
             flex-shrink: 0;
@@ -137,13 +136,12 @@
             50% { opacity: 0.5; transform: scale(0.98); }
         }
 
-        /* Stats simplifiés */
         #stats {
             background: white;
-            padding: 6px 12px;  /* 🎯 Réduit de 10px 20px à 6px 12px */
+            padding: 6px 12px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             display: flex;
-            gap: 10px;  /* 🎯 Réduit de 15px à 10px */
+            gap: 10px;
             flex-wrap: wrap;
             align-items: center;
         }
@@ -151,9 +149,9 @@
         .source-toggle {
             display: flex;
             align-items: center;
-            gap: 6px;  /* 🎯 Réduit de 10px à 6px */
-            padding: 6px 10px;  /* 🎯 Réduit de 10px 15px à 6px 10px */
-            border-radius: 8px;  /* 🎯 Réduit de 10px à 8px */
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s;
             border: 2px solid #e2e8f0;
@@ -175,41 +173,53 @@
             background: #f1f5f9;
         }
 
+        /* 🎯 COULEURS DISTINCTES POUR LES TOGGLES */
+        #toggle-events.active {
+            border-color: #3b82f6;
+        }
+        
+        #toggle-cinema.active {
+            border-color: #dc2626;
+        }
+
         .toggle-icon {
-            font-size: 16px;  /* 🎯 Réduit de 20px à 16px */
+            font-size: 16px;
         }
 
         .toggle-value {
-            font-size: 16px;  /* 🎯 Réduit de 20px à 16px */
+            font-size: 16px;
             font-weight: bold;
-            color: #667eea;
+        }
+        
+        /* 🎯 COULEURS DISTINCTES : Bleu pour événements, Rouge pour cinéma */
+        #toggle-events .toggle-value {
+            color: #3b82f6;  /* Bleu vif */
+        }
+        
+        #toggle-cinema .toggle-value {
+            color: #dc2626;  /* Rouge cinéma */
+        }
+        
+        #toggle-cinema .toggle-icon {
+            color: #dc2626;
         }
 
         .toggle-label {
-            font-size: 10px;  /* 🎯 Réduit de 12px à 10px */
+            font-size: 10px;
             color: #666;
         }
 
         .toggle-check {
-            font-size: 14px;  /* 🎯 Réduit de 16px à 14px */
+            font-size: 14px;
             color: #22c55e;
             font-weight: bold;
-            margin-left: 3px;  /* 🎯 Réduit de 5px à 3px */
+            margin-left: 3px;
         }
 
         .source-toggle.inactive .toggle-check {
             visibility: hidden;
         }
-
-        #toggle-cinema .toggle-value {
-            color: #9333ea;  /* 🎬 Mauve/violet pour les films */
-        }
         
-        #toggle-cinema .toggle-icon {
-            color: #9333ea;  /* 🎬 Mauve/violet pour l'icône */
-        }
-        
-        /* 🎬 Animation de chargement des films */
         .source-toggle.loading {
             animation: pulseLoading 1.5s ease-in-out infinite;
         }
@@ -217,11 +227,11 @@
         @keyframes pulseLoading {
             0%, 100% { 
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.7);
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
             }
             50% { 
                 transform: scale(1.05);
-                box-shadow: 0 0 0 10px rgba(147, 51, 234, 0);
+                box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
             }
         }
         
@@ -236,7 +246,7 @@
 
         #map-container {
             position: relative;
-            height: calc(100vh - 150px);  /* 🎯 Réduit de 200px à 150px */
+            height: calc(100vh - 150px);
             width: 100%;
         }
 
@@ -250,25 +260,63 @@
             touch-action: pan-x pan-y;
         }
 
-        /* Marqueurs d'événements */
+        /* 🎯 MARQUEURS ÉVÉNEMENTS - BLEU VIF */
         .event-marker {
-            width: 20px;
-            height: 20px;
+            width: 22px;
+            height: 22px;
             border-radius: 50%;
             border: 3px solid white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-            background: #667eea;
-            animation: blink 1.5s ease-in-out infinite;
+            background: #3b82f6;  /* Bleu vif */
+            animation: pulseEvent 2s ease-in-out infinite;
         }
 
-        @keyframes blink {
+        @keyframes pulseEvent {
             0%, 100% { 
                 opacity: 1;
                 transform: scale(1);
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
             }
             50% { 
-                opacity: 0.6;
-                transform: scale(0.85);
+                opacity: 0.8;
+                transform: scale(0.9);
+                box-shadow: 0 2px 12px rgba(59, 130, 246, 0.6);
+            }
+        }
+
+        /* 🎬 MARQUEURS CINÉMA - ROUGE CINÉMA */
+        .cinema-marker {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);  /* Rouge dégradé */
+            animation: pulseCinema 1.8s ease-in-out infinite;
+            position: relative;
+        }
+        
+        /* Icône film à l'intérieur du marqueur cinéma */
+        .cinema-marker::after {
+            content: '🎬';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        @keyframes pulseCinema {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+            }
+            50% { 
+                opacity: 0.85;
+                transform: scale(0.92);
+                box-shadow: 0 2px 15px rgba(220, 38, 38, 0.7);
             }
         }
 
@@ -313,7 +361,7 @@
             fill: #667eea;
         }
 
-        /* 🎯 POPUP SIMPLIFIÉ */
+        /* 🎯 POPUP ÉVÉNEMENTS - STYLE BLEU */
         .event-popup {
             max-width: 300px;
         }
@@ -321,12 +369,12 @@
         .event-popup h3 {
             margin: 0 0 10px 0;
             font-size: 16px;
-            color: #333;
+            color: #1e3a5f;
             line-height: 1.4;
         }
 
         .event-popup .date {
-            background: #667eea;
+            background: #3b82f6;
             color: white;
             padding: 4px 8px;
             border-radius: 4px;
@@ -342,7 +390,7 @@
         }
 
         .event-popup .venue strong {
-            color: #667eea;
+            color: #3b82f6;
         }
 
         .event-popup .address {
@@ -353,7 +401,7 @@
 
         .event-popup .link {
             display: inline-block;
-            background: #667eea;
+            background: #3b82f6;
             color: white;
             padding: 6px 12px;
             border-radius: 4px;
@@ -364,7 +412,51 @@
         }
 
         .event-popup .link:hover {
-            background: #5568d3;
+            background: #2563eb;
+        }
+
+        /* 🎬 POPUP CINÉMA - STYLE ROUGE */
+        .cinema-popup {
+            max-width: 320px;
+        }
+
+        .cinema-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #7f1d1d;
+            line-height: 1.4;
+        }
+
+        .cinema-popup .cinema-badge {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            display: inline-block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .cinema-popup .film-item {
+            margin: 8px 0;
+            padding: 10px;
+            background: linear-gradient(135deg, #fef2f2 0%, #fff 100%);
+            border-left: 4px solid #dc2626;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .cinema-popup .film-title {
+            font-weight: 700;
+            color: #991b1b;
+            font-size: 14px;
+        }
+
+        .cinema-popup .film-info {
+            font-size: 11px;
+            color: #666;
+            line-height: 1.4;
+            margin-top: 4px;
         }
 
         .leaflet-popup-content {
@@ -390,42 +482,89 @@
         #map-instructions.hidden {
             opacity: 0;
         }
+        
+        /* 🎯 LÉGENDE */
+        #map-legend {
+            position: absolute;
+            bottom: 70px;
+            right: 10px;
+            background: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            font-size: 12px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 6px 0;
+        }
+        
+        .legend-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .legend-dot.events {
+            background: #3b82f6;
+        }
+        
+        .legend-dot.cinema {
+            background: #dc2626;
+        }
+        
+        .legend-label {
+            color: #555;
+            font-weight: 500;
+        }
 
         @media (max-width: 768px) {
-            #header h1 { font-size: 18px; }  /* 🎯 Encore plus petit */
+            #header h1 { font-size: 18px; }
             #header p { font-size: 11px; }
-            #header img { max-height: 50px; }  /* 🎯 Encore plus petit sur mobile */
-            #stats { gap: 8px; padding: 5px 10px; }  /* 🎯 Plus compact */
+            #header img { max-height: 50px; }
+            #stats { gap: 8px; padding: 5px 10px; }
             .control-group { flex-direction: column; align-items: stretch; }
             .slider-group { min-width: 100%; }
-            #map-container { height: calc(100vh - 180px); }  /* 🎯 Ajusté */
-            button { width: 100%; padding: 8px 12px; font-size: 13px; }  /* 🎯 Légèrement plus grand sur mobile pour touch */
+            #map-container { height: calc(100vh - 180px); }
+            button { width: 100%; padding: 8px 12px; font-size: 13px; }
             
-            /* 🎯 Boutons icônes restent carrés sur mobile */
             #btnMyPosition,
             #resetViewBtn {
                 width: 36px;
                 height: 36px;
                 font-size: 20px;
             }
+            
+            #map-legend {
+                bottom: 60px;
+                right: 5px;
+                padding: 8px 10px;
+                font-size: 11px;
+            }
         }
         
-        /* 🎯 Styles spécifiques selon l'appareil */
-        body.mobile .event-popup {
+        body.mobile .event-popup,
+        body.mobile .cinema-popup {
             max-width: 260px;
         }
         
         body.mobile #map-instructions {
-            font-size: 11px;  /* 🎯 Plus petit */
-            padding: 6px 12px;  /* 🎯 Plus compact */
+            font-size: 11px;
+            padding: 6px 12px;
         }
         
         body.mobile .status {
-            font-size: 10px;  /* 🎯 Plus petit */
+            font-size: 10px;
         }
         
         body.desktop #map-instructions {
-            font-size: 12px;  /* 🎯 Ajusté */
+            font-size: 12px;
         }
     </style>
 </head>
@@ -455,7 +594,6 @@
         </div>
     </div>
 
-    <!-- 🎯 STATS SIMPLIFIÉS : Fusion DATAtourisme + OpenAgenda = Événements -->
     <div id="stats">
         <div class="source-toggle active" id="toggle-events" onclick="toggleSource('events')">
             <span class="toggle-icon">📅</span>
@@ -478,6 +616,18 @@
     <div id="map-container">
         <div id="map"></div>
         <div id="map-instructions">👆 Maintenez appuyé 2s pour sélectionner un point</div>
+        
+        <!-- 🎯 LÉGENDE -->
+        <div id="map-legend">
+            <div class="legend-item">
+                <div class="legend-dot events"></div>
+                <span class="legend-label">Événements</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot cinema"></div>
+                <span class="legend-label">Cinémas</span>
+            </div>
+        </div>
     </div>
 
     <!-- Indicateur de long-press -->
@@ -520,7 +670,6 @@
             };
         })();
         
-        // Ajouter classe CSS au body
         document.addEventListener('DOMContentLoaded', function() {
             document.body.classList.add(DEVICE_INFO.type);
             console.log('📱 Device detected:', DEVICE_INFO);
@@ -529,9 +678,8 @@
         // Configuration
         var SERVER_URL = window.location.origin;
         
-        // 🎯 Adapter selon l'appareil
-        var LONGPRESS_DURATION = DEVICE_INFO.isMobile ? 1500 : 2000;  // 1.5s mobile, 2s desktop
-        var LONGPRESS_MOVE_THRESHOLD = DEVICE_INFO.isMobile ? 30 : 15;  // 30px mobile (plus tolérant), 15px desktop (plus précis)
+        var LONGPRESS_DURATION = DEVICE_INFO.isMobile ? 1500 : 2000;
+        var LONGPRESS_MOVE_THRESHOLD = DEVICE_INFO.isMobile ? 30 : 15;
 
         // État global
         var map = null;
@@ -563,13 +711,23 @@
         var progressCircle = indicator.querySelector('.progress-circle');
         var mapInstructions = document.getElementById('map-instructions');
 
-        // 🎯 ICÔNE UNIQUE pour tous les événements (violette)
-        function createCustomIcon() {
+        // 🎯 ICÔNE ÉVÉNEMENTS - BLEU
+        function createEventIcon() {
             return L.divIcon({
                 className: 'custom-div-icon',
                 html: '<div class="event-marker"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
+                iconSize: [22, 22],
+                iconAnchor: [11, 11]
+            });
+        }
+
+        // 🎬 ICÔNE CINÉMA - ROUGE
+        function createCinemaIcon() {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="cinema-marker"></div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
             });
         }
 
@@ -587,7 +745,6 @@
                 maxZoom: 19
             }).addTo(map);
 
-            // 🎯 FERMER LES POPUPS quand on clique sur la carte
             map.on('click', function(e) {
                 map.closePopup();
             });
@@ -858,9 +1015,7 @@
             }
         }
 
-        // 🎯 MISE À JOUR DES STATS SIMPLIFIÉE
         function updateStats(events, sources) {
-            // Compter seulement les événements visibles (pas les cinémas)
             var eventsCount = events.filter(function(e) {
                 return e.source !== 'Allocine';
             }).length;
@@ -873,7 +1028,6 @@
             document.getElementById('cinema-count').textContent = cinemaCount;
         }
 
-        // 🎯 TOGGLE SIMPLIFIÉ
         function toggleSource(source) {
             if (source === 'events') {
                 showEvents = !showEvents;
@@ -923,26 +1077,21 @@
         function fetchCinemaEvents(lat, lon, radiusKm) {
             var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
             
-            // 🎬 ANIMATION : Ajouter la classe loading
-            var toggleCinema = document.getElementById('toggle-cinema');
-            toggleCinema.classList.add('loading');
+            var toggleCinemaEl = document.getElementById('toggle-cinema');
+            toggleCinemaEl.classList.add('loading');
             
-            // Mettre le compteur à "..." pour montrer qu'on cherche
             document.getElementById('cinema-count').textContent = '...';
             
             fetch(url)
                 .then(function(response) { return response.json(); })
                 .then(function(data) {
-                    // 🎬 ANIMATION : Retirer la classe loading
-                    toggleCinema.classList.remove('loading');
+                    toggleCinemaEl.classList.remove('loading');
                     
                     if (data.status === 'success') {
                         cinemaEventsData = data.events || [];
                         
-                        // 🎯 MISE À JOUR IMMÉDIATE du compteur
                         document.getElementById('cinema-count').textContent = cinemaEventsData.length;
                         
-                        // 🗺️ MISE À JOUR DE LA CARTE avec les films
                         var filteredEvents = allEventsData.filter(function(e) {
                             return e.source !== 'Allocine';
                         });
@@ -956,8 +1105,7 @@
                     }
                 })
                 .catch(function(error) {
-                    // 🎬 ANIMATION : Retirer la classe loading en cas d'erreur
-                    toggleCinema.classList.remove('loading');
+                    toggleCinemaEl.classList.remove('loading');
                     
                     console.error('Erreur fetch cinéma:', error);
                     document.getElementById('cinema-count').textContent = '0';
@@ -976,7 +1124,7 @@
             }
         }
 
-        // 🎯 AFFICHAGE SIMPLIFIÉ DES ÉVÉNEMENTS
+        // 🎯 AFFICHAGE DES ÉVÉNEMENTS AVEC COULEURS DISTINCTES
         function displayEventsOnMap(events, centerLat, centerLon, radiusKm) {
             if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
             if (currentRadiusCircle) map.removeLayer(currentRadiusCircle);
@@ -990,12 +1138,33 @@
                 spiderfyDistanceMultiplier: 2,
                 disableClusteringAtZoom: 18,
                 iconCreateFunction: function(cluster) {
+                    var childMarkers = cluster.getAllChildMarkers();
                     var count = cluster.getChildCount();
                     var size = count >= 100 ? 50 : (count >= 10 ? 40 : 30);
                     var fontSize = size > 35 ? 14 : 12;
                     
+                    // 🎯 Couleur du cluster selon le contenu
+                    var hasCinema = childMarkers.some(function(m) { 
+                        return m.options && m.options.isCinema; 
+                    });
+                    var hasEvents = childMarkers.some(function(m) { 
+                        return m.options && !m.options.isCinema; 
+                    });
+                    
+                    var bgColor;
+                    if (hasCinema && hasEvents) {
+                        // Mix : dégradé violet
+                        bgColor = 'linear-gradient(135deg, #3b82f6 0%, #dc2626 100%)';
+                    } else if (hasCinema) {
+                        // Cinéma uniquement : rouge
+                        bgColor = '#dc2626';
+                    } else {
+                        // Événements uniquement : bleu
+                        bgColor = '#3b82f6';
+                    }
+                    
                     return L.divIcon({
-                        html: '<div style="background:#667eea;width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:' + fontSize + 'px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + count + '</div>',
+                        html: '<div style="background:' + bgColor + ';width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:' + fontSize + 'px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + count + '</div>',
                         className: 'marker-cluster',
                         iconSize: [size, size]
                     });
@@ -1036,51 +1205,67 @@
                 eventsByLocation[locKey].push(event);
             }
             
-            // 🎯 ICÔNE UNIQUE pour tous les événements
-            var icon = createCustomIcon();
-            
             // Créer les marqueurs
             for (var locKey in eventsByLocation) {
                 var eventsAtLocation = eventsByLocation[locKey];
                 if (eventsAtLocation.length === 0) continue;
                 
                 var firstEvent = eventsAtLocation[0];
+                var isCinema = firstEvent.source === 'Allocine';
+                
+                // 🎯 ICÔNE SELON LE TYPE
+                var icon = isCinema ? createCinemaIcon() : createEventIcon();
                 
                 var marker = L.marker([firstEvent.latitude, firstEvent.longitude], {
-                    icon: icon
+                    icon: icon,
+                    isCinema: isCinema  // Flag pour le clustering
                 });
                 
-                // 🎯 POPUP SIMPLIFIÉ (sans mention source, sans distance)
-                var popupHtml = '<div class="event-popup">';
+                // 🎯 POPUP SELON LE TYPE
+                var popupHtml;
                 
-                // CAS SPÉCIAL : Cinéma avec plusieurs films
-                if (firstEvent.source === 'Allocine' && eventsAtLocation.length > 1) {
-                    popupHtml += '<h3>🎬 ' + firstEvent.locationName + '</h3>';
-                    if (firstEvent.address) popupHtml += '<div class="address">' + firstEvent.address + '</div>';
+                if (isCinema) {
+                    // 🎬 POPUP CINÉMA - STYLE ROUGE
+                    popupHtml = '<div class="cinema-popup">';
+                    popupHtml += '<span class="cinema-badge">🎬 CINÉMA</span>';
+                    popupHtml += '<h3>' + firstEvent.locationName + '</h3>';
+                    if (firstEvent.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:10px;">' + firstEvent.address + '</div>';
                     
-                    popupHtml += '<div style="margin-top:10px;max-height:300px;overflow-y:auto;">';
-                    popupHtml += '<strong>' + eventsAtLocation.length + ' films à l\'affiche :</strong><br>';
-                    for (var j = 0; j < eventsAtLocation.length; j++) {
-                        var film = eventsAtLocation[j];
-                        var filmTitle = film.title.replace('🎬 ', '');
-                        popupHtml += '<div style="margin:8px 0;padding:8px;background:#f9fafb;border-left:3px solid #800020;border-radius:4px;">';
-                        popupHtml += '<strong style="color:#800020;">' + filmTitle + '</strong><br>';
-                        if (film.description) {
-                            popupHtml += '<span style="font-size:11px;color:#666;line-height:1.4;">' + film.description + '</span>';
+                    if (eventsAtLocation.length > 1) {
+                        popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
+                        popupHtml += '<div style="font-size:12px;color:#991b1b;font-weight:600;margin-bottom:8px;">' + eventsAtLocation.length + ' films à l\'affiche</div>';
+                        
+                        for (var j = 0; j < eventsAtLocation.length; j++) {
+                            var film = eventsAtLocation[j];
+                            var filmTitle = film.title.replace('🎬 ', '');
+                            popupHtml += '<div class="film-item">';
+                            popupHtml += '<div class="film-title">' + filmTitle + '</div>';
+                            if (film.description) {
+                                popupHtml += '<div class="film-info">' + film.description + '</div>';
+                            }
+                            popupHtml += '</div>';
+                        }
+                        popupHtml += '</div>';
+                    } else {
+                        var filmTitle = firstEvent.title.replace('🎬 ', '');
+                        popupHtml += '<div class="film-item">';
+                        popupHtml += '<div class="film-title">' + filmTitle + '</div>';
+                        if (firstEvent.description) {
+                            popupHtml += '<div class="film-info">' + firstEvent.description + '</div>';
                         }
                         popupHtml += '</div>';
                     }
                     popupHtml += '</div>';
+                    
                 } else {
-                    // CAS NORMAL : Événements culturels
+                    // 📅 POPUP ÉVÉNEMENTS - STYLE BLEU
+                    popupHtml = '<div class="event-popup">';
+                    
                     for (var j = 0; j < eventsAtLocation.length; j++) {
                         var event = eventsAtLocation[j];
                         if (j > 0) popupHtml += '<hr style="margin:10px 0;border:none;border-top:1px solid #e5e7eb;">';
                         
                         var eventTitle = event.title || 'Événement sans titre';
-                        if (event.source === 'Allocine') {
-                            eventTitle = eventTitle.replace('🎬 ', '');
-                        }
                         
                         popupHtml += '<h3>' + eventTitle + '</h3>';
                         
@@ -1088,23 +1273,18 @@
                         if (event.locationName) popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
                         if (event.address) popupHtml += '<div class="address">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
                         
-                        if (event.source === 'Allocine' && event.description) {
-                            popupHtml += '<div class="address" style="font-size:11px;line-height:1.4;color:#666;">' + event.description + '</div>';
-                        }
-                        
                         if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
                     }
+                    
+                    popupHtml += '</div>';
                 }
                 
-                popupHtml += '</div>';
-                
-                // 🎯 Options de popup adaptées selon l'appareil
                 var popupOptions = {
                     maxWidth: DEVICE_INFO.isMobile ? 280 : 400,
                     maxHeight: DEVICE_INFO.isMobile ? 350 : 450,
                     closeButton: true,
-                    autoClose: true,        // Ferme quand on ouvre un autre popup
-                    closeOnClick: false,    // Désactivé - géré par map.on('click')
+                    autoClose: true,
+                    closeOnClick: false,
                     keepInView: true
                 };
                 
@@ -1229,7 +1409,6 @@
             initMap();
             setupSliders();
             
-            // 🎯 Adapter le message selon l'appareil
             var instructionText = DEVICE_INFO.isMobile 
                 ? '👆 Maintenez appuyé 1s pour sélectionner'
                 : '👆 Maintenez appuyé 2s pour sélectionner un point';
