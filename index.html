@@ -722,8 +722,6 @@
         var currentRadiusCircle = null;
         var currentCenterMarker = null;
         var initialMapBounds = null;
-        var allEventsData = [];
-        var cinemaEventsData = [];
         var showEvents = true;
         var showCinema = true;
 
@@ -973,8 +971,13 @@
                 map.removeLayer(currentCenterMarker);
                 currentCenterMarker = null;
             }
-            allEventsData = [];
-            updateStats([], {});
+            
+            // 🎯 Réinitialiser les données
+            eventsRawData = [];
+            cinemaRawData = [];
+            eventsRealCount = 0;
+            cinemaRealCount = 0;
+            updateCounters();
         }
 
         function onLocationSelected(lat, lon) {
@@ -1074,71 +1077,93 @@
             }
         }
 
-        function updateStats(events, sources) {
-            var eventsCount = events.filter(function(e) {
-                return e.source !== 'Allocine';
-            }).length;
-            
-            var cinemaCount = events.filter(function(e) {
-                return e.source === 'Allocine';
-            }).length;
-            
-            document.getElementById('events-count').textContent = eventsCount;
-            document.getElementById('cinema-count').textContent = cinemaCount;
+        // ============================================================
+        // 🎯 NOUVELLE GESTION DES DONNÉES ET TOGGLES
+        // ============================================================
+        
+        // Données brutes (ne changent qu'au fetch)
+        var eventsRawData = [];      // Événements DATAtourisme + OpenAgenda
+        var cinemaRawData = [];      // Films Allociné
+        
+        // Compteurs réels (indépendants de l'affichage)
+        var eventsRealCount = 0;
+        var cinemaRealCount = 0;
+        
+        // Met à jour les compteurs affichés (basés sur les données réelles, pas filtrées)
+        function updateCounters() {
+            document.getElementById('events-count').textContent = eventsRealCount;
+            document.getElementById('cinema-count').textContent = cinemaRealCount;
         }
-
+        
+        // Met à jour l'état visuel des toggles
+        function updateToggleVisuals() {
+            var toggleEventsEl = document.getElementById('toggle-events');
+            var toggleCinemaEl = document.getElementById('toggle-cinema');
+            
+            toggleEventsEl.classList.toggle('active', showEvents);
+            toggleEventsEl.classList.toggle('inactive', !showEvents);
+            
+            toggleCinemaEl.classList.toggle('active', showCinema);
+            toggleCinemaEl.classList.toggle('inactive', !showCinema);
+        }
+        
+        // Recalcule et affiche les marqueurs selon les filtres actifs
+        function refreshMapDisplay() {
+            if (!currentPosition) return;
+            
+            var lat = currentPosition.coords.latitude;
+            var lon = currentPosition.coords.longitude;
+            
+            // Construire la liste des événements à afficher
+            var eventsToShow = [];
+            
+            if (showEvents) {
+                eventsToShow = eventsToShow.concat(eventsRawData);
+            }
+            
+            if (showCinema) {
+                eventsToShow = eventsToShow.concat(cinemaRawData);
+            }
+            
+            displayEventsOnMap(eventsToShow, lat, lon, currentRadiusKm);
+        }
+        
+        // Toggle Événements
         function toggleSource(source) {
             if (source === 'events') {
                 showEvents = !showEvents;
-                var toggleEl = document.getElementById('toggle-events');
-                toggleEl.classList.toggle('active', showEvents);
-                toggleEl.classList.toggle('inactive', !showEvents);
-            }
-            
-            if (allEventsData.length > 0 && currentPosition) {
-                var filteredEvents = allEventsData.filter(function(e) {
-                    if (e.source === 'Allocine') {
-                        return showCinema;
-                    }
-                    return showEvents;
-                });
-                
-                displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
-                updateStats(filteredEvents, {});
+                updateToggleVisuals();
+                refreshMapDisplay();
             }
         }
-
+        
+        // Toggle Cinéma
         function toggleCinema() {
-            var toggleEl = document.getElementById('toggle-cinema');
             showCinema = !showCinema;
-            toggleEl.classList.toggle('active', showCinema);
-            toggleEl.classList.toggle('inactive', !showCinema);
+            updateToggleVisuals();
             
-            if (showCinema && currentPosition && cinemaEventsData.length === 0) {
-                fetchCinemaEvents(currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
-            } else if (currentPosition) {
-                var filteredEvents = allEventsData.filter(function(e) {
-                    if (e.source === 'Allocine') {
-                        return showCinema;
-                    }
-                    return showEvents;
-                });
-                
-                if (showCinema && cinemaEventsData.length > 0) {
-                    filteredEvents = filteredEvents.concat(cinemaEventsData);
-                }
-                
-                displayEventsOnMap(filteredEvents, currentPosition.coords.latitude, currentPosition.coords.longitude, currentRadiusKm);
-                updateStats(filteredEvents, {});
+            // Si on active cinéma et qu'on n'a pas encore chargé les données
+            if (showCinema && currentPosition && cinemaRawData.length === 0 && cinemaRealCount === 0) {
+                fetchCinemaEvents(
+                    currentPosition.coords.latitude, 
+                    currentPosition.coords.longitude, 
+                    currentRadiusKm
+                );
+            } else {
+                refreshMapDisplay();
             }
         }
 
+        // ============================================================
+        // 🎬 FETCH CINÉMA (réécrit)
+        // ============================================================
         function fetchCinemaEvents(lat, lon, radiusKm) {
             var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
             
             var toggleCinemaEl = document.getElementById('toggle-cinema');
             toggleCinemaEl.classList.add('loading');
             
+            // Afficher "..." pendant le chargement
             document.getElementById('cinema-count').textContent = '...';
             
             fetch(url)
@@ -1147,27 +1172,30 @@
                     toggleCinemaEl.classList.remove('loading');
                     
                     if (data.status === 'success') {
-                        cinemaEventsData = data.events || [];
+                        // Stocker les données cinéma
+                        cinemaRawData = data.events || [];
+                        cinemaRealCount = cinemaRawData.length;
                         
-                        document.getElementById('cinema-count').textContent = cinemaEventsData.length;
+                        // Mettre à jour le compteur
+                        updateCounters();
                         
-                        var filteredEvents = allEventsData.filter(function(e) {
-                            return e.source !== 'Allocine';
-                        });
-                        
+                        // Rafraîchir la carte si cinéma est activé
                         if (showCinema) {
-                            filteredEvents = filteredEvents.concat(cinemaEventsData);
+                            refreshMapDisplay();
                         }
-                        
-                        displayEventsOnMap(filteredEvents, lat, lon, radiusKm);
-                        updateStats(filteredEvents, {});
+                    } else {
+                        cinemaRawData = [];
+                        cinemaRealCount = 0;
+                        updateCounters();
                     }
                 })
                 .catch(function(error) {
                     toggleCinemaEl.classList.remove('loading');
-                    
                     console.error('Erreur fetch cinéma:', error);
-                    document.getElementById('cinema-count').textContent = '0';
+                    
+                    cinemaRawData = [];
+                    cinemaRealCount = 0;
+                    updateCounters();
                 });
         }
 
@@ -1358,8 +1386,6 @@
                 initialMapBounds = currentRadiusCircle.getBounds().pad(0.1);
                 document.getElementById('resetViewBtn').style.display = 'inline-block';
             }
-
-            updateStats(events, {});
         }
 
         function resetMapView() {
@@ -1404,23 +1430,29 @@
 
                     var events = result.events || [];
                     
-                    allEventsData = events;
-                    cinemaEventsData = [];
-                    document.getElementById('cinema-count').textContent = '0';
+                    // 🎯 Stocker les événements (sans cinéma)
+                    eventsRawData = events.filter(function(e) {
+                        return e.source !== 'Allocine';
+                    });
+                    eventsRealCount = eventsRawData.length;
                     
-                    if (events.length === 0) {
+                    // Réinitialiser les données cinéma (nouvelle recherche)
+                    cinemaRawData = [];
+                    cinemaRealCount = 0;
+                    
+                    // Mettre à jour les compteurs
+                    updateCounters();
+                    
+                    if (eventsRealCount === 0) {
                         updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
-                        displayEventsOnMap([], lat, lon, currentRadiusKm);
-                        if (showCinema) {
-                            fetchCinemaEvents(lat, lon, currentRadiusKm);
-                        }
-                        return;
+                    } else {
+                        updateStatus('✅ ' + eventsRealCount + ' événement(s) ' + placeText, 'active');
                     }
-
-                    displayEventsOnMap(events, lat, lon, currentRadiusKm);
                     
-                    updateStatus('✅ ' + events.length + ' événement(s) ' + placeText, 'active');
+                    // Afficher sur la carte
+                    refreshMapDisplay();
                     
+                    // Charger les cinémas si le toggle est actif
                     if (showCinema) {
                         fetchCinemaEvents(lat, lon, currentRadiusKm);
                     }
