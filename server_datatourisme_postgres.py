@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-API Flask OPTIMISÉE avec PARALLÉLISATION SIMPLE
+🚀 GEDEON API - VERSION OPTIMISÉE v2
 
-🚀 OPTIMISATIONS :
-- DATAtourisme : Requête SQL optimisée (CTE + index GIST)
-- OpenAgenda   : Parallélisation interne (10 workers)
-- 🎯 NOUVEAU : DATAtourisme + OpenAgenda en PARALLÈLE (au lieu de séquentiel)
-
-Performance attendue :
-- Avant : DATAtourisme (200ms) PUIS OpenAgenda (3s) = 3.2s
-- Après : DATAtourisme ET OpenAgenda EN PARALLÈLE = 3s
-- Gain : 200ms-2s selon la vitesse de chaque source
+Optimisations :
+1. DATAtourisme + OpenAgenda en PARALLÈLE
+2. Mapping statique des départements Allociné (pas d'appel API au démarrage)
+3. Recherche cinéma par code postal (plus fiable)
+4. Recherche élargie IDF et départements adjacents
+5. Cache persistant des coordonnées de cinémas
+6. Utilisation de get_movies() pour données enrichies (poster, genres, etc.)
 """
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -25,7 +23,21 @@ import math
 import time
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import pickle
+
+# ============================================================================
+# IMPORT DES MODULES OPTIMISÉS
+# ============================================================================
+
+# Mapping départements
+from department_mapping import (
+    get_allocine_dept_id,
+    get_allocine_dept_id_from_postcode,
+    get_all_dept_ids_for_location,
+    is_in_idf,
+    IDF_DEPARTMENTS,
+    POSTCODE_TO_ALLOCINE,
+    ADJACENT_DEPARTMENTS
+)
 
 # Allociné API
 try:
@@ -36,24 +48,6 @@ except ImportError:
     ALLOCINE_AVAILABLE = False
     print("⚠️ Allociné API non disponible")
 
-# ============================================================================
-# CINÉMAS PARIS - COORDONNÉES PRÉ-CALCULÉES
-# ============================================================================
-
-KNOWN_CINEMAS_GPS = {
-    'ugc ciné cité les halles': (48.8619, 2.3466),
-    'pathé beaugrenelle': (48.8478, 2.2820),
-    'mk2 bibliothèque': (48.8338, 2.3761),
-    'mk2 quai de seine': (48.8840, 2.3719),
-    'mk2 nation': (48.8482, 2.3969),
-    'gaumont champs-élysées': (48.8698, 2.3046),
-    'gaumont opéra': (48.8716, 2.3315),
-    'ugc montparnasse': (48.8422, 2.3244),
-    'le grand rex': (48.8707, 2.3477),
-    'pathé levallois': (48.8920, 2.2883),
-    'pathé boulogne': (48.8342, 2.2411),
-    'pathé la villette': (48.8938, 2.3889),
-}
 
 # ============================================================================
 # CONFIGURATION
@@ -62,6 +56,7 @@ KNOWN_CINEMAS_GPS = {
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
+# PostgreSQL
 database_url = os.environ.get('DATABASE_URL')
 
 if database_url:
@@ -84,27 +79,62 @@ else:
         'password': os.environ.get('DB_PASSWORD', ''),
         'sslmode': 'prefer'
     }
-    print(f"⚠️  Connexion locale: {DB_CONFIG['host']}")
+    print(f"⚠️ Connexion locale: {DB_CONFIG['host']}")
 
 # OpenAgenda
-API_KEY = os.environ.get("OPENAGENDA_API_KEY", "a05c8baab2024ef494d3250fe4fec435")
+API_KEY = os.environ.get("OPENAGENDA_API_KEY", "")
 BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2")
 
 # Valeurs par défaut
 RADIUS_KM_DEFAULT = 30
 DAYS_AHEAD_DEFAULT = 30
 
-# Cache
+# Caches
 GEOCODE_CACHE = {}
-DEPARTMENT_CACHE = {}
-CINEMA_CACHE = {}
+CINEMA_COORDS_CACHE = {}
+CINEMA_CACHE_FILE = "/tmp/allocine_cinemas_coords.pkl"
+CINEMAS_BY_DEPT_CACHE = {}
+CINEMAS_CACHE_TIMESTAMPS = {}
+CINEMAS_CACHE_DURATION = 3600 * 6  # 6 heures
 
-# Paramètres OpenAgenda
+# OpenAgenda
 OPENAGENDA_MAX_WORKERS = 10
 OPENAGENDA_AGENDAS_LIMIT = 30
 OPENAGENDA_EVENTS_PER_AGENDA = 30
 OPENAGENDA_CACHE_FILE = "/tmp/openagenda_agendas_cache.pkl"
 OPENAGENDA_CACHE_DURATION = timedelta(hours=24)
+
+# Coordonnées connues de cinémas
+KNOWN_CINEMAS_GPS = {
+    'ugc ciné cité les halles': (48.8619, 2.3466),
+    'pathé beaugrenelle': (48.8478, 2.2820),
+    'mk2 bibliothèque': (48.8338, 2.3761),
+    'mk2 quai de seine': (48.8840, 2.3719),
+    'gaumont champs-élysées': (48.8698, 2.3046),
+    'gaumont opéra': (48.8716, 2.3315),
+    'ugc montparnasse': (48.8422, 2.3244),
+    'le grand rex': (48.8707, 2.3477),
+    'pathé la villette': (48.8938, 2.3889),
+    'pathé levallois': (48.8920, 2.2883),
+    'ugc ciné cité la défense': (48.8920, 2.2380),
+    'pathé bellecour': (45.7578, 4.8320),
+    'pathé madeleine': (43.2965, 5.3698),
+    'gaumont wilson': (43.6070, 1.4480),
+}
+
+# Départements adjacents
+ADJACENT_DEPTS = {
+    "75": ["92", "93", "94"],
+    "92": ["75", "93", "94", "78", "91"],
+    "93": ["75", "92", "94", "77", "95"],
+    "94": ["75", "92", "93", "77", "91"],
+    "69": ["01", "38", "42", "71"],
+    "13": ["83", "84", "30", "04"],
+    "31": ["09", "11", "32", "81", "82"],
+    "33": ["17", "24", "40", "47"],
+    "59": ["62", "02", "80"],
+    "06": ["83", "04"],
+}
 
 
 # ============================================================================
@@ -112,175 +142,158 @@ OPENAGENDA_CACHE_DURATION = timedelta(hours=24)
 # ============================================================================
 
 def get_db_connection():
-    """Crée une connexion à PostgreSQL"""
+    """Crée une connexion à PostgreSQL."""
     return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
 
 
+def haversine_km(lat1, lon1, lat2, lon2):
+    """Distance en km entre deux points GPS."""
+    R = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+
 def calculate_bounding_box(lat, lng, radius_km):
-    """Calculate bounding box coordinates from a center point and radius."""
+    """Calcule la bounding box pour une recherche géographique."""
     EARTH_RADIUS_KM = 6371.0
     radius_rad = radius_km / EARTH_RADIUS_KM
     lat_rad = math.radians(lat)
-
     lat_delta = math.degrees(radius_rad)
-    min_lat = lat - lat_delta
-    max_lat = lat + lat_delta
-
     lng_delta = math.degrees(radius_rad / math.cos(lat_rad))
-    min_lng = lng - lng_delta
-    max_lng = lng + lng_delta
-
     return {
-        'northEast': {'lat': max_lat, 'lng': max_lng},
-        'southWest': {'lat': min_lat, 'lng': min_lng}
+        'northEast': {'lat': lat + lat_delta, 'lng': lng + lng_delta},
+        'southWest': {'lat': lat - lat_delta, 'lng': lng - lng_delta}
     }
 
 
-def haversine_km(lat1, lon1, lat2, lon2):
-    """Distance en km entre deux points (latitude/longitude)."""
-    R = 6371.0
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-
-def geocode_address_nominatim(address_str):
-    """Géocode une adresse texte avec Nominatim (OpenStreetMap)."""
-    if not address_str:
-        return None, None
-
-    if address_str in GEOCODE_CACHE:
-        return GEOCODE_CACHE[address_str]
-
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"q": address_str, "format": "json", "limit": 1}
-    headers = {"User-Agent": "gedeon-events-api/1.0 (eric@ericmahe.com)"}
-
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if not data:
-            GEOCODE_CACHE[address_str] = (None, None)
-            return None, None
-
-        lat = float(data[0]["lat"])
-        lon = float(data[0]["lon"])
-        GEOCODE_CACHE[address_str] = (lat, lon)
-        return lat, lon
-    except Exception as e:
-        GEOCODE_CACHE[address_str] = (None, None)
-        return None, None
-
-
-def reverse_geocode_department(lat, lon):
-    """Retourne le nom du département via Nominatim."""
+def reverse_geocode_nominatim(lat, lon):
+    """
+    Récupère les infos de localisation via Nominatim.
+    Retourne: (dept_name, postcode, city)
+    """
     cache_key = (round(lat, 2), round(lon, 2))
     if cache_key in GEOCODE_CACHE:
         return GEOCODE_CACHE[cache_key]
-
+    
     url = "https://nominatim.openstreetmap.org/reverse"
     params = {"lat": lat, "lon": lon, "format": "json", "zoom": 10, "addressdetails": 1}
-    headers = {"User-Agent": "gedeon-events-api/1.0 (eric@ericmahe.com)"}
-
+    headers = {"User-Agent": "gedeon-events-api/1.0"}
+    
     try:
         r = requests.get(url, params=params, headers=headers, timeout=10)
         r.raise_for_status()
         data = r.json()
         address = data.get("address", {})
         
-        city = address.get("city", "")
+        postcode = address.get("postcode", "")
+        city = address.get("city") or address.get("town") or address.get("village") or ""
         county = address.get("county", "")
-        state_district = address.get("state_district", "")
         state = address.get("state", "")
         
         if city in ["Paris", "Lyon", "Marseille"]:
             dept_name = city
         elif county:
             dept_name = county
-        elif state_district:
-            dept_name = state_district
         else:
             dept_name = state
         
-        GEOCODE_CACHE[cache_key] = dept_name
-        return dept_name
+        result = (dept_name, postcode, city)
+        GEOCODE_CACHE[cache_key] = result
+        return result
+        
     except Exception as e:
-        GEOCODE_CACHE[cache_key] = None
-        return None
+        print(f"   ⚠️ Erreur Nominatim: {e}")
+        GEOCODE_CACHE[cache_key] = (None, None, None)
+        return (None, None, None)
+
+
+def geocode_address_nominatim(address_str):
+    """Géocode une adresse texte."""
+    if not address_str:
+        return None, None
+    
+    if address_str in GEOCODE_CACHE:
+        cached = GEOCODE_CACHE[address_str]
+        if isinstance(cached, tuple) and len(cached) == 2:
+            return cached
+    
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {"q": address_str, "format": "json", "limit": 1}
+    headers = {"User-Agent": "gedeon-events-api/1.0"}
+    
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if data:
+            lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
+            GEOCODE_CACHE[address_str] = (lat, lon)
+            return lat, lon
+    except Exception:
+        pass
+    
+    GEOCODE_CACHE[address_str] = (None, None)
+    return None, None
+
+
+def load_cinema_coords_cache():
+    """Charge le cache des coordonnées de cinémas."""
+    global CINEMA_COORDS_CACHE
+    if os.path.exists(CINEMA_CACHE_FILE):
+        try:
+            with open(CINEMA_CACHE_FILE, 'rb') as f:
+                CINEMA_COORDS_CACHE = pickle.load(f)
+                print(f"   💾 Cache cinémas: {len(CINEMA_COORDS_CACHE)} entrées")
+        except Exception:
+            pass
+
+
+def save_cinema_coords_cache():
+    """Sauvegarde le cache des coordonnées."""
+    try:
+        with open(CINEMA_CACHE_FILE, 'wb') as f:
+            pickle.dump(CINEMA_COORDS_CACHE, f)
+    except Exception:
+        pass
 
 
 # ============================================================================
-# DATATOURISME - OPTIMISÉ
+# DATATOURISME
 # ============================================================================
 
 def fetch_datatourisme_events(center_lat, center_lon, radius_km, days_ahead):
-    """
-    Récupère les événements DATAtourisme (requête SQL optimisée)
-    """
-    
+    """Récupère les événements DATAtourisme (requête SQL optimisée)."""
     try:
         start_time = time.time()
-        
         conn = get_db_connection()
         cur = conn.cursor()
         
         date_limite = datetime.now().date() + timedelta(days=days_ahead)
         
-        # 🚀 REQUÊTE OPTIMISÉE avec CTE
         query = """
             WITH nearby_events AS (
-                SELECT 
-                    uri, nom, description,
-                    date_debut, date_fin,
-                    latitude, longitude, 
-                    adresse, commune, code_postal, contacts,
-                    geom
+                SELECT uri, nom, description, date_debut, date_fin,
+                       latitude, longitude, adresse, commune, code_postal, contacts, geom
                 FROM evenements
-                WHERE 
-                    (date_fin IS NULL OR date_fin >= CURRENT_DATE)
-                    AND (date_debut IS NULL OR date_debut <= %s)
-                    AND ST_DWithin(
-                        geom::geography,
-                        ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
-                        %s
-                    )
+                WHERE (date_fin IS NULL OR date_fin >= CURRENT_DATE)
+                  AND (date_debut IS NULL OR date_debut <= %s)
+                  AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, %s)
                 LIMIT 500
             )
-            SELECT 
-                uri as uid,
-                nom as title,
-                description,
-                date_debut as begin,
-                date_fin as end,
-                latitude,
-                longitude,
-                adresse as address,
-                commune as city,
-                code_postal as "postalCode",
-                contacts,
-                ST_Distance(
-                    geom::geography,
-                    ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography
-                ) / 1000 as "distanceKm"
+            SELECT uri as uid, nom as title, description,
+                   date_debut as begin, date_fin as end,
+                   latitude, longitude, adresse as address, commune as city,
+                   code_postal as "postalCode", contacts,
+                   ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography) / 1000 as "distanceKm"
             FROM nearby_events
             ORDER BY "distanceKm", date_debut
         """
         
-        cur.execute(query, (
-            date_limite,
-            center_lon, center_lat, radius_km * 1000,
-            center_lon, center_lat
-        ))
-        
+        cur.execute(query, (date_limite, center_lon, center_lat, radius_km * 1000, center_lon, center_lat))
         rows = cur.fetchall()
-        
-        query_time = time.time() - start_time
         
         events = []
         for row in rows:
@@ -309,8 +322,7 @@ def fetch_datatourisme_events(center_lat, center_lon, radius_km, days_ahead):
         cur.close()
         conn.close()
         
-        print(f"   ⚡ DATAtourisme: {len(events)} événements en {query_time:.3f}s")
-        
+        print(f"   ⚡ DATAtourisme: {len(events)} événements en {time.time()-start_time:.3f}s")
         return events
         
     except Exception as e:
@@ -319,21 +331,22 @@ def fetch_datatourisme_events(center_lat, center_lon, radius_km, days_ahead):
 
 
 # ============================================================================
-# OPENAGENDA - VERSION OPTIMISÉE
+# OPENAGENDA
 # ============================================================================
 
 def get_cached_agendas():
-    """Cache la liste des agendas pendant 24h"""
+    """Cache la liste des agendas pendant 24h."""
     if os.path.exists(OPENAGENDA_CACHE_FILE):
         try:
             with open(OPENAGENDA_CACHE_FILE, 'rb') as f:
                 cached_data = pickle.load(f)
-                cached_time = cached_data['timestamp']
-                
-                if datetime.now() - cached_time < OPENAGENDA_CACHE_DURATION:
+                if datetime.now() - cached_data['timestamp'] < OPENAGENDA_CACHE_DURATION:
                     return cached_data['agendas']
-        except Exception as e:
+        except Exception:
             pass
+    
+    if not API_KEY:
+        return []
     
     url = f"{BASE_URL}/agendas"
     params = {"key": API_KEY, "size": 100}
@@ -341,85 +354,53 @@ def get_cached_agendas():
     try:
         r = requests.get(url, params=params, timeout=15)
         r.raise_for_status()
-        agendas_result = r.json() or {}
-        agendas = agendas_result.get('agendas', [])
-    except Exception as e:
-        return []
-    
-    try:
+        agendas = r.json().get('agendas', [])
+        
         with open(OPENAGENDA_CACHE_FILE, 'wb') as f:
             pickle.dump({'timestamp': datetime.now(), 'agendas': agendas}, f)
-    except Exception as e:
-        pass
-    
-    return agendas
-
-
-def select_top_agendas(agendas, limit=OPENAGENDA_AGENDAS_LIMIT):
-    """Sélectionne les 30 meilleurs agendas"""
-    official_agendas = [a for a in agendas if a.get('official')]
-    other_agendas = [a for a in agendas if not a.get('official')]
-    
-    top_agendas = official_agendas[:20] + other_agendas[:10]
-    
-    return top_agendas
-
-
-def get_events_from_agenda(agenda_uid, center_lat, center_lon, radius_km, days_ahead, limit=OPENAGENDA_EVENTS_PER_AGENDA):
-    """Récupère les événements d'un agenda"""
-    url = f"{BASE_URL}/agendas/{agenda_uid}/events"
-    bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
-    
-    today = datetime.now()
-    today_str = today.strftime('%Y-%m-%d')
-    end_date = today + timedelta(days=days_ahead)
-    end_date_str = end_date.strftime('%Y-%m-%d')
-
-    params = {
-        'key': API_KEY,
-        'size': limit,
-        'detailed': 1,
-        'geo[northEast][lat]': bbox['northEast']['lat'],
-        'geo[northEast][lng]': bbox['northEast']['lng'],
-        'geo[southWest][lat]': bbox['southWest']['lat'],
-        'geo[southWest][lng]': bbox['southWest']['lng'],
-        'timings[gte]': today_str,
-        'timings[lte]': end_date_str,
-    }
-
-    try:
-        r = requests.get(url, params=params, timeout=15)
-        r.raise_for_status()
-        return r.json() or {}
+        
+        return agendas
     except Exception:
-        return {"events": []}
+        return []
 
 
 def process_agenda_events(agenda, center_lat, center_lon, radius_km, days_ahead):
-    """Worker function pour traiter un agenda en parallèle"""
-    
+    """Worker pour traiter un agenda OpenAgenda."""
     uid = agenda.get('uid')
     agenda_slug = agenda.get('slug')
     title = agenda.get('title', {})
     agenda_title = title.get('fr') or title.get('en') or 'Agenda' if isinstance(title, dict) else (title or 'Agenda')
     
     try:
-        events_data = get_events_from_agenda(uid, center_lat, center_lon, radius_km, days_ahead)
-        events = events_data.get('events', []) if events_data else []
+        url = f"{BASE_URL}/agendas/{uid}/events"
+        bbox = calculate_bounding_box(center_lat, center_lon, radius_km)
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        end_date_str = (datetime.now() + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+        
+        params = {
+            'key': API_KEY, 'size': OPENAGENDA_EVENTS_PER_AGENDA, 'detailed': 1,
+            'geo[northEast][lat]': bbox['northEast']['lat'],
+            'geo[northEast][lng]': bbox['northEast']['lng'],
+            'geo[southWest][lat]': bbox['southWest']['lat'],
+            'geo[southWest][lng]': bbox['southWest']['lng'],
+            'timings[gte]': today_str, 'timings[lte]': end_date_str,
+        }
+        
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        events = r.json().get('events', [])
         
         if not events:
             return []
         
         agenda_events = []
-        
         for ev in events:
             timings = ev.get('timings') or []
             begin_str = timings[0].get('begin') if timings else None
             end_str = timings[0].get('end') if timings else None
             
             loc = ev.get('location') or {}
-            ev_lat = loc.get('latitude')
-            ev_lon = loc.get('longitude')
+            ev_lat, ev_lon = loc.get('latitude'), loc.get('longitude')
             
             if ev_lat is None or ev_lon is None:
                 parts = [loc.get("name"), loc.get("address"), loc.get("city"), "France"]
@@ -430,13 +411,11 @@ def process_agenda_events(agenda, center_lat, center_lon, radius_km, days_ahead)
                 time.sleep(0.1)
             
             try:
-                ev_lat = float(ev_lat)
-                ev_lon = float(ev_lon)
+                ev_lat, ev_lon = float(ev_lat), float(ev_lon)
             except (ValueError, TypeError):
                 continue
             
             dist = haversine_km(center_lat, center_lon, ev_lat, ev_lon)
-            
             if dist > radius_km:
                 continue
             
@@ -469,25 +448,23 @@ def process_agenda_events(agenda, center_lat, center_lon, radius_km, days_ahead)
 
 
 def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
-    """
-    VERSION OPTIMISÉE avec parallélisation interne (10 workers)
-    """
-    
+    """Récupère les événements OpenAgenda avec parallélisation."""
     start_time = time.time()
     
     agendas = get_cached_agendas()
-    
     if not agendas:
         return []
     
-    top_agendas = select_top_agendas(agendas, limit=OPENAGENDA_AGENDAS_LIMIT)
+    # Sélectionner les meilleurs agendas
+    official = [a for a in agendas if a.get('official')]
+    others = [a for a in agendas if not a.get('official')]
+    top_agendas = official[:20] + others[:10]
     
     all_events = []
     
-    # Parallélisation interne des agendas
     with ThreadPoolExecutor(max_workers=OPENAGENDA_MAX_WORKERS) as executor:
         futures = {
-            executor.submit(process_agenda_events, agenda, center_lat, center_lon, radius_km, days_ahead): agenda 
+            executor.submit(process_agenda_events, agenda, center_lat, center_lon, radius_km, days_ahead): agenda
             for agenda in top_agendas
         }
         
@@ -498,56 +475,263 @@ def fetch_openagenda_events(center_lat, center_lon, radius_km, days_ahead):
             except Exception:
                 pass
     
-    elapsed = time.time() - start_time
-    print(f"   ⚡ OpenAgenda: {len(all_events)} événements en {elapsed:.1f}s")
-    
+    print(f"   ⚡ OpenAgenda: {len(all_events)} événements en {time.time()-start_time:.1f}s")
     return all_events
 
 
 # ============================================================================
-# 🎯 PARALLÉLISATION TOTALE DATAtourisme + OpenAgenda
+# ALLOCINÉ OPTIMISÉ
+# ============================================================================
+
+def get_cinemas_for_department(dept_id):
+    """Récupère les cinémas d'un département avec cache."""
+    if not ALLOCINE_AVAILABLE:
+        return []
+    
+    now = time.time()
+    if dept_id in CINEMAS_BY_DEPT_CACHE:
+        if now - CINEMAS_CACHE_TIMESTAMPS.get(dept_id, 0) < CINEMAS_CACHE_DURATION:
+            return CINEMAS_BY_DEPT_CACHE[dept_id]
+    
+    try:
+        api = allocineAPI()
+        cinemas = api.get_cinema(dept_id)
+        CINEMAS_BY_DEPT_CACHE[dept_id] = cinemas
+        CINEMAS_CACHE_TIMESTAMPS[dept_id] = now
+        return cinemas
+    except Exception as e:
+        print(f"   ⚠️ Erreur get_cinema({dept_id}): {e}")
+        return []
+
+
+def geocode_cinema(cinema_name, cinema_address):
+    """Géocode un cinéma avec cache et coordonnées connues."""
+    cache_key = f"{cinema_name}:{cinema_address}"
+    if cache_key in CINEMA_COORDS_CACHE:
+        return CINEMA_COORDS_CACHE[cache_key]
+    
+    # Coordonnées connues
+    name_lower = cinema_name.lower().strip()
+    for known_name, coords in KNOWN_CINEMAS_GPS.items():
+        if known_name in name_lower or name_lower.startswith(known_name[:10]):
+            CINEMA_COORDS_CACHE[cache_key] = coords
+            return coords
+    
+    # Géocodage Nominatim
+    if cinema_address:
+        lat, lon = geocode_address_nominatim(f"{cinema_address}, France")
+        if lat:
+            CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
+            save_cinema_coords_cache()
+            time.sleep(0.1)
+            return (lat, lon)
+    
+    CINEMA_COORDS_CACHE[cache_key] = (None, None)
+    return (None, None)
+
+
+def fetch_movies_for_cinema(cinema_info, today_str):
+    """Worker pour récupérer les films d'un cinéma."""
+    try:
+        api = allocineAPI()
+        movies = api.get_movies(cinema_info['id'], today_str)
+        return cinema_info, movies
+    except Exception:
+        return cinema_info, []
+
+
+def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas=50):
+    """
+    🎬 VERSION OPTIMISÉE avec mapping statique et recherche élargie.
+    """
+    if not ALLOCINE_AVAILABLE:
+        return []
+    
+    print(f"🎬 Cinéma optimisé: ({center_lat:.4f}, {center_lon:.4f}), {radius_km}km")
+    start_time = time.time()
+    
+    # Charger cache
+    if not CINEMA_COORDS_CACHE:
+        load_cinema_coords_cache()
+    
+    # 1. Récupérer localisation via Nominatim
+    dept_name, postcode, city = reverse_geocode_nominatim(center_lat, center_lon)
+    
+    if not dept_name and not postcode:
+        print("   ⚠️ Localisation non trouvée")
+        return []
+    
+    # 2. Déterminer les départements à rechercher (MAPPING STATIQUE)
+    dept_ids = []
+    dept_code = None
+    
+    if postcode:
+        if postcode.upper().startswith("2A") or postcode.upper().startswith("2B"):
+            dept_code = postcode[:2].upper()
+        else:
+            dept_code = postcode[:2]
+        
+        primary_id = get_allocine_dept_id_from_postcode(postcode)
+        if primary_id:
+            dept_ids.append(primary_id)
+    
+    if not dept_ids and dept_name:
+        primary_id = get_allocine_dept_id(dept_name)
+        if primary_id:
+            dept_ids.append(primary_id)
+    
+    if not dept_ids:
+        print(f"   ⚠️ Département non mappé: {dept_name} / {postcode}")
+        return []
+    
+    # 3. Étendre la recherche si IDF ou grand rayon
+    if is_in_idf(dept_name, postcode):
+        dept_ids = IDF_DEPARTMENTS.copy()
+        print(f"   📍 Zone IDF → {len(dept_ids)} départements")
+    elif radius_km > 30 and dept_code and dept_code in ADJACENT_DEPTS:
+        for adj_code in ADJACENT_DEPTS[dept_code]:
+            adj_id = POSTCODE_TO_ALLOCINE.get(adj_code)
+            if adj_id and adj_id not in dept_ids:
+                dept_ids.append(adj_id)
+        print(f"   📍 Rayon étendu → {len(dept_ids)} départements")
+    
+    # 4. Récupérer tous les cinémas
+    all_cinemas = []
+    for dept_id in dept_ids:
+        cinemas = get_cinemas_for_department(dept_id)
+        all_cinemas.extend(cinemas)
+    
+    print(f"   🎦 {len(all_cinemas)} cinémas trouvés")
+    
+    if not all_cinemas:
+        return []
+    
+    # 5. Filtrer par distance
+    nearby_cinemas = []
+    seen_ids = set()
+    
+    for cinema in all_cinemas:
+        cinema_id = cinema.get('id')
+        if not cinema_id or cinema_id in seen_ids:
+            continue
+        seen_ids.add(cinema_id)
+        
+        cinema_name = cinema.get('name', '')
+        cinema_address = cinema.get('address', '')
+        
+        lat, lon = geocode_cinema(cinema_name, cinema_address)
+        if lat and lon:
+            dist = haversine_km(center_lat, center_lon, lat, lon)
+            if dist <= radius_km:
+                nearby_cinemas.append({
+                    'id': cinema_id,
+                    'name': cinema_name,
+                    'address': cinema_address,
+                    'lat': lat,
+                    'lon': lon,
+                    'distance': dist
+                })
+    
+    print(f"   📍 {len(nearby_cinemas)} cinémas dans le rayon")
+    
+    if not nearby_cinemas:
+        return []
+    
+    # 6. Limiter et trier
+    nearby_cinemas.sort(key=lambda c: c['distance'])
+    if len(nearby_cinemas) > max_cinemas:
+        nearby_cinemas = nearby_cinemas[:max_cinemas]
+    
+    # 7. Récupérer les films en parallèle
+    today_str = date.today().strftime("%Y-%m-%d")
+    all_events = []
+    
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(fetch_movies_for_cinema, cinema, today_str): cinema
+            for cinema in nearby_cinemas
+        }
+        
+        for future in as_completed(futures):
+            try:
+                cinema_info, movies = future.result(timeout=15)
+                
+                if movies:
+                    for movie in movies:
+                        runtime = movie.get('runtime', 0)
+                        if runtime:
+                            h, m = runtime // 3600, (runtime % 3600) // 60
+                            duration = f"{h}h{m:02d}" if h else f"{m}min"
+                        else:
+                            duration = ""
+                        
+                        genres = movie.get('genres', [])
+                        genres_str = ", ".join(genres[:3]) if genres else ""
+                        
+                        desc_parts = []
+                        if duration:
+                            desc_parts.append(duration)
+                        if genres_str:
+                            desc_parts.append(genres_str)
+                        if movie.get('isPremiere'):
+                            desc_parts.append("🌟 Avant-première")
+                        if movie.get('weeklyOuting'):
+                            desc_parts.append("🆕 Sortie")
+                        
+                        event = {
+                            "uid": f"allocine-{cinema_info['id']}-{movie.get('title', '')[:20]}",
+                            "title": f"🎬 {movie.get('title', 'Film')}",
+                            "begin": today_str,
+                            "end": today_str,
+                            "locationName": cinema_info['name'],
+                            "city": city or dept_name or "",
+                            "address": cinema_info['address'],
+                            "latitude": cinema_info['lat'],
+                            "longitude": cinema_info['lon'],
+                            "distanceKm": round(cinema_info['distance'], 1),
+                            "openagendaUrl": "",
+                            "agendaTitle": f"Cinéma {cinema_info['name']}",
+                            "source": "Allocine",
+                            "description": " • ".join(desc_parts),
+                            "poster": movie.get('urlPoster', ''),
+                            "genres": genres,
+                        }
+                        all_events.append(event)
+                        
+            except Exception:
+                pass
+    
+    save_cinema_coords_cache()
+    
+    print(f"   ✅ {len(all_events)} films en {time.time()-start_time:.1f}s")
+    return all_events
+
+
+# ============================================================================
+# PARALLÉLISATION TOTALE
 # ============================================================================
 
 def fetch_all_events_parallel(center_lat, center_lon, radius_km, days_ahead):
-    """
-    🚀 NOUVELLE FONCTION : Exécute DATAtourisme ET OpenAgenda en PARALLÈLE
-    
-    Avant (séquentiel) :
-    - DATAtourisme : 200ms
-    - OpenAgenda   : 3s
-    - Total        : 3.2s
-    
-    Après (parallèle) :
-    - DATAtourisme : 200ms ┐
-    - OpenAgenda   : 3s    ┤ En parallèle
-    - Total        : 3s    ┘
-    
-    Gain : 200ms-2s selon la source la plus lente
-    """
-    
-    print(f"🔍 Recherche PARALLÈLE: ({center_lat}, {center_lon}), rayon={radius_km}km, jours={days_ahead}")
+    """Exécute DATAtourisme ET OpenAgenda en parallèle."""
+    print(f"🔍 Recherche parallèle: ({center_lat}, {center_lon}), {radius_km}km, {days_ahead}j")
     
     all_events = []
     sources_count = {}
     
-    # 🚀 Exécuter les 2 sources EN PARALLÈLE
     with ThreadPoolExecutor(max_workers=2) as executor:
-        # Soumettre les 2 tâches simultanément
-        future_datatourisme = executor.submit(fetch_datatourisme_events, center_lat, center_lon, radius_km, days_ahead)
-        future_openagenda = executor.submit(fetch_openagenda_events, center_lat, center_lon, radius_km, days_ahead)
+        future_dt = executor.submit(fetch_datatourisme_events, center_lat, center_lon, radius_km, days_ahead)
+        future_oa = executor.submit(fetch_openagenda_events, center_lat, center_lon, radius_km, days_ahead)
         
-        # Récupérer DATAtourisme
         try:
-            dt_events = future_datatourisme.result(timeout=10)
+            dt_events = future_dt.result(timeout=10)
             sources_count['DATAtourisme'] = len(dt_events)
             all_events.extend(dt_events)
         except Exception as e:
             print(f"   ⚠️ Erreur DATAtourisme: {e}")
             sources_count['DATAtourisme'] = 0
         
-        # Récupérer OpenAgenda
         try:
-            oa_events = future_openagenda.result(timeout=25)
+            oa_events = future_oa.result(timeout=25)
             sources_count['OpenAgenda'] = len(oa_events)
             all_events.extend(oa_events)
         except Exception as e:
@@ -558,329 +742,17 @@ def fetch_all_events_parallel(center_lat, center_lon, radius_km, days_ahead):
 
 
 # ============================================================================
-# ALLOCINÉ (code simplifié - même logique qu'avant)
-# ============================================================================
-
-def get_department_id_allocine(dept_name):
-    """Trouve l'ID AlloCiné d'un département."""
-    if not ALLOCINE_AVAILABLE:
-        return None
-    
-    MANUAL_MAPPING = {
-        'paris': ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne'],
-        'île-de-france': ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne'],
-        'lyon': ['rhône'],
-        'marseille': ['bouches-du-rhône'],
-    }
-    
-    if not DEPARTMENT_CACHE:
-        try:
-            api = allocineAPI()
-            depts = api.get_departements()
-            for d in depts:
-                name = d.get('name', '').lower().strip()
-                dept_id = d.get('id')
-                DEPARTMENT_CACHE[name] = dept_id
-        except Exception:
-            return None
-    
-    dept_lower = dept_name.lower().strip()
-    
-    if dept_lower in MANUAL_MAPPING:
-        for pname in MANUAL_MAPPING[dept_lower]:
-            if pname in DEPARTMENT_CACHE:
-                return DEPARTMENT_CACHE[pname]
-    
-    if dept_lower in DEPARTMENT_CACHE:
-        return DEPARTMENT_CACHE[dept_lower]
-    
-    for name, dept_id in DEPARTMENT_CACHE.items():
-        if dept_lower in name or name in dept_lower:
-            return dept_id
-    
-    return None
-
-
-def find_cinema_allocine(dept_id, target_name):
-    """Trouve un cinéma AlloCiné par son nom."""
-    if not ALLOCINE_AVAILABLE:
-        return None
-    
-    cache_key = f"{dept_id}:{target_name.lower()}"
-    if cache_key in CINEMA_CACHE:
-        return CINEMA_CACHE[cache_key]
-    
-    try:
-        api = allocineAPI()
-        cinemas = api.get_cinema(dept_id)
-    except Exception:
-        return None
-    
-    target = target_name.lower()
-    best_match = None
-    best_score = 0
-    
-    for cinema in cinemas:
-        name = cinema.get('name', '').lower()
-        score = 0
-        if target == name:
-            score = 100
-        elif target in name or name in target:
-            score = 50
-        else:
-            target_words = set(target.split())
-            name_words = set(name.split())
-            common = len(target_words & name_words)
-            score = common * 10
-        
-        if score > best_score:
-            best_score = score
-            best_match = cinema
-    
-    if best_match and best_score >= 20:
-        CINEMA_CACHE[cache_key] = best_match
-        return best_match
-    
-    return None
-
-
-def load_cinema_geocode_cache():
-    """🚀 OPTIMISATION : Charge le cache des cinémas géocodés"""
-    global CINEMA_CACHE
-    
-    cache_file = "/tmp/allocine_cinemas_geocoded.pkl"
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, 'rb') as f:
-                loaded = pickle.load(f)
-                CINEMA_CACHE.update(loaded)
-                print(f"   💾 Cache cinémas chargé : {len(loaded)} cinémas")
-        except Exception as e:
-            print(f"   ⚠️ Erreur lecture cache: {e}")
-
-
-def save_cinema_geocode_cache():
-    """Sauvegarde le cache des cinémas"""
-    cache_file = "/tmp/allocine_cinemas_geocoded.pkl"
-    try:
-        with open(cache_file, 'wb') as f:
-            pickle.dump(CINEMA_CACHE, f)
-    except Exception:
-        pass
-
-
-def get_cinema_coords(cinema_id, cinema_name, cinema_address):
-    """Récupère les coordonnées avec cache persistant"""
-    
-    cache_key = f"coords:{cinema_id}:{cinema_name}"
-    if cache_key in CINEMA_CACHE:
-        return CINEMA_CACHE[cache_key]
-    
-    name_lower = cinema_name.lower().strip()
-    if name_lower in KNOWN_CINEMAS_GPS:
-        coords = KNOWN_CINEMAS_GPS[name_lower]
-        CINEMA_CACHE[cache_key] = coords
-        return coords
-    
-    for known_name, coords in KNOWN_CINEMAS_GPS.items():
-        if known_name in name_lower or name_lower.startswith(known_name[:10]):
-            CINEMA_CACHE[cache_key] = coords
-            return coords
-    
-    if cinema_address:
-        cinema_lat, cinema_lon = geocode_address_nominatim(f"{cinema_address}, France")
-        if cinema_lat:
-            coords = (cinema_lat, cinema_lon)
-            CINEMA_CACHE[cache_key] = coords
-            save_cinema_geocode_cache()
-            time.sleep(0.1)
-            return coords
-    
-    return None, None
-
-
-def fetch_showtime_for_cinema(cinema_info, today):
-    """Worker pour récupérer les séances d'un cinéma"""
-    try:
-        api = allocineAPI()
-        showtimes = api.get_showtime(cinema_info['id'], today)
-        return cinema_info, showtimes
-    except:
-        return cinema_info, []
-
-
-def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km):
-    """
-    🚀 VERSION OPTIMISÉE Allociné
-    
-    Optimisations :
-    1. Parallélisation get_showtime (10 workers)
-    2. Cache persistant des cinémas
-    3. Limite à 30 cinémas max
-    """
-    if not ALLOCINE_AVAILABLE:
-        return []
-    
-    print(f"🎬 Allociné (optimisé): {center_lat}, {center_lon}, {radius_km}km")
-    start_time = time.time()
-    
-    try:
-        api = allocineAPI()
-        today = date.today().strftime("%Y-%m-%d")
-        
-        dept_name = reverse_geocode_department(center_lat, center_lon)
-        if not dept_name:
-            return []
-        
-        all_cinemas = []
-        dept_lower = dept_name.lower().strip()
-        
-        if dept_lower in ['paris', 'île-de-france']:
-            try:
-                top_villes = api.get_top_villes()
-                for ville in top_villes:
-                    if "Paris" in ville.get('name', ''):
-                        cinemas = api.get_cinema(ville.get('id'))
-                        if cinemas:
-                            all_cinemas.extend(cinemas)
-                        break
-            except:
-                pass
-            
-            for dept in ['hauts-de-seine', 'seine-saint-denis', 'val-de-marne']:
-                try:
-                    dept_id = get_department_id_allocine(dept)
-                    if dept_id:
-                        cinemas = api.get_cinema(dept_id)
-                        if cinemas:
-                            all_cinemas.extend(cinemas)
-                except:
-                    pass
-        else:
-            dept_id = get_department_id_allocine(dept_name)
-            if dept_id:
-                try:
-                    all_cinemas = api.get_cinema(dept_id)
-                except:
-                    pass
-        
-        if not all_cinemas:
-            return []
-        
-        # Géocodage avec cache
-        nearby_cinemas = []
-        for cinema in all_cinemas:
-            cinema_name = cinema.get('name', '')
-            cinema_address = cinema.get('address', '')
-            cinema_id = cinema.get('id')
-            
-            if not cinema_name:
-                continue
-            
-            cinema_lat, cinema_lon = get_cinema_coords(cinema_id, cinema_name, cinema_address)
-            
-            if cinema_lat and cinema_lon:
-                dist = haversine_km(center_lat, center_lon, cinema_lat, cinema_lon)
-                if dist <= radius_km:
-                    nearby_cinemas.append({
-                        'id': cinema_id,
-                        'name': cinema_name,
-                        'address': cinema_address,
-                        'lat': cinema_lat,
-                        'lon': cinema_lon,
-                        'distance': dist
-                    })
-        
-        if not nearby_cinemas:
-            return []
-        
-        nearby_cinemas.sort(key=lambda c: c['distance'])
-        
-        # Limite à 30 cinémas
-        if len(nearby_cinemas) > 30:
-            nearby_cinemas = nearby_cinemas[:30]
-        
-        # 🚀 Parallélisation get_showtime
-        all_cinema_events = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {
-                executor.submit(fetch_showtime_for_cinema, cinema, today): cinema 
-                for cinema in nearby_cinemas
-            }
-            
-            for future in as_completed(futures):
-                try:
-                    cinema_info, showtimes = future.result(timeout=10)
-                    
-                    if showtimes:
-                        for show in showtimes:
-                            film_title = show.get('title', 'Film')
-                            duration = show.get('duration', '')
-                            
-                            vf = show.get('VF', [])
-                            vo = show.get('VO', [])
-                            vost = show.get('VOST', [])
-                            
-                            versions = []
-                            if vf:
-                                versions.append(f"VF: {', '.join(vf[:3])}")
-                            if vo:
-                                versions.append(f"VO: {', '.join(vo[:3])}")
-                            if vost:
-                                versions.append(f"VOST: {', '.join(vost[:3])}")
-                            
-                            versions_str = " | ".join(versions) if versions else "Horaires non disponibles"
-                            
-                            event = {
-                                "uid": f"allocine-{cinema_info['id']}-{film_title[:20]}",
-                                "title": f"🎬 {film_title}",
-                                "begin": today,
-                                "end": today,
-                                "locationName": cinema_info['name'],
-                                "city": dept_name,
-                                "address": cinema_info['address'],
-                                "latitude": cinema_info['lat'],
-                                "longitude": cinema_info['lon'],
-                                "distanceKm": round(cinema_info['distance'], 1),
-                                "openagendaUrl": "",
-                                "agendaTitle": f"Films {cinema_info['name']}",
-                                "source": "Allocine",
-                                "description": f"{duration} - {versions_str}"
-                            }
-                            all_cinema_events.append(event)
-                except:
-                    pass
-        
-        elapsed = time.time() - start_time
-        print(f"   ⚡ Allociné: {len(all_cinema_events)} films en {elapsed:.1f}s")
-        return all_cinema_events
-        
-    except Exception as e:
-        print(f"   ❌ Erreur Allociné: {e}")
-        return []
-
-
-# Charger le cache au démarrage
-load_cinema_geocode_cache()
-
-
-# ============================================================================
 # ROUTES
 # ============================================================================
 
 @app.route('/')
 def index():
-    """Page d'accueil"""
     return send_from_directory('.', 'index.html')
 
 
 @app.route('/api/events/nearby', methods=['GET'])
 def get_nearby_events():
-    """
-    🚀 VERSION AVEC PARALLÉLISATION TOTALE
-    
-    DATAtourisme ET OpenAgenda s'exécutent EN MÊME TEMPS
-    """
+    """Événements à proximité (DATAtourisme + OpenAgenda en parallèle)."""
     try:
         center_lat = request.args.get('lat', type=float)
         center_lon = request.args.get('lon', type=float)
@@ -890,10 +762,7 @@ def get_nearby_events():
         if center_lat is None or center_lon is None:
             return jsonify({"status": "error", "message": "Paramètres 'lat' et 'lon' requis"}), 400
         
-        # 🚀 APPEL DE LA FONCTION PARALLÈLE
         all_events, sources = fetch_all_events_parallel(center_lat, center_lon, radius_km, days_ahead)
-        
-        # Tri final
         all_events.sort(key=lambda e: (e.get("distanceKm") or 999, e.get("begin") or ""))
         
         print(f"✅ Total: {len(all_events)} événements")
@@ -917,7 +786,7 @@ def get_nearby_events():
 
 @app.route('/api/cinema/nearby', methods=['GET'])
 def get_nearby_cinema():
-    """Récupère les séances de cinéma AlloCiné"""
+    """Cinémas à proximité (Allociné optimisé)."""
     try:
         center_lat = request.args.get('lat', type=float)
         center_lon = request.args.get('lon', type=float)
@@ -936,6 +805,7 @@ def get_nearby_cinema():
             "count": len(cinema_events),
             "source": "Allocine"
         }), 200
+        
     except Exception as e:
         print(f"❌ Erreur: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -943,7 +813,7 @@ def get_nearby_cinema():
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    """Statistiques de la base"""
+    """Statistiques de la base."""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -968,15 +838,16 @@ def get_stats():
             "total_events": total,
             "upcoming_events": futurs,
             "top_communes": [dict(row) for row in top_communes],
-            "sources": ["DATAtourisme (optimisé)", "OpenAgenda (parallèle)"]
+            "sources": ["DATAtourisme", "OpenAgenda", "Allociné (optimisé)"]
         }), 200
+        
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check"""
+    """Health check."""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -987,8 +858,10 @@ def health():
         return jsonify({
             "status": "healthy",
             "database": "connected",
-            "sources": ["DATAtourisme (optimisé)", "OpenAgenda (parallèle)", "Allociné" if ALLOCINE_AVAILABLE else "Allociné (non dispo)"]
+            "sources": ["DATAtourisme", "OpenAgenda", "Allociné" if ALLOCINE_AVAILABLE else "Allociné (non dispo)"],
+            "optimizations": ["mapping statique", "recherche IDF élargie", "cache cinémas"]
         }), 200
+        
     except Exception as e:
         return jsonify({"status": "unhealthy", "database": "disconnected", "error": str(e)}), 500
 
@@ -1000,14 +873,21 @@ def health():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     
-    print("="*70)
-    print("🚀 GEDEON API - VERSION PARALLÉLISÉE")
-    print("="*70)
+    # Charger le cache au démarrage
+    load_cinema_coords_cache()
+    
+    print("=" * 70)
+    print("🚀 GEDEON API - VERSION OPTIMISÉE v2")
+    print("=" * 70)
     print(f"Port: {port}")
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
-    print(f"Optimisation :")
-    print(f"  ✅ DATAtourisme + OpenAgenda en PARALLÈLE")
-    print(f"  ✅ Gain: 200ms-2s (temps de la source la plus lente)")
-    print("="*70)
+    print("Optimisations:")
+    print("  ✅ Mapping statique départements (pas d'appel API)")
+    print("  ✅ Recherche par code postal (plus fiable)")
+    print("  ✅ Recherche élargie IDF (8 départements)")
+    print("  ✅ Départements adjacents si rayon > 30km")
+    print("  ✅ Cache persistant des cinémas")
+    print("  ✅ get_movies() pour données enrichies")
+    print("=" * 70)
     
     app.run(host='0.0.0.0', port=port, debug=True)
