@@ -181,6 +181,134 @@ CINEMAS_BY_DEPT_CACHE = {}
 CINEMAS_CACHE_TIMESTAMPS = {}
 CINEMAS_CACHE_DURATION = 3600 * 6  # 6 heures
 
+# Bounding boxes approximatives des départements français (lat_min, lat_max, lon_min, lon_max)
+# Utilisé pour vérifier la cohérence des résultats Nominatim
+DEPT_BOUNDING_BOXES = {
+    '01': (45.6, 46.5, 4.7, 6.2),    # Ain
+    '02': (49.0, 50.1, 3.0, 4.3),    # Aisne
+    '03': (46.0, 46.8, 2.3, 4.0),    # Allier
+    '04': (43.7, 44.7, 5.5, 6.9),    # Alpes-de-Haute-Provence
+    '05': (44.2, 45.1, 5.4, 6.9),    # Hautes-Alpes
+    '06': (43.5, 44.4, 6.6, 7.7),    # Alpes-Maritimes
+    '07': (44.3, 45.4, 3.9, 4.9),    # Ardèche
+    '08': (49.2, 50.2, 4.0, 5.4),    # Ardennes
+    '09': (42.6, 43.3, 0.8, 2.2),    # Ariège
+    '10': (47.9, 48.7, 3.4, 4.9),    # Aube
+    '11': (42.7, 43.5, 1.7, 3.2),    # Aude
+    '12': (43.7, 44.9, 1.8, 3.5),    # Aveyron
+    '13': (43.2, 43.9, 4.2, 5.8),    # Bouches-du-Rhône
+    '14': (48.8, 49.4, -1.2, 0.4),   # Calvados
+    '15': (44.6, 45.5, 2.1, 3.4),    # Cantal
+    '16': (45.2, 46.1, -0.5, 0.6),   # Charente
+    '17': (45.1, 46.4, -1.5, -0.1),  # Charente-Maritime
+    '18': (46.4, 47.6, 1.8, 3.1),    # Cher
+    '19': (44.9, 45.8, 1.2, 2.5),    # Corrèze
+    '21': (46.9, 48.0, 4.1, 5.5),    # Côte-d'Or
+    '22': (48.3, 48.9, -3.7, -1.9),  # Côtes-d'Armor
+    '23': (45.7, 46.4, 1.4, 2.6),    # Creuse
+    '24': (44.5, 45.7, -0.1, 1.5),   # Dordogne
+    '25': (46.6, 47.6, 5.7, 7.1),    # Doubs
+    '26': (44.1, 45.4, 4.6, 5.8),    # Drôme
+    '27': (48.7, 49.5, 0.3, 1.8),    # Eure
+    '28': (47.9, 48.7, 0.8, 2.0),    # Eure-et-Loir
+    '29': (47.7, 48.8, -5.2, -3.4),  # Finistère
+    '30': (43.5, 44.5, 3.3, 4.8),    # Gard
+    '31': (42.9, 43.9, 0.4, 2.0),    # Haute-Garonne
+    '32': (43.3, 44.1, -0.3, 1.2),   # Gers
+    '33': (44.2, 45.6, -1.3, 0.3),   # Gironde
+    '34': (43.2, 43.9, 2.5, 4.2),    # Hérault
+    '35': (47.6, 48.6, -2.3, -1.0),  # Ille-et-Vilaine
+    '36': (46.3, 47.2, 0.9, 2.2),    # Indre
+    '37': (46.7, 47.7, 0.0, 1.4),    # Indre-et-Loire
+    '38': (44.7, 45.9, 4.7, 6.4),    # Isère
+    '39': (46.3, 47.2, 5.3, 6.2),    # Jura
+    '40': (43.5, 44.5, -1.5, 0.1),   # Landes
+    '41': (47.2, 48.1, 0.6, 2.2),    # Loir-et-Cher
+    '42': (45.3, 46.3, 3.7, 4.8),    # Loire
+    '43': (44.7, 45.4, 3.1, 4.5),    # Haute-Loire
+    '44': (46.9, 47.8, -2.6, -1.0),  # Loire-Atlantique
+    '45': (47.5, 48.3, 1.5, 3.1),    # Loiret
+    '46': (44.2, 45.1, 1.0, 2.2),    # Lot
+    '47': (43.8, 44.8, -0.2, 1.1),   # Lot-et-Garonne
+    '48': (44.1, 44.9, 2.9, 4.0),    # Lozère
+    '49': (47.0, 47.8, -1.4, 0.2),   # Maine-et-Loire
+    '50': (48.5, 49.7, -2.0, -0.8),  # Manche
+    '51': (48.5, 49.4, 3.4, 5.0),    # Marne
+    '52': (47.6, 48.7, 4.6, 5.9),    # Haute-Marne
+    '53': (47.7, 48.5, -1.2, 0.0),   # Mayenne
+    '54': (48.3, 49.2, 5.4, 7.1),    # Meurthe-et-Moselle
+    '55': (48.4, 49.4, 4.9, 5.9),    # Meuse
+    '56': (47.3, 48.0, -3.7, -2.0),  # Morbihan
+    '57': (48.6, 49.5, 5.9, 7.6),    # Moselle
+    '58': (46.7, 47.6, 2.8, 4.2),    # Nièvre
+    '59': (50.0, 51.1, 2.1, 4.2),    # Nord
+    '60': (49.1, 49.8, 1.7, 3.2),    # Oise
+    '61': (48.4, 48.9, -0.9, 0.9),   # Orne
+    '62': (50.0, 51.0, 1.5, 3.2),    # Pas-de-Calais
+    '63': (45.3, 46.3, 2.4, 3.9),    # Puy-de-Dôme
+    '64': (42.8, 43.6, -1.8, 0.0),   # Pyrénées-Atlantiques
+    '65': (42.7, 43.4, -0.4, 0.6),   # Hautes-Pyrénées
+    '66': (42.3, 42.9, 1.7, 3.2),    # Pyrénées-Orientales
+    '67': (48.1, 49.1, 7.0, 8.2),    # Bas-Rhin
+    '68': (47.4, 48.3, 6.8, 7.6),    # Haut-Rhin
+    '69': (45.5, 46.3, 4.2, 5.2),    # Rhône
+    '70': (47.3, 48.0, 5.4, 6.8),    # Haute-Saône
+    '71': (46.2, 47.2, 3.6, 5.1),    # Saône-et-Loire
+    '72': (47.6, 48.5, -0.5, 0.9),   # Sarthe
+    '73': (45.1, 45.9, 5.6, 7.2),    # Savoie
+    '74': (45.7, 46.5, 5.8, 7.0),    # Haute-Savoie
+    '75': (48.8, 48.9, 2.2, 2.5),    # Paris
+    '76': (49.2, 50.1, 0.1, 1.8),    # Seine-Maritime
+    '77': (48.1, 49.1, 2.4, 3.6),    # Seine-et-Marne
+    '78': (48.4, 49.1, 1.4, 2.2),    # Yvelines
+    '79': (46.0, 47.1, -0.9, 0.2),   # Deux-Sèvres
+    '80': (49.6, 50.4, 1.4, 3.2),    # Somme
+    '81': (43.4, 44.2, 1.5, 2.9),    # Tarn
+    '82': (43.8, 44.4, 0.7, 2.0),    # Tarn-et-Garonne
+    '83': (43.0, 43.8, 5.7, 6.9),    # Var
+    '84': (43.7, 44.4, 4.6, 5.8),    # Vaucluse
+    '85': (46.3, 47.1, -2.4, -0.6),  # Vendée
+    '86': (46.0, 47.2, -0.1, 1.2),   # Vienne
+    '87': (45.4, 46.4, 0.6, 1.9),    # Haute-Vienne
+    '88': (47.8, 48.5, 5.5, 7.2),    # Vosges
+    '89': (47.3, 48.4, 2.8, 4.3),    # Yonne
+    '90': (47.4, 47.8, 6.7, 7.2),    # Territoire de Belfort
+    '91': (48.3, 48.8, 2.0, 2.6),    # Essonne
+    '92': (48.7, 48.9, 2.1, 2.4),    # Hauts-de-Seine
+    '93': (48.8, 49.0, 2.3, 2.6),    # Seine-Saint-Denis
+    '94': (48.7, 48.9, 2.3, 2.6),    # Val-de-Marne
+    '95': (48.9, 49.2, 1.6, 2.6),    # Val-d'Oise
+    '2A': (41.3, 42.0, 8.5, 9.4),    # Corse-du-Sud
+    '2B': (42.0, 43.0, 9.0, 9.6),    # Haute-Corse
+}
+
+
+def is_coords_in_dept(lat, lon, dept_code):
+    """
+    Vérifie si les coordonnées sont cohérentes avec le département.
+    Utilisé pour filtrer les résultats Nominatim aberrants.
+    
+    Returns: True si cohérent ou si dept_code inconnu, False sinon
+    """
+    if not dept_code or not lat or not lon:
+        return True  # Pas de vérification possible
+    
+    # Normaliser le code département
+    dept = str(dept_code).upper().zfill(2)
+    
+    if dept not in DEPT_BOUNDING_BOXES:
+        return True  # Département inconnu, on accepte
+    
+    lat_min, lat_max, lon_min, lon_max = DEPT_BOUNDING_BOXES[dept]
+    
+    # Ajouter une marge de 0.5° (~50km) pour les cas limites
+    margin = 0.5
+    
+    in_box = (lat_min - margin <= lat <= lat_max + margin and 
+              lon_min - margin <= lon <= lon_max + margin)
+    
+    return in_box
+
 # ============================================================================
 # BASE DE DONNÉES CNC DES CINÉMAS FRANÇAIS (avec GPS)
 # ============================================================================
@@ -708,7 +836,7 @@ def geocode_cinema(cinema_name, cinema_address, dept_code=None):
     1. Cache local
     2. Base CNC (2053 cinémas français avec GPS)
     3. Coordonnées connues (fallback)
-    4. Nominatim (dernier recours)
+    4. Nominatim (dernier recours) - avec vérification de cohérence
     
     Args:
         cinema_name: Nom du cinéma
@@ -738,7 +866,7 @@ def geocode_cinema(cinema_name, cinema_address, dept_code=None):
     if cinema_address:
         # Stratégie 1: Adresse complète
         lat, lon = geocode_address_nominatim(f"{cinema_address}, France")
-        if lat:
+        if lat and is_coords_in_dept(lat, lon, dept_code):
             CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
             save_cinema_coords_cache()
             return (lat, lon)
@@ -749,7 +877,7 @@ def geocode_cinema(cinema_name, cinema_address, dept_code=None):
             cp, ville = match.groups()
             simplified = f"{ville.strip()}, {cp}, France"
             lat, lon = geocode_address_nominatim(simplified)
-            if lat:
+            if lat and is_coords_in_dept(lat, lon, dept_code):
                 CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
                 save_cinema_coords_cache()
                 return (lat, lon)
@@ -759,7 +887,7 @@ def geocode_cinema(cinema_name, cinema_address, dept_code=None):
         if match_cp:
             cp = match_cp.group(1)
             lat, lon = geocode_address_nominatim(f"{cp}, France")
-            if lat:
+            if lat and is_coords_in_dept(lat, lon, dept_code):
                 CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
                 save_cinema_coords_cache()
                 return (lat, lon)
