@@ -874,6 +874,50 @@ def get_nearby_cinema():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route('/api/debug/allocine-depts', methods=['GET'])
+def debug_allocine_depts():
+    """
+    🔧 DEBUG: Récupère la liste complète des départements Allociné avec leurs vrais IDs.
+    Utilise cet endpoint pour corriger le mapping dans department_mapping.py
+    """
+    if not ALLOCINE_AVAILABLE:
+        return jsonify({"status": "error", "message": "Allociné API non disponible"}), 500
+    
+    try:
+        api = allocineAPI()
+        depts = api.get_departements()
+        
+        # Trier par nom pour faciliter la lecture
+        depts_sorted = sorted(depts, key=lambda d: d.get('name', ''))
+        
+        # Créer un mapping prêt à copier-coller
+        mapping_code = []
+        postcode_mapping = []
+        
+        for dept in depts_sorted:
+            name = dept.get('name', '')
+            dept_id = dept.get('id', '')
+            
+            # Extraire le numéro de département du nom si possible
+            name_lower = name.lower().strip()
+            mapping_code.append(f'    "{name_lower}": "{dept_id}",')
+        
+        return jsonify({
+            "status": "success",
+            "count": len(depts),
+            "departments": depts_sorted,
+            "mapping_code": "\n".join(mapping_code)
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error", 
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Statistiques de la base."""
