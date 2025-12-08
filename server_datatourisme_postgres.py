@@ -954,124 +954,116 @@ def fetch_movies_for_cinema(cinema_info, today_str):
 
 def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas=50):
     """
-    🎬 VERSION AVEC MAPPING DYNAMIQUE - Utilise les vrais IDs Allociné.
+    🎬 VERSION OPTIMISÉE - Recherche spatiale dans la base CNC d'abord
+    
+    Nouveau flux:
+    1. Base CNC: Trouver tous les cinémas dans le rayon (recherche GPS directe)
+    2. Pour chaque cinéma CNC → chercher correspondance Allociné par département
+    3. Récupérer les films
+    
+    Avantage: Pas de géocodage, pas de cinémas hors rayon, plus rapide !
     """
     if not ALLOCINE_AVAILABLE:
         return []
     
-    print(f"🎬 Cinéma (mapping dynamique): ({center_lat:.4f}, {center_lon:.4f}), {radius_km}km")
+    print(f"🎬 Cinéma (recherche spatiale CNC): ({center_lat:.4f}, {center_lon:.4f}), {radius_km}km")
     start_time = time.time()
     
-    # Charger le mapping Allociné si pas encore fait
+    # Charger la base CNC si pas encore fait
+    if not CINEMAS_CNC_DATA:
+        load_cinemas_cnc()
+    
+    if not CINEMAS_CNC_DATA:
+        print("   ⚠️ Base CNC non disponible")
+        return []
+    
+    # 1. Recherche spatiale dans la base CNC (instantané)
+    nearby_cnc_cinemas = []
+    for cinema in CINEMAS_CNC_DATA:
+        lat = cinema.get('lat')
+        lon = cinema.get('lon')
+        if not lat or not lon:
+            continue
+        
+        dist = haversine_km(center_lat, center_lon, lat, lon)
+        if dist <= radius_km:
+            nearby_cnc_cinemas.append({
+                'nom': cinema['nom'],
+                'nom_normalized': cinema['nom_normalized'],
+                'keywords': cinema.get('keywords', []),
+                'commune': cinema.get('commune', ''),
+                'dept': cinema.get('dept', ''),
+                'lat': lat,
+                'lon': lon,
+                'distance': dist
+            })
+    
+    nearby_cnc_cinemas.sort(key=lambda c: c['distance'])
+    print(f"   📍 Base CNC: {len(nearby_cnc_cinemas)} cinémas dans le rayon de {radius_km}km")
+    
+    if not nearby_cnc_cinemas:
+        return []
+    
+    # Limiter le nombre
+    if len(nearby_cnc_cinemas) > max_cinemas:
+        nearby_cnc_cinemas = nearby_cnc_cinemas[:max_cinemas]
+    
+    # Afficher les cinémas trouvés
+    for c in nearby_cnc_cinemas:
+        print(f"      📍 {c['nom']} ({c['commune']}): {c['distance']:.1f}km")
+    
+    # 2. Charger le mapping Allociné si pas encore fait
     if not ALLOCINE_DEPT_MAPPING_LOADED:
         load_allocine_departments()
     
-    # Charger cache des coordonnées
-    if not CINEMA_COORDS_CACHE:
-        load_cinema_coords_cache()
+    # 3. Récupérer les cinémas Allociné des départements concernés
+    dept_codes = set(c['dept'] for c in nearby_cnc_cinemas if c.get('dept'))
+    print(f"   🗺️ Départements concernés: {dept_codes}")
     
-    # 1. Récupérer localisation via Nominatim
-    dept_name, postcode, city = reverse_geocode_nominatim(center_lat, center_lon)
+    allocine_cinemas = []
+    for dept_code in dept_codes:
+        dept_name = get_dept_name_from_code(dept_code)
+        if dept_name:
+            dept_id = get_allocine_dept_id_dynamic(dept_name)
+            if dept_id:
+                cinemas = get_cinemas_for_department(dept_id)
+                allocine_cinemas.extend(cinemas)
+                print(f"      🎦 {dept_name} ({dept_code}): {len(cinemas)} cinémas Allociné")
     
-    print(f"   📍 Nominatim: dept='{dept_name}', postcode='{postcode}', city='{city}'")
+    print(f"   🎦 Total Allociné: {len(allocine_cinemas)} cinémas")
     
-    if not dept_name and not postcode:
-        print("   ⚠️ Localisation non trouvée")
-        return []
+    # 4. Faire la correspondance CNC → Allociné
+    matched_cinemas = []
     
-    # 2. Trouver l'ID Allociné via le MAPPING DYNAMIQUE
-    dept_ids = []
-    
-    # Utiliser le nom du département (plus fiable avec le mapping dynamique)
-    if dept_name:
-        primary_id = get_allocine_dept_id_dynamic(dept_name)
-        print(f"   🔍 Dept '{dept_name}' → ID dynamique='{primary_id}'")
-        if primary_id:
-            dept_ids.append(primary_id)
-    
-    if not dept_ids:
-        print(f"   ⚠️ Département non trouvé dans mapping Allociné: {dept_name}")
-        print(f"   📋 Départements disponibles: {list(ALLOCINE_DEPT_MAPPING.keys())[:10]}...")
-        return []
-    
-    print(f"   ✅ Département à rechercher: {dept_ids}")
-    
-    # 3. Étendre la recherche si IDF (ajouter les départements voisins)
-    # Pour l'instant on ne fait que le département principal
-    # TODO: ajouter la logique IDF avec le mapping dynamique
-    
-    # 4. Récupérer tous les cinémas
-    all_cinemas = []
-    for dept_id in dept_ids:
-        cinemas = get_cinemas_for_department(dept_id)
-        all_cinemas.extend(cinemas)
-    
-    print(f"   🎦 {len(all_cinemas)} cinémas trouvés")
-    
-    if not all_cinemas:
-        return []
-    
-    # Extraire le code département pour le géocodage
-    dept_code = None
-    if postcode:
-        if postcode.upper().startswith('2A') or postcode.upper().startswith('2B'):
-            dept_code = postcode[:2].upper()
+    for cnc_cinema in nearby_cnc_cinemas:
+        best_match = find_allocine_match(cnc_cinema, allocine_cinemas)
+        
+        if best_match:
+            matched_cinemas.append({
+                'id': best_match.get('id'),
+                'name': cnc_cinema['nom'],
+                'address': best_match.get('address', ''),
+                'lat': cnc_cinema['lat'],
+                'lon': cnc_cinema['lon'],
+                'distance': cnc_cinema['distance']
+            })
+            print(f"      ✅ {cnc_cinema['nom']} → Allociné ID {best_match.get('id')}")
         else:
-            dept_code = postcode[:2]
+            print(f"      ⚠️ {cnc_cinema['nom']}: pas de correspondance Allociné")
     
-    # 5. Filtrer par distance
-    nearby_cinemas = []
-    seen_ids = set()
+    print(f"   🎯 {len(matched_cinemas)} cinémas avec correspondance Allociné")
     
-    print(f"   🔍 Géocodage de {len(all_cinemas)} cinémas (dept={dept_code})...")
-    
-    for cinema in all_cinemas:
-        cinema_id = cinema.get('id')
-        if not cinema_id or cinema_id in seen_ids:
-            continue
-        seen_ids.add(cinema_id)
-        
-        cinema_name = cinema.get('name', '')
-        cinema_address = cinema.get('address', '')
-        
-        # Passer le code département pour éviter les homonymes
-        lat, lon = geocode_cinema(cinema_name, cinema_address, dept_code)
-        
-        if lat and lon:
-            dist = haversine_km(center_lat, center_lon, lat, lon)
-            print(f"      📍 {cinema_name}: ({lat:.4f}, {lon:.4f}) → {dist:.1f}km")
-            if dist <= radius_km:
-                nearby_cinemas.append({
-                    'id': cinema_id,
-                    'name': cinema_name,
-                    'address': cinema_address,
-                    'lat': lat,
-                    'lon': lon,
-                    'distance': dist
-                })
-            else:
-                print(f"         ❌ Hors rayon ({dist:.1f}km > {radius_km}km)")
-        else:
-            print(f"      ⚠️ {cinema_name}: géocodage échoué (adresse: {cinema_address})")
-    
-    print(f"   📍 {len(nearby_cinemas)} cinémas dans le rayon")
-    
-    if not nearby_cinemas:
+    if not matched_cinemas:
         return []
     
-    # 6. Limiter et trier
-    nearby_cinemas.sort(key=lambda c: c['distance'])
-    if len(nearby_cinemas) > max_cinemas:
-        nearby_cinemas = nearby_cinemas[:max_cinemas]
-    
-    # 7. Récupérer les films en parallèle
+    # 5. Récupérer les films en parallèle
     today_str = date.today().strftime("%Y-%m-%d")
     all_events = []
     
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
             executor.submit(fetch_movies_for_cinema, cinema, today_str): cinema
-            for cinema in nearby_cinemas
+            for cinema in matched_cinemas
         }
         
         for future in as_completed(futures):
@@ -1081,9 +1073,9 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                 if movies:
                     print(f"      🎬 {cinema_info['name']}: {len(movies)} films")
                     for movie in movies:
-                        # Gestion de la durée (deux formats possibles)
+                        # Gestion de la durée
                         runtime = movie.get('runtime', 0)
-                        duration_str = movie.get('duration', '')  # Format texte de get_showtime
+                        duration_str = movie.get('duration', '')
                         
                         if runtime and isinstance(runtime, int):
                             h, m = runtime // 3600, (runtime % 3600) // 60
@@ -1093,9 +1085,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                         else:
                             duration = ""
                         
-                        # Gestion des horaires (de get_showtime)
                         showtimes_str = movie.get('showtimes_str', '')
-                        
                         genres = movie.get('genres', [])
                         genres_str = ", ".join(genres[:3]) if genres else ""
                         
@@ -1117,7 +1107,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                             "begin": today_str,
                             "end": today_str,
                             "locationName": cinema_info['name'],
-                            "city": city or dept_name or "",
+                            "city": "",
                             "address": cinema_info['address'],
                             "latitude": cinema_info['lat'],
                             "longitude": cinema_info['lon'],
@@ -1134,12 +1124,93 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                     print(f"      ⚠️ {cinema_info['name']}: 0 films")
                         
             except Exception as e:
-                print(f"      ❌ Erreur future: {e}")
-    
-    save_cinema_coords_cache()
+                print(f"      ❌ Erreur: {e}")
     
     print(f"   ✅ {len(all_events)} films en {time.time()-start_time:.1f}s")
     return all_events
+
+
+def get_dept_name_from_code(dept_code):
+    """Retourne le nom du département depuis son code."""
+    DEPT_NAMES = {
+        '01': 'ain', '02': 'aisne', '03': 'allier', '04': 'alpes-de-haute-provence',
+        '05': 'hautes-alpes', '06': 'alpes-maritimes', '07': 'ardèche', '08': 'ardennes',
+        '09': 'ariège', '10': 'aube', '11': 'aude', '12': 'aveyron',
+        '13': 'bouches-du-rhône', '14': 'calvados', '15': 'cantal', '16': 'charente',
+        '17': 'charente-maritime', '18': 'cher', '19': 'corrèze', '21': 'côte-d\'or',
+        '22': 'côtes-d\'armor', '23': 'creuse', '24': 'dordogne', '25': 'doubs',
+        '26': 'drôme', '27': 'eure', '28': 'eure-et-loir', '29': 'finistère',
+        '30': 'gard', '31': 'haute-garonne', '32': 'gers', '33': 'gironde',
+        '34': 'hérault', '35': 'ille-et-vilaine', '36': 'indre', '37': 'indre-et-loire',
+        '38': 'isère', '39': 'jura', '40': 'landes', '41': 'loir-et-cher',
+        '42': 'loire', '43': 'haute-loire', '44': 'loire-atlantique', '45': 'loiret',
+        '46': 'lot', '47': 'lot-et-garonne', '48': 'lozère', '49': 'maine-et-loire',
+        '50': 'manche', '51': 'marne', '52': 'haute-marne', '53': 'mayenne',
+        '54': 'meurthe-et-moselle', '55': 'meuse', '56': 'morbihan', '57': 'moselle',
+        '58': 'nièvre', '59': 'nord', '60': 'oise', '61': 'orne',
+        '62': 'pas-de-calais', '63': 'puy-de-dôme', '64': 'pyrénées-atlantiques',
+        '65': 'hautes-pyrénées', '66': 'pyrénées-orientales', '67': 'bas-rhin',
+        '68': 'haut-rhin', '69': 'rhône', '70': 'haute-saône', '71': 'saône-et-loire',
+        '72': 'sarthe', '73': 'savoie', '74': 'haute-savoie', '75': 'paris',
+        '76': 'seine-maritime', '77': 'seine-et-marne', '78': 'yvelines',
+        '79': 'deux-sèvres', '80': 'somme', '81': 'tarn', '82': 'tarn-et-garonne',
+        '83': 'var', '84': 'vaucluse', '85': 'vendée', '86': 'vienne',
+        '87': 'haute-vienne', '88': 'vosges', '89': 'yonne', '90': 'territoire-de-belfort',
+        '91': 'essonne', '92': 'hauts-de-seine', '93': 'seine-saint-denis',
+        '94': 'val-de-marne', '95': 'val-d\'oise', '2A': 'corse-du-sud', '2B': 'haute-corse'
+    }
+    return DEPT_NAMES.get(str(dept_code), '')
+
+
+def find_allocine_match(cnc_cinema, allocine_cinemas):
+    """
+    Trouve la correspondance entre un cinéma CNC et la liste Allociné.
+    Utilise les mots-clés et le nom normalisé.
+    """
+    import re
+    
+    cnc_name = cnc_cinema['nom_normalized']
+    cnc_keywords = set(cnc_cinema.get('keywords', []))
+    cnc_commune = cnc_cinema.get('commune', '').lower()
+    
+    best_match = None
+    best_score = 0
+    
+    for alloc_cinema in allocine_cinemas:
+        alloc_name = alloc_cinema.get('name', '').lower().strip()
+        alloc_name_normalized = re.sub(r'\s+', ' ', alloc_name)
+        
+        # Extraire les mots-clés du nom Allociné
+        alloc_keywords = set(re.findall(r'[a-zàâäéèêëïîôùûüç0-9]+', alloc_name_normalized))
+        alloc_keywords.discard('le')
+        alloc_keywords.discard('la')
+        alloc_keywords.discard('les')
+        alloc_keywords.discard('cinema')
+        alloc_keywords.discard('cinéma')
+        
+        # Score basé sur les mots-clés communs
+        common = cnc_keywords & alloc_keywords
+        if not common:
+            continue
+        
+        score = len(common) * 10
+        
+        # Bonus si noms similaires
+        if cnc_name == alloc_name_normalized:
+            score += 100
+        elif cnc_name in alloc_name_normalized or alloc_name_normalized in cnc_name:
+            score += 50
+        
+        # Bonus si commune dans le nom Allociné
+        if cnc_commune and cnc_commune in alloc_name_normalized:
+            score += 30
+        
+        if score > best_score:
+            best_score = score
+            best_match = alloc_cinema
+    
+    return best_match if best_score >= 10 else None
+
 
 
 # ============================================================================
