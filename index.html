@@ -102,6 +102,12 @@
             font-size: 18px;
         }
 
+        .buttons-group {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
         input[type="range"] {
             flex: 1;
             max-width: 140px;
@@ -562,13 +568,22 @@
             .control-group { flex-direction: column; align-items: stretch; }
             .slider-group { min-width: 100%; }
             #map-container { height: calc(100vh - 180px); }
-            button { width: 100%; padding: 8px 12px; font-size: 13px; }
+            
+            /* Boutons pleine largeur SAUF les boutons icônes */
+            .control-group > button { width: 100%; padding: 8px 12px; font-size: 13px; }
+            
+            /* Groupe de boutons icônes reste en ligne */
+            .buttons-group {
+                display: flex;
+                gap: 8px;
+                justify-content: flex-start;
+            }
             
             #btnMyPosition,
             #resetViewBtn {
-                width: 36px;
-                height: 36px;
-                font-size: 20px;
+                width: 44px !important;
+                height: 44px;
+                font-size: 22px;
             }
             
             #map-legend {
@@ -605,8 +620,10 @@
 
     <div id="controls">
         <div class="control-group">
-            <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
-            <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
+            <div class="buttons-group">
+                <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
+                <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
+            </div>
 
             <div class="slider-group">
                 <span class="slider-label">Rayon:</span>
@@ -1357,8 +1374,22 @@
                         popupHtml += '<h3>' + eventTitle + '</h3>';
                         
                         if (event.begin) popupHtml += '<div class="date">📅 ' + formatDate(event.begin) + '</div>';
-                        if (event.locationName) popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
-                        if (event.address) popupHtml += '<div class="address">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+                        
+                        // 📍 Affichage optimisé : éviter la redondance ville/adresse
+                        if (event.locationName) {
+                            popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
+                        }
+                        if (event.address) {
+                            // Ne pas rajouter la ville si elle est déjà dans l'adresse
+                            var addressDisplay = event.address;
+                            if (event.city && addressDisplay.toLowerCase().indexOf(event.city.toLowerCase()) === -1) {
+                                addressDisplay += ', ' + event.city;
+                            }
+                            popupHtml += '<div class="address">' + addressDisplay + '</div>';
+                        } else if (event.city && (!event.locationName || event.locationName.toLowerCase().indexOf(event.city.toLowerCase()) === -1)) {
+                            // Afficher la ville seulement si pas d'adresse et pas déjà dans locationName
+                            popupHtml += '<div class="address">' + event.city + '</div>';
+                        }
                         
                         if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
                     }
