@@ -285,7 +285,7 @@ def reverse_geocode_nominatim(lat, lon):
 
 
 def geocode_address_nominatim(address_str):
-    """Géocode une adresse texte."""
+    """Géocode une adresse texte avec respect du rate limit Nominatim."""
     if not address_str:
         return None, None
     
@@ -305,6 +305,7 @@ def geocode_address_nominatim(address_str):
         if data:
             lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
             GEOCODE_CACHE[address_str] = (lat, lon)
+            time.sleep(0.05)  # 50ms entre requêtes (respect rate limit Nominatim)
             return lat, lon
     except Exception:
         pass
@@ -591,14 +592,38 @@ def geocode_cinema(cinema_name, cinema_address):
             CINEMA_COORDS_CACHE[cache_key] = coords
             return coords
     
-    # Géocodage Nominatim
+    # Géocodage Nominatim avec plusieurs stratégies
+    import re
+    
     if cinema_address:
+        # Stratégie 1: Adresse complète
         lat, lon = geocode_address_nominatim(f"{cinema_address}, France")
         if lat:
             CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
             save_cinema_coords_cache()
-            time.sleep(0.1)
             return (lat, lon)
+        
+        # Stratégie 2: Extraire code postal et ville de l'adresse
+        # Format typique: "... 63000 Clermont-Ferrand" ou "... 63220 Arlanc"
+        match = re.search(r'(\d{5})\s+([A-Za-zÀ-ÿ\-\' ]+)$', cinema_address)
+        if match:
+            cp, ville = match.groups()
+            simplified = f"{ville.strip()}, {cp}, France"
+            lat, lon = geocode_address_nominatim(simplified)
+            if lat:
+                CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
+                save_cinema_coords_cache()
+                return (lat, lon)
+        
+        # Stratégie 3: Juste le code postal (centre de la commune)
+        match_cp = re.search(r'(\d{5})', cinema_address)
+        if match_cp:
+            cp = match_cp.group(1)
+            lat, lon = geocode_address_nominatim(f"{cp}, France")
+            if lat:
+                CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
+                save_cinema_coords_cache()
+                return (lat, lon)
     
     CINEMA_COORDS_CACHE[cache_key] = (None, None)
     return (None, None)
