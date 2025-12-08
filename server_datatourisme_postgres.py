@@ -1379,7 +1379,7 @@ def parse_salon_date(date_str):
 
 @app.route('/api/salons/nearby', methods=['GET'])
 def get_nearby_salons():
-    """Salons à proximité - tous les salons 2025-2026."""
+    """Salons à proximité - tous les salons à venir (2025-2026)."""
     try:
         center_lat = request.args.get('lat', type=float)
         center_lon = request.args.get('lon', type=float)
@@ -1395,6 +1395,7 @@ def get_nearby_salons():
         print(f"🏢 Recherche salons: ({center_lat}, {center_lon}), rayon={radius_km}km")
         print(f"   Total salons en mémoire: {len(SALONS_DATA)}")
         
+        today = date.today()
         nearby_salons = []
         
         for salon in SALONS_DATA:
@@ -1404,9 +1405,14 @@ def get_nearby_salons():
             if not lat or not lon:
                 continue
             
-            # Filtrer uniquement par distance (pas de filtre date)
+            # Filtrer par distance
             dist = haversine_km(center_lat, center_lon, lat, lon)
             if dist > radius_km:
+                continue
+            
+            # Filtrer les salons passés
+            salon_date = parse_salon_date(salon.get('dates', ''))
+            if salon_date and salon_date < today:
                 continue
             
             nearby_salons.append({
