@@ -197,7 +197,7 @@
             font-weight: bold;
         }
         
-        /* 🎯 COULEURS DISTINCTES : Bleu pour événements, Rouge pour cinéma */
+        /* 🎯 COULEURS DISTINCTES : Bleu pour événements, Rouge pour cinéma, Vert pour salons */
         #toggle-events .toggle-value {
             color: #3b82f6;  /* Bleu vif */
         }
@@ -208,6 +208,14 @@
         
         #toggle-cinema .toggle-icon {
             color: #dc2626;
+        }
+        
+        #toggle-salons .toggle-value {
+            color: #22c55e;  /* Vert salons */
+        }
+        
+        #toggle-salons .toggle-icon {
+            color: #22c55e;
         }
 
         .toggle-label {
@@ -324,6 +332,103 @@
                 transform: scale(0.92);
                 box-shadow: 0 2px 15px rgba(220, 38, 38, 0.7);
             }
+        }
+
+        /* 🏢 MARQUEURS SALONS - VERT */
+        .salon-marker {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);  /* Vert dégradé */
+            animation: pulseSalon 1.8s ease-in-out infinite;
+            position: relative;
+        }
+        
+        .salon-marker::after {
+            content: '🏢';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        @keyframes pulseSalon {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 2px 8px rgba(34, 197, 94, 0.5);
+            }
+            50% { 
+                opacity: 0.85;
+                transform: scale(0.92);
+                box-shadow: 0 2px 15px rgba(34, 197, 94, 0.7);
+            }
+        }
+
+        /* 🏢 POPUP SALONS - STYLE VERT */
+        .salon-popup {
+            max-width: 320px;
+        }
+
+        .salon-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #166534;
+            line-height: 1.4;
+            border-left: 4px solid #22c55e;
+            padding-left: 10px;
+        }
+
+        .salon-popup .date {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .salon-popup .duration {
+            background: #dcfce7;
+            color: #166534;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            display: inline-block;
+            margin-left: 5px;
+        }
+
+        .salon-popup .venue {
+            font-size: 13px;
+            color: #444;
+            margin-bottom: 4px;
+        }
+
+        .salon-popup .venue strong {
+            color: #16a34a;
+        }
+
+        .salon-popup .link {
+            display: inline-block;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+
+        .salon-popup .link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
         }
 
         /* Indicateur de long-press */
@@ -555,6 +660,10 @@
             background: #dc2626;
         }
         
+        .legend-dot.salons {
+            background: #22c55e;
+        }
+        
         .legend-label {
             color: #555;
             font-weight: 500;
@@ -658,6 +767,14 @@
             </div>
             <span class="toggle-check">✓</span>
         </div>
+        <div class="source-toggle active" id="toggle-salons" onclick="toggleSalons()">
+            <span class="toggle-icon">🏢</span>
+            <div>
+                <div class="toggle-value" id="salons-count">0</div>
+                <div class="toggle-label">Salons</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
     </div>
 
     <div id="map-container">
@@ -673,6 +790,10 @@
             <div class="legend-item">
                 <div class="legend-dot cinema"></div>
                 <span class="legend-label">Cinémas</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot salons"></div>
+                <span class="legend-label">Salons</span>
             </div>
         </div>
     </div>
@@ -741,6 +862,8 @@
         var initialMapBounds = null;
         var showEvents = true;
         var showCinema = true;
+        var showSalons = true;
+        var salonsEventsData = [];
 
         // État du long-press
         var longPressTimer = null;
@@ -772,6 +895,16 @@
             return L.divIcon({
                 className: 'custom-div-icon',
                 html: '<div class="cinema-marker"></div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        // 🏢 ICÔNE SALON - VERT
+        function createSalonIcon() {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="salon-marker"></div>',
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             });
@@ -992,9 +1125,11 @@
             // 🎯 Réinitialiser les données
             eventsRawData = [];
             cinemaRawData = [];
+            salonsEventsData = [];
             eventsRealCount = 0;
             cinemaRealCount = 0;
             updateCounters();
+            document.getElementById('salons-count').textContent = '0';
         }
 
         function onLocationSelected(lat, lon) {
@@ -1142,6 +1277,10 @@
                 eventsToShow = eventsToShow.concat(cinemaRawData);
             }
             
+            if (showSalons) {
+                eventsToShow = eventsToShow.concat(salonsEventsData);
+            }
+            
             displayEventsOnMap(eventsToShow, lat, lon, currentRadiusKm);
         }
         
@@ -1169,6 +1308,60 @@
             } else {
                 refreshMapDisplay();
             }
+        }
+
+        function toggleSalons() {
+            showSalons = !showSalons;
+            var toggleEl = document.getElementById('toggle-salons');
+            toggleEl.classList.toggle('active', showSalons);
+            toggleEl.classList.toggle('inactive', !showSalons);
+            
+            // Si on active salons et qu'on n'a pas encore chargé les données
+            if (showSalons && currentPosition && salonsEventsData.length === 0) {
+                fetchSalonsEvents(
+                    currentPosition.coords.latitude, 
+                    currentPosition.coords.longitude, 
+                    currentRadiusKm
+                );
+            } else {
+                refreshMapDisplay();
+            }
+        }
+
+        // ============================================================
+        // 🏢 FETCH SALONS
+        // ============================================================
+        function fetchSalonsEvents(lat, lon, radiusKm) {
+            var url = SERVER_URL + '/api/salons/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm + '&days=365';
+            
+            var toggleSalonsEl = document.getElementById('toggle-salons');
+            toggleSalonsEl.classList.add('loading');
+            
+            document.getElementById('salons-count').textContent = '...';
+            
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    toggleSalonsEl.classList.remove('loading');
+                    
+                    if (data.status === 'success') {
+                        salonsEventsData = data.events || [];
+                        document.getElementById('salons-count').textContent = salonsEventsData.length;
+                        
+                        if (showSalons) {
+                            refreshMapDisplay();
+                        }
+                    } else {
+                        salonsEventsData = [];
+                        document.getElementById('salons-count').textContent = '0';
+                    }
+                })
+                .catch(function(error) {
+                    toggleSalonsEl.classList.remove('loading');
+                    console.error('Erreur fetch salons:', error);
+                    salonsEventsData = [];
+                    document.getElementById('salons-count').textContent = '0';
+                });
         }
 
         // ============================================================
@@ -1316,19 +1509,55 @@
                 
                 var firstEvent = eventsAtLocation[0];
                 var isCinema = firstEvent.source === 'Allocine';
+                var isSalon = firstEvent.source === 'EventsEye';
                 
                 // 🎯 ICÔNE SELON LE TYPE
-                var icon = isCinema ? createCinemaIcon() : createEventIcon();
+                var icon;
+                if (isCinema) {
+                    icon = createCinemaIcon();
+                } else if (isSalon) {
+                    icon = createSalonIcon();
+                } else {
+                    icon = createEventIcon();
+                }
                 
                 var marker = L.marker([firstEvent.latitude, firstEvent.longitude], {
                     icon: icon,
-                    isCinema: isCinema  // Flag pour le clustering
+                    isCinema: isCinema,
+                    isSalon: isSalon
                 });
                 
                 // 🎯 POPUP SELON LE TYPE
                 var popupHtml;
                 
-                if (isCinema) {
+                if (isSalon) {
+                    // 🏢 POPUP SALON - STYLE VERT
+                    popupHtml = '<div class="salon-popup">';
+                    popupHtml += '<h3>🏢 ' + firstEvent.title + '</h3>';
+                    
+                    if (firstEvent.begin) {
+                        popupHtml += '<span class="date">📅 ' + firstEvent.begin + '</span>';
+                    }
+                    if (firstEvent.duration) {
+                        popupHtml += '<span class="duration">' + firstEvent.duration + '</span>';
+                    }
+                    
+                    if (firstEvent.locationName) {
+                        popupHtml += '<div class="venue"><strong>📍</strong> ' + firstEvent.locationName + '</div>';
+                    }
+                    if (firstEvent.city) {
+                        popupHtml += '<div style="font-size:12px;color:#666;">' + firstEvent.city + '</div>';
+                    }
+                    if (firstEvent.frequency) {
+                        popupHtml += '<div style="font-size:11px;color:#888;margin-top:5px;">🔄 ' + firstEvent.frequency + '</div>';
+                    }
+                    
+                    if (firstEvent.openagendaUrl) {
+                        popupHtml += '<a href="' + firstEvent.openagendaUrl + '" target="_blank" class="link">Plus d\'infos →</a>';
+                    }
+                    popupHtml += '</div>';
+                    
+                } else if (isCinema) {
                     // 🎬 POPUP CINÉMA - STYLE ROUGE
                     popupHtml = '<div class="cinema-popup">';
                     popupHtml += '<span class="cinema-badge">🎬 CINÉMA</span>';
@@ -1492,6 +1721,11 @@
                     // Charger les cinémas si le toggle est actif
                     if (showCinema) {
                         fetchCinemaEvents(lat, lon, currentRadiusKm);
+                    }
+                    
+                    // Charger les salons si le toggle est actif
+                    if (showSalons) {
+                        fetchSalonsEvents(lat, lon, currentRadiusKm);
                     }
                 })
                 .catch(function(e) {
