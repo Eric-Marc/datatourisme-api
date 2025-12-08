@@ -213,10 +213,16 @@ def load_cinemas_cnc():
         print(f"   ⚠️ Fichier CNC non trouvé: {cnc_file}")
 
 
-def find_cinema_gps_cnc(cinema_name, cinema_address=None):
+def find_cinema_gps_cnc(cinema_name, cinema_address=None, dept_code=None):
     """
     Recherche les coordonnées GPS d'un cinéma dans la base CNC.
     Utilise une recherche fuzzy basée sur les mots-clés du nom.
+    Prend en compte le département pour éviter les homonymes.
+    
+    Args:
+        cinema_name: Nom du cinéma (ex: "Le Travelling")
+        cinema_address: Adresse complète (ex: "... 34300 Agde")
+        dept_code: Code département (ex: "34")
     
     Returns: (lat, lon) ou (None, None)
     """
@@ -245,13 +251,21 @@ def find_cinema_gps_cnc(cinema_name, cinema_address=None):
     search_keywords.discard('cine')
     search_keywords.discard('ciné')
     
-    # Extraire la ville de l'adresse si disponible
+    # Extraire le département et la ville de l'adresse si disponible
+    search_dept = dept_code
     search_commune = None
     if cinema_address:
         # Chercher le code postal et la ville
         match = re.search(r'(\d{5})\s+([A-Za-zÀ-ÿ\-\' ]+)$', cinema_address)
         if match:
+            cp = match.group(1)
             search_commune = match.group(2).lower().strip()
+            # Extraire le département du code postal
+            if not search_dept:
+                if cp.upper().startswith('2A') or cp.upper().startswith('2B'):
+                    search_dept = cp[:2].upper()
+                else:
+                    search_dept = cp[:2]
     
     best_match = None
     best_score = 0
@@ -273,9 +287,13 @@ def find_cinema_gps_cnc(cinema_name, cinema_address=None):
         elif name_normalized in cinema['nom_normalized'] or cinema['nom_normalized'] in name_normalized:
             score += 50
         
+        # IMPORTANT: Bonus si le département correspond (évite les homonymes)
+        if search_dept and cinema.get('dept') == search_dept:
+            score += 200  # Priorité forte au département
+        
         # Bonus si la commune correspond
         if search_commune and search_commune in cinema['commune_normalized']:
-            score += 30
+            score += 100
         
         if score > best_score:
             best_score = score
@@ -684,20 +702,25 @@ def get_cinemas_for_department(dept_id):
         return []
 
 
-def geocode_cinema(cinema_name, cinema_address):
+def geocode_cinema(cinema_name, cinema_address, dept_code=None):
     """
     Géocode un cinéma avec priorité:
     1. Cache local
     2. Base CNC (2053 cinémas français avec GPS)
     3. Coordonnées connues (fallback)
     4. Nominatim (dernier recours)
+    
+    Args:
+        cinema_name: Nom du cinéma
+        cinema_address: Adresse du cinéma
+        dept_code: Code département (ex: "34") pour éviter les homonymes
     """
-    cache_key = f"{cinema_name}:{cinema_address}"
+    cache_key = f"{cinema_name}:{cinema_address}:{dept_code}"
     if cache_key in CINEMA_COORDS_CACHE:
         return CINEMA_COORDS_CACHE[cache_key]
     
-    # 1. Chercher dans la base CNC (instantané)
-    lat, lon = find_cinema_gps_cnc(cinema_name, cinema_address)
+    # 1. Chercher dans la base CNC (instantané) - avec département
+    lat, lon = find_cinema_gps_cnc(cinema_name, cinema_address, dept_code)
     if lat and lon:
         CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
         return (lat, lon)
@@ -860,11 +883,19 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     if not all_cinemas:
         return []
     
+    # Extraire le code département pour le géocodage
+    dept_code = None
+    if postcode:
+        if postcode.upper().startswith('2A') or postcode.upper().startswith('2B'):
+            dept_code = postcode[:2].upper()
+        else:
+            dept_code = postcode[:2]
+    
     # 5. Filtrer par distance
     nearby_cinemas = []
     seen_ids = set()
     
-    print(f"   🔍 Géocodage de {len(all_cinemas)} cinémas...")
+    print(f"   🔍 Géocodage de {len(all_cinemas)} cinémas (dept={dept_code})...")
     
     for cinema in all_cinemas:
         cinema_id = cinema.get('id')
@@ -875,7 +906,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
         cinema_name = cinema.get('name', '')
         cinema_address = cinema.get('address', '')
         
-        lat, lon = geocode_cinema(cinema_name, cinema_address)
+        # Passer le code département pour éviter les homonymes
+        lat, lon = geocode_cinema(cinema_name, cinema_address, dept_code)
         
         if lat and lon:
             dist = haversine_km(center_lat, center_lon, lat, lon)
