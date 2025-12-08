@@ -953,34 +953,55 @@ def fetch_movies_for_cinema(cinema_info, today_str):
         return cinema_info, []
 
 
-def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas=50):
+# ============================================================================
+# CINÉMAS ALLOCINÉ - VERSION ULTRA-OPTIMISÉE
+# ============================================================================
+
+CINEMAS_ALLOCINE_DATA = []
+
+def load_cinemas_allocine():
+    """Charge la base complète des cinémas Allociné avec GPS."""
+    global CINEMAS_ALLOCINE_DATA
+    try:
+        allocine_file = os.path.join(os.path.dirname(__file__), 'cinemas_allocine_complet.json')
+        if os.path.exists(allocine_file):
+            with open(allocine_file, 'r', encoding='utf-8') as f:
+                CINEMAS_ALLOCINE_DATA = json.load(f)
+            print(f"✅ Cinémas Allociné chargés: {len(CINEMAS_ALLOCINE_DATA)}")
+        else:
+            print(f"⚠️ Fichier cinemas_allocine_complet.json non trouvé")
+    except Exception as e:
+        print(f"❌ Erreur chargement cinémas Allociné: {e}")
+
+
+def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas=20):
     """
-    🎬 VERSION OPTIMISÉE - Recherche spatiale dans la base CNC d'abord
+    🚀 VERSION ULTRA-OPTIMISÉE
     
-    Nouveau flux:
-    1. Base CNC: Trouver tous les cinémas dans le rayon (recherche GPS directe)
-    2. Pour chaque cinéma CNC → chercher correspondance Allociné par département
-    3. Récupérer les films
+    Utilise directement cinemas_allocine_complet.json (2334 cinémas avec GPS)
+    Plus besoin de: CNC matching, département lookup, géocodage
     
-    Avantage: Pas de géocodage, pas de cinémas hors rayon, plus rapide !
+    1. Recherche spatiale directe (instantané)
+    2. Récupération des films
     """
+    
     if not ALLOCINE_AVAILABLE:
         return []
     
-    print(f"🎬 Cinéma (recherche spatiale CNC): ({center_lat:.4f}, {center_lon:.4f}), {radius_km}km")
+    print(f"🎬 Cinéma (optimisé): ({center_lat:.4f}, {center_lon:.4f}), {radius_km}km")
     start_time = time.time()
     
-    # Charger la base CNC si pas encore fait
-    if not CINEMAS_CNC_DATA:
-        load_cinemas_cnc()
+    # Charger la base si pas encore fait
+    if not CINEMAS_ALLOCINE_DATA:
+        load_cinemas_allocine()
     
-    if not CINEMAS_CNC_DATA:
-        print("   ⚠️ Base CNC non disponible")
+    if not CINEMAS_ALLOCINE_DATA:
+        print("   ⚠️ Base cinémas non disponible")
         return []
     
-    # 1. Recherche spatiale dans la base CNC (instantané)
-    nearby_cnc_cinemas = []
-    for cinema in CINEMAS_CNC_DATA:
+    # 1. Recherche spatiale (instantané)
+    nearby_cinemas = []
+    for cinema in CINEMAS_ALLOCINE_DATA:
         lat = cinema.get('lat')
         lon = cinema.get('lon')
         if not lat or not lon:
@@ -988,145 +1009,90 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
         
         dist = haversine_km(center_lat, center_lon, lat, lon)
         if dist <= radius_km:
-            nearby_cnc_cinemas.append({
-                'nom': cinema['nom'],
-                'nom_normalized': cinema['nom_normalized'],
-                'keywords': cinema.get('keywords', []),
-                'commune': cinema.get('commune', ''),
-                'dept': cinema.get('dept', ''),
+            nearby_cinemas.append({
+                'id': cinema['id'],
+                'name': cinema['name'],
+                'address': cinema.get('address', ''),
                 'lat': lat,
                 'lon': lon,
                 'distance': dist
             })
     
-    nearby_cnc_cinemas.sort(key=lambda c: c['distance'])
-    print(f"   📍 Base CNC: {len(nearby_cnc_cinemas)} cinémas dans le rayon de {radius_km}km")
+    nearby_cinemas.sort(key=lambda c: c['distance'])
+    print(f"   📍 {len(nearby_cinemas)} cinémas trouvés")
     
-    if not nearby_cnc_cinemas:
+    if not nearby_cinemas:
         return []
     
-    # Limiter le nombre
-    if len(nearby_cnc_cinemas) > max_cinemas:
-        nearby_cnc_cinemas = nearby_cnc_cinemas[:max_cinemas]
+    # Limiter
+    if len(nearby_cinemas) > max_cinemas:
+        nearby_cinemas = nearby_cinemas[:max_cinemas]
+        print(f"   📍 Limité à {max_cinemas} cinémas")
     
-    # Afficher les cinémas trouvés
-    for c in nearby_cnc_cinemas:
-        print(f"      📍 {c['nom']} ({c['commune']}): {c['distance']:.1f}km")
-    
-    # 2. Charger le mapping Allociné si pas encore fait
-    if not ALLOCINE_DEPT_MAPPING_LOADED:
-        load_allocine_departments()
-    
-    # 3. Récupérer les cinémas Allociné des départements concernés
-    dept_codes = set(c['dept'] for c in nearby_cnc_cinemas if c.get('dept'))
-    print(f"   🗺️ Départements concernés: {dept_codes}")
-    
-    allocine_cinemas = []
-    for dept_code in dept_codes:
-        dept_name = get_dept_name_from_code(dept_code)
-        if dept_name:
-            dept_id = get_allocine_dept_id_dynamic(dept_name)
-            if dept_id:
-                cinemas = get_cinemas_for_department(dept_id)
-                allocine_cinemas.extend(cinemas)
-                print(f"      🎦 {dept_name} ({dept_code}): {len(cinemas)} cinémas Allociné")
-    
-    print(f"   🎦 Total Allociné: {len(allocine_cinemas)} cinémas")
-    
-    # 4. Faire la correspondance CNC → Allociné
-    matched_cinemas = []
-    
-    for cnc_cinema in nearby_cnc_cinemas:
-        best_match = find_allocine_match(cnc_cinema, allocine_cinemas)
-        
-        if best_match:
-            matched_cinemas.append({
-                'id': best_match.get('id'),
-                'name': cnc_cinema['nom'],
-                'address': best_match.get('address', ''),
-                'lat': cnc_cinema['lat'],
-                'lon': cnc_cinema['lon'],
-                'distance': cnc_cinema['distance']
-            })
-            print(f"      ✅ {cnc_cinema['nom']} → Allociné ID {best_match.get('id')}")
-        else:
-            print(f"      ⚠️ {cnc_cinema['nom']}: pas de correspondance Allociné")
-    
-    print(f"   🎯 {len(matched_cinemas)} cinémas avec correspondance Allociné")
-    
-    if not matched_cinemas:
-        return []
-    
-    # 5. Récupérer les films - SÉQUENTIELLEMENT pour éviter le rate limit 429
+    # 2. Récupérer les films
     today_str = date.today().strftime("%Y-%m-%d")
     all_events = []
     
-    # Limiter à 20 cinémas max pour éviter trop de requêtes
-    cinemas_to_fetch = matched_cinemas[:20]
+    print(f"   🎬 Récupération des films...")
     
-    print(f"   🎬 Récupération des films pour {len(cinemas_to_fetch)} cinémas...")
-    
-    for i, cinema in enumerate(cinemas_to_fetch):
+    for i, cinema in enumerate(nearby_cinemas):
         try:
             cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
             
             if movies:
-                print(f"      🎬 {cinema_info['name']}: {len(movies)} films")
+                print(f"      🎬 {cinema_info['name'][:30]}: {len(movies)} films")
                 for movie in movies:
-                        # Gestion de la durée
-                        runtime = movie.get('runtime', 0)
-                        duration_str = movie.get('duration', '')
-                        
-                        if runtime and isinstance(runtime, int):
-                            h, m = runtime // 3600, (runtime % 3600) // 60
-                            duration = f"{h}h{m:02d}" if h else f"{m}min"
-                        elif duration_str:
-                            duration = duration_str
-                        else:
-                            duration = ""
-                        
-                        showtimes_str = movie.get('showtimes_str', '')
-                        genres = movie.get('genres', [])
-                        genres_str = ", ".join(genres[:3]) if genres else ""
-                        
-                        desc_parts = []
-                        if duration:
-                            desc_parts.append(duration)
-                        if genres_str:
-                            desc_parts.append(genres_str)
-                        if movie.get('isPremiere'):
-                            desc_parts.append("🌟 Avant-première")
-                        if movie.get('weeklyOuting'):
-                            desc_parts.append("🆕 Sortie")
-                        if showtimes_str:
-                            desc_parts.append(showtimes_str)
-                        
-                        event = {
-                            "uid": f"allocine-{cinema_info['id']}-{movie.get('title', '')[:20]}",
-                            "title": f"🎬 {movie.get('title', 'Film')}",
-                            "begin": today_str,
-                            "end": today_str,
-                            "locationName": cinema_info['name'],
-                            "city": "",
-                            "address": cinema_info['address'],
-                            "latitude": cinema_info['lat'],
-                            "longitude": cinema_info['lon'],
-                            "distanceKm": round(cinema_info['distance'], 1),
-                            "openagendaUrl": "",
-                            "agendaTitle": f"Cinéma {cinema_info['name']}",
-                            "source": "Allocine",
-                            "description": " • ".join(desc_parts) if desc_parts else "Séances disponibles",
-                            "poster": movie.get('urlPoster', ''),
-                            "genres": genres,
-                        }
-                        all_events.append(event)
-            else:
-                print(f"      ⚠️ {cinema_info['name']}: 0 films")
+                    runtime = movie.get('runtime', 0)
+                    duration_str = movie.get('duration', '')
+                    
+                    if runtime and isinstance(runtime, int):
+                        h, m = runtime // 3600, (runtime % 3600) // 60
+                        duration = f"{h}h{m:02d}" if h else f"{m}min"
+                    elif duration_str:
+                        duration = duration_str
+                    else:
+                        duration = ""
+                    
+                    showtimes_str = movie.get('showtimes_str', '')
+                    genres = movie.get('genres', [])
+                    genres_str = ", ".join(genres[:3]) if genres else ""
+                    
+                    desc_parts = []
+                    if duration:
+                        desc_parts.append(duration)
+                    if genres_str:
+                        desc_parts.append(genres_str)
+                    if movie.get('isPremiere'):
+                        desc_parts.append("🌟 Avant-première")
+                    if movie.get('weeklyOuting'):
+                        desc_parts.append("🆕 Sortie")
+                    if showtimes_str:
+                        desc_parts.append(showtimes_str)
+                    
+                    event = {
+                        "uid": f"allocine-{cinema_info['id']}-{movie.get('title', '')[:20]}",
+                        "title": f"🎬 {movie.get('title', 'Film')}",
+                        "begin": today_str,
+                        "end": today_str,
+                        "locationName": cinema_info['name'],
+                        "city": "",
+                        "address": cinema_info['address'],
+                        "latitude": cinema_info['lat'],
+                        "longitude": cinema_info['lon'],
+                        "distanceKm": round(cinema_info['distance'], 1),
+                        "openagendaUrl": "",
+                        "agendaTitle": f"Cinéma {cinema_info['name']}",
+                        "source": "Allocine",
+                        "description": " • ".join(desc_parts) if desc_parts else "Séances disponibles",
+                        "poster": movie.get('urlPoster', ''),
+                        "genres": genres,
+                    }
+                    all_events.append(event)
         except Exception as e:
-            print(f"      ❌ Erreur cinéma {cinema.get('name', '?')}: {e}")
+            print(f"      ❌ Erreur {cinema.get('name', '?')[:20]}: {e}")
         
-        # Délai entre les requêtes pour éviter le rate limit 429
-        if i < len(cinemas_to_fetch) - 1:
+        # Délai pour éviter rate limit 429
+        if i < len(nearby_cinemas) - 1:
             time.sleep(0.3)
     
     print(f"   ✅ {len(all_events)} films en {time.time()-start_time:.1f}s")
