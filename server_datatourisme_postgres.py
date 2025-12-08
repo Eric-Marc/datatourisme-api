@@ -907,31 +907,66 @@ def fetch_movies_for_cinema(cinema_info, today_str):
         try:
             showtimes = api.get_showtime(cinema_id, today_str)
             if showtimes:
-                # Convertir showtimes en format compatible
                 movies = []
                 for show in showtimes:
-                    # Extraire les horaires
-                    vf = show.get('VF', [])
-                    vo = show.get('VO', [])
-                    vost = show.get('VOST', [])
+                    title = show.get('title', 'Film')
                     
-                    versions = []
-                    if vf:
-                        versions.append(f"VF: {', '.join(vf[:3])}")
-                    if vo:
-                        versions.append(f"VO: {', '.join(vo[:3])}")
-                    if vost:
-                        versions.append(f"VOST: {', '.join(vost[:3])}")
+                    # Nouveau format: showtimes avec startsAt et diffusionVersion
+                    show_times = show.get('showtimes', [])
+                    
+                    if show_times:
+                        # Grouper par version (LOCAL=VF, ORIGINAL=VO)
+                        vf_times = []
+                        vo_times = []
+                        
+                        for st in show_times:
+                            starts_at = st.get('startsAt', '')
+                            version = st.get('diffusionVersion', '')
+                            
+                            # Extraire l'heure (HH:MM)
+                            if 'T' in starts_at:
+                                time_part = starts_at.split('T')[1][:5]
+                            else:
+                                time_part = starts_at
+                            
+                            if version == 'LOCAL':
+                                vf_times.append(time_part)
+                            else:  # ORIGINAL
+                                vo_times.append(time_part)
+                        
+                        # Construire la chaîne d'horaires
+                        versions = []
+                        if vf_times:
+                            versions.append(f"VF: {', '.join(vf_times[:4])}")
+                        if vo_times:
+                            versions.append(f"VO: {', '.join(vo_times[:4])}")
+                        
+                        showtimes_str = " | ".join(versions) if versions else "Horaires disponibles"
+                    else:
+                        # Ancien format avec VF/VO/VOST
+                        vf = show.get('VF', [])
+                        vo = show.get('VO', [])
+                        vost = show.get('VOST', [])
+                        
+                        versions = []
+                        if vf:
+                            versions.append(f"VF: {', '.join(vf[:4])}")
+                        if vo:
+                            versions.append(f"VO: {', '.join(vo[:4])}")
+                        if vost:
+                            versions.append(f"VOST: {', '.join(vost[:4])}")
+                        
+                        showtimes_str = " | ".join(versions) if versions else "Horaires non disponibles"
                     
                     movies.append({
-                        'title': show.get('title', 'Film'),
-                        'runtime': 0,  # Non disponible avec get_showtime
+                        'title': title,
+                        'runtime': 0,
                         'genres': [],
                         'urlPoster': '',
                         'director': '',
                         'isPremiere': False,
                         'weeklyOuting': False,
-                        'showtimes_str': " | ".join(versions) if versions else "Horaires non disponibles",
+                        'showtimes_str': showtimes_str,
                         'duration': show.get('duration', ''),
                     })
                 return cinema_info, movies
