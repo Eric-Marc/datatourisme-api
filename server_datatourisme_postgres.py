@@ -906,6 +906,15 @@ def fetch_movies_for_cinema(cinema_info, today_str):
         # Essayer d'abord get_showtime (plus fiable)
         try:
             showtimes = api.get_showtime(cinema_id, today_str)
+            
+            # DEBUG: Voir ce que retourne l'API
+            if showtimes:
+                print(f"      📋 {cinema_id}: {len(showtimes)} films reçus")
+                if len(showtimes) > 0:
+                    print(f"         Exemple: {showtimes[0]}")
+            else:
+                print(f"      📋 {cinema_id}: showtimes vide ou None")
+            
             if showtimes:
                 movies = []
                 for show in showtimes:
@@ -977,6 +986,7 @@ def fetch_movies_for_cinema(cinema_info, today_str):
         try:
             movies = api.get_movies(cinema_id, today_str)
             if movies:
+                print(f"      📋 {cinema_id}: get_movies retourne {len(movies)} films")
                 return cinema_info, movies
         except Exception as e:
             print(f"      ⚠️ get_movies({cinema_id}) failed: {e}")
