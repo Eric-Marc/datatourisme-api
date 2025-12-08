@@ -1165,45 +1165,71 @@ def get_dept_name_from_code(dept_code):
 def find_allocine_match(cnc_cinema, allocine_cinemas):
     """
     Trouve la correspondance entre un cinéma CNC et la liste Allociné.
-    Utilise les mots-clés et le nom normalisé.
+    Utilise les mots-clés et le nom normalisé (sans accents).
     """
     import re
+    import unicodedata
     
-    cnc_name = cnc_cinema['nom_normalized']
-    cnc_keywords = set(cnc_cinema.get('keywords', []))
-    cnc_commune = cnc_cinema.get('commune', '').lower()
+    def remove_accents(text):
+        """Supprime les accents d'un texte."""
+        return ''.join(
+            c for c in unicodedata.normalize('NFD', text)
+            if unicodedata.category(c) != 'Mn'
+        )
+    
+    def extract_keywords(name):
+        """Extrait les mots-clés d'un nom (sans accents, sans mots vides)."""
+        name_lower = name.lower().strip()
+        name_no_accents = remove_accents(name_lower)
+        # Remplacer les tirets et caractères spéciaux par des espaces
+        name_normalized = re.sub(r'[^a-z0-9]+', ' ', name_no_accents)
+        name_normalized = re.sub(r'\s+', ' ', name_normalized).strip()
+        
+        keywords = set(name_normalized.split())
+        # Supprimer les mots vides courts uniquement
+        stop_words = {'le', 'la', 'les', 'du', 'de', 'des', 'sur', 'en', 'et'}
+        keywords -= stop_words
+        return keywords, name_normalized
+    
+    cnc_keywords, cnc_norm = extract_keywords(cnc_cinema['nom'])
+    cnc_commune_norm = remove_accents(cnc_cinema.get('commune', '').lower())
     
     best_match = None
     best_score = 0
     
     for alloc_cinema in allocine_cinemas:
-        alloc_name = alloc_cinema.get('name', '').lower().strip()
-        alloc_name_normalized = re.sub(r'\s+', ' ', alloc_name)
-        
-        # Extraire les mots-clés du nom Allociné
-        alloc_keywords = set(re.findall(r'[a-zàâäéèêëïîôùûüç0-9]+', alloc_name_normalized))
-        alloc_keywords.discard('le')
-        alloc_keywords.discard('la')
-        alloc_keywords.discard('les')
-        alloc_keywords.discard('cinema')
-        alloc_keywords.discard('cinéma')
+        alloc_name = alloc_cinema.get('name', '')
+        alloc_keywords, alloc_norm = extract_keywords(alloc_name)
         
         # Score basé sur les mots-clés communs
         common = cnc_keywords & alloc_keywords
-        if not common:
-            continue
         
         score = len(common) * 10
         
+        # Si pas de mots communs, essayer une correspondance partielle
+        if not common:
+            # Chercher si un mot de l'un contient un mot de l'autre
+            for cnc_kw in cnc_keywords:
+                for alloc_kw in alloc_keywords:
+                    if len(cnc_kw) >= 4 and len(alloc_kw) >= 4:
+                        if cnc_kw in alloc_kw or alloc_kw in cnc_kw:
+                            score += 8
+                            break
+        
+        if score == 0:
+            continue
+        
         # Bonus si noms similaires
-        if cnc_name == alloc_name_normalized:
+        if cnc_norm == alloc_norm:
             score += 100
-        elif cnc_name in alloc_name_normalized or alloc_name_normalized in cnc_name:
+        elif cnc_norm in alloc_norm or alloc_norm in cnc_norm:
             score += 50
         
         # Bonus si commune dans le nom Allociné
-        if cnc_commune and cnc_commune in alloc_name_normalized:
-            score += 30
+        if cnc_commune_norm and len(cnc_commune_norm) > 3:
+            alloc_norm_for_commune = remove_accents(alloc_name.lower())
+            if cnc_commune_norm in alloc_norm_for_commune:
+                score += 30
         
         if score > best_score:
             best_score = score
@@ -1314,6 +1340,112 @@ def get_nearby_cinema():
         
     except Exception as e:
         print(f"❌ Erreur: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================================
+# SALONS (EventsEye)
+# ============================================================================
+
+SALONS_DATA = []
+
+def load_salons_data():
+    """Charge les données des salons depuis le fichier JSON."""
+    global SALONS_DATA
+    try:
+        import os
+        salons_file = os.path.join(os.path.dirname(__file__), 'salons_france.json')
+        if os.path.exists(salons_file):
+            with open(salons_file, 'r', encoding='utf-8') as f:
+                SALONS_DATA = json.load(f)
+            print(f"✅ Salons chargés: {len(SALONS_DATA)}")
+        else:
+            print(f"⚠️ Fichier salons_france.json non trouvé")
+    except Exception as e:
+        print(f"❌ Erreur chargement salons: {e}")
+
+
+def parse_salon_date(date_str):
+    """Parse une date de salon (format DD/MM/YYYY)."""
+    try:
+        from datetime import datetime
+        return datetime.strptime(date_str, '%d/%m/%Y').date()
+    except:
+        return None
+
+
+@app.route('/api/salons/nearby', methods=['GET'])
+def get_nearby_salons():
+    """Salons à proximité."""
+    try:
+        center_lat = request.args.get('lat', type=float)
+        center_lon = request.args.get('lon', type=float)
+        radius_km = request.args.get('radiusKm', RADIUS_KM_DEFAULT, type=int)
+        days_ahead = request.args.get('days', 365, type=int)  # Par défaut 1 an
+        
+        if center_lat is None or center_lon is None:
+            return jsonify({"status": "error", "message": "Paramètres 'lat' et 'lon' requis"}), 400
+        
+        # Charger les salons si pas encore fait
+        if not SALONS_DATA:
+            load_salons_data()
+        
+        today = date.today()
+        max_date = today + timedelta(days=days_ahead)
+        
+        nearby_salons = []
+        
+        for salon in SALONS_DATA:
+            lat = salon.get('lat')
+            lon = salon.get('lon')
+            
+            if not lat or not lon:
+                continue
+            
+            # Filtrer par distance
+            dist = haversine_km(center_lat, center_lon, lat, lon)
+            if dist > radius_km:
+                continue
+            
+            # Filtrer par date
+            salon_date = parse_salon_date(salon.get('dates', ''))
+            if salon_date:
+                if salon_date < today or salon_date > max_date:
+                    continue
+            
+            nearby_salons.append({
+                "uid": f"salon-{hash(salon['name']) % 100000}",
+                "title": salon['name'],
+                "begin": salon.get('dates', ''),
+                "duration": salon.get('duration', ''),
+                "locationName": salon.get('venue', ''),
+                "city": salon.get('city', ''),
+                "latitude": lat,
+                "longitude": lon,
+                "distanceKm": round(dist, 1),
+                "frequency": salon.get('frequency', ''),
+                "openagendaUrl": salon.get('url', ''),
+                "source": "EventsEye"
+            })
+        
+        # Trier par distance
+        nearby_salons.sort(key=lambda s: s['distanceKm'])
+        
+        print(f"🏢 Salons: {len(nearby_salons)} trouvés dans {radius_km}km")
+        
+        return jsonify({
+            "status": "success",
+            "center": {"latitude": center_lat, "longitude": center_lon},
+            "radiusKm": radius_km,
+            "events": nearby_salons,
+            "count": len(nearby_salons),
+            "source": "EventsEye"
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur salons: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
