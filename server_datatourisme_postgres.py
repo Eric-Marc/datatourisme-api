@@ -1391,6 +1391,9 @@ def get_nearby_salons():
         if not SALONS_DATA:
             load_salons_data()
         
+        print(f"🏢 Recherche salons: ({center_lat}, {center_lon}), rayon={radius_km}km")
+        print(f"   Total salons en mémoire: {len(SALONS_DATA)}")
+        
         nearby_salons = []
         
         for salon in SALONS_DATA:
