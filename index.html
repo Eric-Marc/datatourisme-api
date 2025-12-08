@@ -1478,15 +1478,6 @@
                     dashArray: '5, 10',
                     interactive: false
                 }).addTo(map);
-
-                currentCenterMarker = L.marker([centerLat, centerLon], {
-                    icon: L.divIcon({
-                        className: 'center-marker',
-                        html: '<div style="background:#22c55e;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
-                        iconSize: [16, 16],
-                        iconAnchor: [8, 8]
-                    })
-                }).addTo(map).bindPopup('<strong>📍 Point de recherche</strong>');
             }
 
             // Grouper par lieu
