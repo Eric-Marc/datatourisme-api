@@ -181,6 +181,111 @@ CINEMAS_BY_DEPT_CACHE = {}
 CINEMAS_CACHE_TIMESTAMPS = {}
 CINEMAS_CACHE_DURATION = 3600 * 6  # 6 heures
 
+# ============================================================================
+# BASE DE DONNÉES CNC DES CINÉMAS FRANÇAIS (avec GPS)
+# ============================================================================
+
+CINEMAS_CNC_DATA = []  # Liste des cinémas avec coordonnées GPS
+CINEMAS_CNC_LOADED = False
+
+def load_cinemas_cnc():
+    """
+    Charge la base de données CNC des cinémas français avec coordonnées GPS.
+    Fichier généré depuis Données_cartographie_2024.xlsx du CNC.
+    """
+    global CINEMAS_CNC_DATA, CINEMAS_CNC_LOADED
+    
+    if CINEMAS_CNC_LOADED:
+        return
+    
+    import json
+    cnc_file = os.path.join(os.path.dirname(__file__), 'cinemas_france_data.json')
+    
+    if os.path.exists(cnc_file):
+        try:
+            with open(cnc_file, 'r', encoding='utf-8') as f:
+                CINEMAS_CNC_DATA = json.load(f)
+            CINEMAS_CNC_LOADED = True
+            print(f"   ✅ Base CNC chargée: {len(CINEMAS_CNC_DATA)} cinémas avec GPS")
+        except Exception as e:
+            print(f"   ⚠️ Erreur chargement base CNC: {e}")
+    else:
+        print(f"   ⚠️ Fichier CNC non trouvé: {cnc_file}")
+
+
+def find_cinema_gps_cnc(cinema_name, cinema_address=None):
+    """
+    Recherche les coordonnées GPS d'un cinéma dans la base CNC.
+    Utilise une recherche fuzzy basée sur les mots-clés du nom.
+    
+    Returns: (lat, lon) ou (None, None)
+    """
+    if not CINEMAS_CNC_DATA:
+        load_cinemas_cnc()
+    
+    if not CINEMAS_CNC_DATA:
+        return None, None
+    
+    import re
+    
+    # Normaliser le nom recherché
+    name_normalized = cinema_name.lower().strip()
+    name_normalized = re.sub(r'\s+', ' ', name_normalized)
+    
+    # Extraire les mots-clés du nom recherché
+    search_keywords = set(re.findall(r'[a-zàâäéèêëïîôùûüç0-9]+', name_normalized))
+    search_keywords.discard('le')
+    search_keywords.discard('la')
+    search_keywords.discard('les')
+    search_keywords.discard('du')
+    search_keywords.discard('de')
+    search_keywords.discard('des')
+    search_keywords.discard('cinema')
+    search_keywords.discard('cinéma')
+    search_keywords.discard('cine')
+    search_keywords.discard('ciné')
+    
+    # Extraire la ville de l'adresse si disponible
+    search_commune = None
+    if cinema_address:
+        # Chercher le code postal et la ville
+        match = re.search(r'(\d{5})\s+([A-Za-zÀ-ÿ\-\' ]+)$', cinema_address)
+        if match:
+            search_commune = match.group(2).lower().strip()
+    
+    best_match = None
+    best_score = 0
+    
+    for cinema in CINEMAS_CNC_DATA:
+        cinema_keywords = set(cinema.get('keywords', []))
+        
+        # Score basé sur les mots-clés communs
+        common_keywords = search_keywords & cinema_keywords
+        
+        if not common_keywords:
+            continue
+        
+        score = len(common_keywords) * 10
+        
+        # Bonus si le nom correspond exactement
+        if name_normalized == cinema['nom_normalized']:
+            score += 100
+        elif name_normalized in cinema['nom_normalized'] or cinema['nom_normalized'] in name_normalized:
+            score += 50
+        
+        # Bonus si la commune correspond
+        if search_commune and search_commune in cinema['commune_normalized']:
+            score += 30
+        
+        if score > best_score:
+            best_score = score
+            best_match = cinema
+    
+    if best_match and best_score >= 10:
+        return best_match['lat'], best_match['lon']
+    
+    return None, None
+
 # OpenAgenda
 OPENAGENDA_MAX_WORKERS = 10
 OPENAGENDA_AGENDAS_LIMIT = 30
@@ -580,19 +685,31 @@ def get_cinemas_for_department(dept_id):
 
 
 def geocode_cinema(cinema_name, cinema_address):
-    """Géocode un cinéma avec cache et coordonnées connues."""
+    """
+    Géocode un cinéma avec priorité:
+    1. Cache local
+    2. Base CNC (2053 cinémas français avec GPS)
+    3. Coordonnées connues (fallback)
+    4. Nominatim (dernier recours)
+    """
     cache_key = f"{cinema_name}:{cinema_address}"
     if cache_key in CINEMA_COORDS_CACHE:
         return CINEMA_COORDS_CACHE[cache_key]
     
-    # Coordonnées connues
+    # 1. Chercher dans la base CNC (instantané)
+    lat, lon = find_cinema_gps_cnc(cinema_name, cinema_address)
+    if lat and lon:
+        CINEMA_COORDS_CACHE[cache_key] = (lat, lon)
+        return (lat, lon)
+    
+    # 2. Coordonnées connues (fallback manuel)
     name_lower = cinema_name.lower().strip()
     for known_name, coords in KNOWN_CINEMAS_GPS.items():
         if known_name in name_lower or name_lower.startswith(known_name[:10]):
             CINEMA_COORDS_CACHE[cache_key] = coords
             return coords
     
-    # Géocodage Nominatim avec plusieurs stratégies
+    # 3. Géocodage Nominatim (dernier recours - plus lent)
     import re
     
     if cinema_address:
@@ -604,7 +721,6 @@ def geocode_cinema(cinema_name, cinema_address):
             return (lat, lon)
         
         # Stratégie 2: Extraire code postal et ville de l'adresse
-        # Format typique: "... 63000 Clermont-Ferrand" ou "... 63220 Arlanc"
         match = re.search(r'(\d{5})\s+([A-Za-zÀ-ÿ\-\' ]+)$', cinema_address)
         if match:
             cp, ville = match.groups()
@@ -1077,7 +1193,7 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     
     print("=" * 70)
-    print("🚀 GEDEON API - VERSION AVEC MAPPING DYNAMIQUE")
+    print("🚀 GEDEON API - VERSION AVEC BASE CNC")
     print("=" * 70)
     print(f"Port: {port}")
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
@@ -1085,11 +1201,15 @@ if __name__ == '__main__':
     # Charger les caches au démarrage
     load_cinema_coords_cache()
     
+    # Charger la base CNC des cinémas français
+    load_cinemas_cnc()
+    
     # Charger le mapping Allociné dynamiquement
     if ALLOCINE_AVAILABLE:
         load_allocine_departments()
     
     print("Optimisations:")
+    print("  ✅ BASE CNC: 2053 cinémas français avec GPS")
     print("  ✅ MAPPING DYNAMIQUE Allociné (vrais IDs)")
     print("  ✅ Cache persistant des cinémas")
     print("  ✅ Parallélisation DATAtourisme + OpenAgenda")
