@@ -1365,47 +1365,82 @@
         }
 
         // ============================================================
-        // 🎬 FETCH CINÉMA (réécrit)
+        // 🎬 FETCH CINÉMA PROGRESSIF (par batch de 5)
         // ============================================================
+        var cinemaCurrentBatch = 0;
+        var cinemaHasMore = false;
+        var cinemaLoading = false;
+        
         function fetchCinemaEvents(lat, lon, radiusKm) {
-            var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm;
+            // Réinitialiser pour une nouvelle recherche
+            cinemaCurrentBatch = 0;
+            cinemaRawData = [];
+            cinemaRealCount = 0;
+            cinemaHasMore = true;
+            
+            // Lancer le premier batch
+            fetchCinemaBatch(lat, lon, radiusKm, 0);
+        }
+        
+        function fetchCinemaBatch(lat, lon, radiusKm, batch) {
+            if (cinemaLoading) return;
+            cinemaLoading = true;
+            
+            var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + 
+                      '&radiusKm=' + radiusKm + '&batch=' + batch + '&batchSize=5';
             
             var toggleCinemaEl = document.getElementById('toggle-cinema');
             toggleCinemaEl.classList.add('loading');
             
-            // Afficher "..." pendant le chargement
-            document.getElementById('cinema-count').textContent = '...';
+            // Afficher le compteur en cours
+            if (batch === 0) {
+                document.getElementById('cinema-count').textContent = '...';
+            }
             
             fetch(url)
                 .then(function(response) { return response.json(); })
                 .then(function(data) {
-                    toggleCinemaEl.classList.remove('loading');
+                    cinemaLoading = false;
                     
                     if (data.status === 'success') {
-                        // Stocker les données cinéma
-                        cinemaRawData = data.events || [];
+                        var newEvents = data.events || [];
+                        
+                        // Ajouter les nouveaux films aux existants
+                        cinemaRawData = cinemaRawData.concat(newEvents);
                         cinemaRealCount = cinemaRawData.length;
+                        cinemaHasMore = data.hasMore;
+                        cinemaCurrentBatch = batch;
                         
-                        // Mettre à jour le compteur
-                        updateCounters();
+                        // Mettre à jour le compteur (avec indicateur si plus à charger)
+                        var countText = cinemaRealCount.toString();
+                        if (cinemaHasMore) {
+                            countText += '+';
+                        }
+                        document.getElementById('cinema-count').textContent = countText;
                         
-                        // Rafraîchir la carte si cinéma est activé
+                        // Rafraîchir la carte immédiatement
                         if (showCinema) {
                             refreshMapDisplay();
                         }
+                        
+                        // Charger le batch suivant automatiquement
+                        if (cinemaHasMore) {
+                            setTimeout(function() {
+                                fetchCinemaBatch(lat, lon, radiusKm, batch + 1);
+                            }, 100);  // Petit délai pour laisser la carte se rafraîchir
+                        } else {
+                            toggleCinemaEl.classList.remove('loading');
+                        }
                     } else {
-                        cinemaRawData = [];
-                        cinemaRealCount = 0;
-                        updateCounters();
+                        toggleCinemaEl.classList.remove('loading');
+                        cinemaHasMore = false;
                     }
                 })
                 .catch(function(error) {
+                    cinemaLoading = false;
                     toggleCinemaEl.classList.remove('loading');
-                    console.error('Erreur fetch cinéma:', error);
-                    
-                    cinemaRawData = [];
-                    cinemaRealCount = 0;
-                    updateCounters();
+                    console.error('Erreur fetch cinéma batch ' + batch + ':', error);
+                    cinemaHasMore = false;
                 });
         }
 
