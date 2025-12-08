@@ -1056,23 +1056,22 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     if not matched_cinemas:
         return []
     
-    # 5. Récupérer les films en parallèle
+    # 5. Récupérer les films - SÉQUENTIELLEMENT pour éviter le rate limit 429
     today_str = date.today().strftime("%Y-%m-%d")
     all_events = []
     
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {
-            executor.submit(fetch_movies_for_cinema, cinema, today_str): cinema
-            for cinema in matched_cinemas
-        }
-        
-        for future in as_completed(futures):
-            try:
-                cinema_info, movies = future.result(timeout=15)
-                
-                if movies:
-                    print(f"      🎬 {cinema_info['name']}: {len(movies)} films")
-                    for movie in movies:
+    # Limiter à 20 cinémas max pour éviter trop de requêtes
+    cinemas_to_fetch = matched_cinemas[:20]
+    
+    print(f"   🎬 Récupération des films pour {len(cinemas_to_fetch)} cinémas...")
+    
+    for i, cinema in enumerate(cinemas_to_fetch):
+        try:
+            cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+            
+            if movies:
+                print(f"      🎬 {cinema_info['name']}: {len(movies)} films")
+                for movie in movies:
                         # Gestion de la durée
                         runtime = movie.get('runtime', 0)
                         duration_str = movie.get('duration', '')
@@ -1120,11 +1119,14 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                             "genres": genres,
                         }
                         all_events.append(event)
-                else:
-                    print(f"      ⚠️ {cinema_info['name']}: 0 films")
-                        
-            except Exception as e:
-                print(f"      ❌ Erreur: {e}")
+            else:
+                print(f"      ⚠️ {cinema_info['name']}: 0 films")
+        except Exception as e:
+            print(f"      ❌ Erreur cinéma {cinema.get('name', '?')}: {e}")
+        
+        # Délai entre les requêtes pour éviter le rate limit 429
+        if i < len(cinemas_to_fetch) - 1:
+            time.sleep(0.3)
     
     print(f"   ✅ {len(all_events)} films en {time.time()-start_time:.1f}s")
     return all_events
