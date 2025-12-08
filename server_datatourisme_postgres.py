@@ -963,13 +963,13 @@ def load_cinemas_allocine():
     """Charge la base complète des cinémas Allociné avec GPS."""
     global CINEMAS_ALLOCINE_DATA
     try:
-        allocine_file = os.path.join(os.path.dirname(__file__), 'cinemas_allocine_complet.json')
+        allocine_file = os.path.join(os.path.dirname(__file__), 'cinemas_france_data.json')
         if os.path.exists(allocine_file):
             with open(allocine_file, 'r', encoding='utf-8') as f:
                 CINEMAS_ALLOCINE_DATA = json.load(f)
             print(f"✅ Cinémas Allociné chargés: {len(CINEMAS_ALLOCINE_DATA)}")
         else:
-            print(f"⚠️ Fichier cinemas_allocine_complet.json non trouvé")
+            print(f"⚠️ Fichier cinemas_france_data.json non trouvé")
     except Exception as e:
         print(f"❌ Erreur chargement cinémas Allociné: {e}")
 
@@ -978,7 +978,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     """
     🚀 VERSION ULTRA-OPTIMISÉE
     
-    Utilise directement cinemas_allocine_complet.json (2334 cinémas avec GPS)
+    Utilise directement cinemas_france_data.json (2334 cinémas avec GPS)
     Plus besoin de: CNC matching, département lookup, géocodage
     
     1. Recherche spatiale directe (instantané)
