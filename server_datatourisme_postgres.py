@@ -48,6 +48,90 @@ except ImportError:
     ALLOCINE_AVAILABLE = False
     print("⚠️ Allociné API non disponible")
 
+# ============================================================================
+# MAPPING DYNAMIQUE ALLOCINÉ (chargé au démarrage)
+# ============================================================================
+
+ALLOCINE_DEPT_MAPPING = {}  # nom_normalisé → id_allocine
+ALLOCINE_DEPT_MAPPING_LOADED = False
+
+def load_allocine_departments():
+    """
+    Charge le mapping des départements depuis l'API Allociné.
+    Appelé une fois au démarrage du serveur.
+    """
+    global ALLOCINE_DEPT_MAPPING, ALLOCINE_DEPT_MAPPING_LOADED
+    
+    if not ALLOCINE_AVAILABLE:
+        print("   ⚠️ Allociné non disponible, mapping non chargé")
+        return
+    
+    if ALLOCINE_DEPT_MAPPING_LOADED:
+        return
+    
+    try:
+        print("   🔄 Chargement des départements Allociné...")
+        api = allocineAPI()
+        depts = api.get_departements()
+        
+        for dept in depts:
+            name = dept.get('name', '')
+            dept_id = dept.get('id', '')
+            
+            if name and dept_id:
+                # Normaliser le nom (minuscules, sans accents problématiques)
+                name_normalized = name.lower().strip()
+                ALLOCINE_DEPT_MAPPING[name_normalized] = dept_id
+                
+                # Ajouter des variantes sans tirets/accents
+                name_simple = name_normalized.replace('-', ' ').replace("'", " ")
+                if name_simple != name_normalized:
+                    ALLOCINE_DEPT_MAPPING[name_simple] = dept_id
+        
+        ALLOCINE_DEPT_MAPPING_LOADED = True
+        print(f"   ✅ {len(depts)} départements Allociné chargés")
+        
+        # Afficher quelques exemples pour debug
+        examples = list(ALLOCINE_DEPT_MAPPING.items())[:5]
+        for name, dept_id in examples:
+            print(f"      '{name}' → {dept_id}")
+        
+    except Exception as e:
+        print(f"   ❌ Erreur chargement départements Allociné: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def get_allocine_dept_id_dynamic(dept_name):
+    """
+    Récupère l'ID Allociné pour un nom de département.
+    Utilise le mapping dynamique chargé au démarrage.
+    """
+    if not ALLOCINE_DEPT_MAPPING:
+        load_allocine_departments()
+    
+    if not dept_name:
+        return None
+    
+    # Normaliser le nom recherché
+    name_normalized = dept_name.lower().strip()
+    
+    # Recherche exacte
+    if name_normalized in ALLOCINE_DEPT_MAPPING:
+        return ALLOCINE_DEPT_MAPPING[name_normalized]
+    
+    # Recherche sans tirets
+    name_simple = name_normalized.replace('-', ' ').replace("'", " ")
+    if name_simple in ALLOCINE_DEPT_MAPPING:
+        return ALLOCINE_DEPT_MAPPING[name_simple]
+    
+    # Recherche partielle (le nom contient ou est contenu)
+    for key, value in ALLOCINE_DEPT_MAPPING.items():
+        if key in name_normalized or name_normalized in key:
+            return value
+    
+    return None
+
 
 # ============================================================================
 # CONFIGURATION
@@ -578,15 +662,19 @@ def fetch_movies_for_cinema(cinema_info, today_str):
 
 def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas=50):
     """
-    🎬 VERSION OPTIMISÉE avec mapping statique et recherche élargie.
+    🎬 VERSION AVEC MAPPING DYNAMIQUE - Utilise les vrais IDs Allociné.
     """
     if not ALLOCINE_AVAILABLE:
         return []
     
-    print(f"🎬 Cinéma optimisé: ({center_lat:.4f}, {center_lon:.4f}), {radius_km}km")
+    print(f"🎬 Cinéma (mapping dynamique): ({center_lat:.4f}, {center_lon:.4f}), {radius_km}km")
     start_time = time.time()
     
-    # Charger cache
+    # Charger le mapping Allociné si pas encore fait
+    if not ALLOCINE_DEPT_MAPPING_LOADED:
+        load_allocine_departments()
+    
+    # Charger cache des coordonnées
     if not CINEMA_COORDS_CACHE:
         load_cinema_coords_cache()
     
@@ -599,43 +687,26 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
         print("   ⚠️ Localisation non trouvée")
         return []
     
-    # 2. Déterminer les départements à rechercher (MAPPING STATIQUE)
+    # 2. Trouver l'ID Allociné via le MAPPING DYNAMIQUE
     dept_ids = []
-    dept_code = None
     
-    if postcode:
-        if postcode.upper().startswith("2A") or postcode.upper().startswith("2B"):
-            dept_code = postcode[:2].upper()
-        else:
-            dept_code = postcode[:2]
-        
-        primary_id = get_allocine_dept_id_from_postcode(postcode)
-        print(f"   🔍 Postcode '{postcode}' → dept_code='{dept_code}' → ID='{primary_id}'")
-        if primary_id:
-            dept_ids.append(primary_id)
-    
-    if not dept_ids and dept_name:
-        primary_id = get_allocine_dept_id(dept_name)
-        print(f"   🔍 Dept name '{dept_name}' → ID='{primary_id}'")
+    # Utiliser le nom du département (plus fiable avec le mapping dynamique)
+    if dept_name:
+        primary_id = get_allocine_dept_id_dynamic(dept_name)
+        print(f"   🔍 Dept '{dept_name}' → ID dynamique='{primary_id}'")
         if primary_id:
             dept_ids.append(primary_id)
     
     if not dept_ids:
-        print(f"   ⚠️ Département non mappé: {dept_name} / {postcode}")
+        print(f"   ⚠️ Département non trouvé dans mapping Allociné: {dept_name}")
+        print(f"   📋 Départements disponibles: {list(ALLOCINE_DEPT_MAPPING.keys())[:10]}...")
         return []
     
-    print(f"   ✅ Départements à rechercher: {dept_ids}")
+    print(f"   ✅ Département à rechercher: {dept_ids}")
     
-    # 3. Étendre la recherche si IDF ou grand rayon
-    if is_in_idf(dept_name, postcode):
-        dept_ids = IDF_DEPARTMENTS.copy()
-        print(f"   📍 Zone IDF → {len(dept_ids)} départements")
-    elif radius_km > 30 and dept_code and dept_code in ADJACENT_DEPARTMENTS:
-        for adj_code in ADJACENT_DEPARTMENTS[dept_code]:
-            adj_id = POSTCODE_TO_ALLOCINE.get(adj_code)
-            if adj_id and adj_id not in dept_ids:
-                dept_ids.append(adj_id)
-        print(f"   📍 Rayon étendu → {len(dept_ids)} départements")
+    # 3. Étendre la recherche si IDF (ajouter les départements voisins)
+    # Pour l'instant on ne fait que le département principal
+    # TODO: ajouter la logique IDF avec le mapping dynamique
     
     # 4. Récupérer tous les cinémas
     all_cinemas = []
@@ -980,21 +1051,23 @@ def health():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     
-    # Charger le cache au démarrage
-    load_cinema_coords_cache()
-    
     print("=" * 70)
-    print("🚀 GEDEON API - VERSION OPTIMISÉE v2")
+    print("🚀 GEDEON API - VERSION AVEC MAPPING DYNAMIQUE")
     print("=" * 70)
     print(f"Port: {port}")
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
+    
+    # Charger les caches au démarrage
+    load_cinema_coords_cache()
+    
+    # Charger le mapping Allociné dynamiquement
+    if ALLOCINE_AVAILABLE:
+        load_allocine_departments()
+    
     print("Optimisations:")
-    print("  ✅ Mapping statique départements (pas d'appel API)")
-    print("  ✅ Recherche par code postal (plus fiable)")
-    print("  ✅ Recherche élargie IDF (8 départements)")
-    print("  ✅ Départements adjacents si rayon > 30km")
+    print("  ✅ MAPPING DYNAMIQUE Allociné (vrais IDs)")
     print("  ✅ Cache persistant des cinémas")
-    print("  ✅ get_movies() pour données enrichies")
+    print("  ✅ Parallélisation DATAtourisme + OpenAgenda")
     print("=" * 70)
     
     app.run(host='0.0.0.0', port=port, debug=True)
