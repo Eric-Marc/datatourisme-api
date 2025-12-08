@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta, date
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
+import json
 from urllib.parse import urlparse
 import requests
 import math
