@@ -234,6 +234,24 @@
             visibility: hidden;
         }
         
+        /* 🎯 MODE EXCLUSIF : bordure colorée + ombre */
+        .source-toggle.exclusive {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.5);
+            transform: scale(1.05);
+        }
+        
+        #toggle-events.exclusive {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+        
+        #toggle-cinema.exclusive {
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.5);
+        }
+        
+        #toggle-salons.exclusive {
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.5);
+        }
+        
         .source-toggle.loading {
             animation: pulseLoading 1.5s ease-in-out infinite;
         }
@@ -1251,12 +1269,22 @@
         function updateToggleVisuals() {
             var toggleEventsEl = document.getElementById('toggle-events');
             var toggleCinemaEl = document.getElementById('toggle-cinema');
+            var toggleSalonsEl = document.getElementById('toggle-salons');
             
+            // Mode exclusif = un seul actif et mis en évidence
             toggleEventsEl.classList.toggle('active', showEvents);
             toggleEventsEl.classList.toggle('inactive', !showEvents);
+            toggleEventsEl.classList.toggle('exclusive', exclusiveMode === 'events');
             
             toggleCinemaEl.classList.toggle('active', showCinema);
             toggleCinemaEl.classList.toggle('inactive', !showCinema);
+            toggleCinemaEl.classList.toggle('exclusive', exclusiveMode === 'cinema');
+            
+            if (toggleSalonsEl) {
+                toggleSalonsEl.classList.toggle('active', showSalons);
+                toggleSalonsEl.classList.toggle('inactive', !showSalons);
+                toggleSalonsEl.classList.toggle('exclusive', exclusiveMode === 'salons');
+            }
         }
         
         // Recalcule et affiche les marqueurs selon les filtres actifs
@@ -1284,47 +1312,72 @@
             displayEventsOnMap(eventsToShow, lat, lon, currentRadiusKm);
         }
         
+        // 🎯 MODE EXCLUSIF : clic = affiche SEULEMENT cette source, reclic = affiche tout
+        var exclusiveMode = null;  // null = tout, 'events' | 'cinema' | 'salons' = exclusif
+        
+        function setExclusiveMode(source) {
+            if (exclusiveMode === source) {
+                // Déjà en mode exclusif sur cette source → revenir à tout
+                exclusiveMode = null;
+                showEvents = true;
+                showCinema = true;
+                showSalons = true;
+            } else {
+                // Passer en mode exclusif sur cette source
+                exclusiveMode = source;
+                showEvents = (source === 'events');
+                showCinema = (source === 'cinema');
+                showSalons = (source === 'salons');
+            }
+            
+            updateToggleVisuals();
+            refreshMapDisplay();
+        }
+        
         // Toggle Événements
         function toggleSource(source) {
             if (source === 'events') {
-                showEvents = !showEvents;
-                updateToggleVisuals();
-                refreshMapDisplay();
+                setExclusiveMode('events');
             }
         }
         
         // Toggle Cinéma
         function toggleCinema() {
-            showCinema = !showCinema;
-            updateToggleVisuals();
-            
-            // Si on active cinéma et qu'on n'a pas encore chargé les données
-            if (showCinema && currentPosition && cinemaRawData.length === 0 && cinemaRealCount === 0) {
+            // Si on n'a pas encore chargé les données cinéma, les charger d'abord
+            if (currentPosition && cinemaRawData.length === 0 && cinemaRealCount === 0) {
+                // Charger puis passer en mode exclusif
+                showCinema = true;
                 fetchCinemaEvents(
                     currentPosition.coords.latitude, 
                     currentPosition.coords.longitude, 
                     currentRadiusKm
                 );
+                // Passer en mode exclusif après le premier chargement
+                exclusiveMode = 'cinema';
+                showEvents = false;
+                showSalons = false;
+                updateToggleVisuals();
             } else {
-                refreshMapDisplay();
+                setExclusiveMode('cinema');
             }
         }
 
         function toggleSalons() {
-            showSalons = !showSalons;
-            var toggleEl = document.getElementById('toggle-salons');
-            toggleEl.classList.toggle('active', showSalons);
-            toggleEl.classList.toggle('inactive', !showSalons);
-            
-            // Si on active salons et qu'on n'a pas encore chargé les données
-            if (showSalons && currentPosition && salonsEventsData.length === 0) {
+            // Si on n'a pas encore chargé les données salons, les charger d'abord
+            if (currentPosition && salonsEventsData.length === 0) {
+                showSalons = true;
                 fetchSalonsEvents(
                     currentPosition.coords.latitude, 
                     currentPosition.coords.longitude, 
                     currentRadiusKm
                 );
+                // Passer en mode exclusif après le premier chargement
+                exclusiveMode = 'salons';
+                showEvents = false;
+                showCinema = false;
+                updateToggleVisuals();
             } else {
-                refreshMapDisplay();
+                setExclusiveMode('salons');
             }
         }
 
