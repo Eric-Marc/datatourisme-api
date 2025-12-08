@@ -974,7 +974,35 @@ def load_cinemas_allocine():
         print(f"❌ Erreur chargement cinémas Allociné: {e}")
 
 
-def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas=20):
+# Cache des films par cinéma (TTL 1h)
+FILMS_CACHE = {}  # {cinema_id: {'films': [...], 'timestamp': datetime}}
+FILMS_CACHE_TTL = 3600  # 1 heure
+
+
+def get_films_cached(cinema, today_str):
+    """Récupère les films avec cache."""
+    cinema_id = cinema['id']
+    now = time.time()
+    
+    # Vérifier le cache
+    if cinema_id in FILMS_CACHE:
+        cached = FILMS_CACHE[cinema_id]
+        if now - cached['timestamp'] < FILMS_CACHE_TTL:
+            return cached['films']
+    
+    # Pas en cache ou expiré -> requête API
+    cinema_info, films = fetch_movies_for_cinema(cinema, today_str)
+    
+    # Stocker en cache
+    FILMS_CACHE[cinema_id] = {
+        'films': films,
+        'timestamp': now
+    }
+    
+    return films
+
+
+def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas=10):
     """
     🚀 VERSION ULTRA-OPTIMISÉE
     
@@ -1029,18 +1057,41 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
         nearby_cinemas = nearby_cinemas[:max_cinemas]
         print(f"   📍 Limité à {max_cinemas} cinémas")
     
-    # 2. Récupérer les films
+    # 2. Récupérer les films (avec cache)
     today_str = date.today().strftime("%Y-%m-%d")
     all_events = []
+    cache_hits = 0
     
     print(f"   🎬 Récupération des films...")
     
     for i, cinema in enumerate(nearby_cinemas):
         try:
-            cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+            cinema_id = cinema['id']
+            now = time.time()
+            
+            # Vérifier le cache
+            from_cache = False
+            if cinema_id in FILMS_CACHE:
+                cached = FILMS_CACHE[cinema_id]
+                if now - cached['timestamp'] < FILMS_CACHE_TTL:
+                    movies = cached['films']
+                    from_cache = True
+                    cache_hits += 1
+            
+            if not from_cache:
+                # Requête API
+                cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+                # Stocker en cache
+                FILMS_CACHE[cinema_id] = {'films': movies, 'timestamp': now}
+                # Délai seulement si pas de cache
+                if i < len(nearby_cinemas) - 1:
+                    time.sleep(0.15)
+            else:
+                cinema_info = cinema
             
             if movies:
-                print(f"      🎬 {cinema_info['name'][:30]}: {len(movies)} films")
+                cache_icon = "💾" if from_cache else "🎬"
+                print(f"      {cache_icon} {cinema.get('name', '?')[:30]}: {len(movies)} films")
                 for movie in movies:
                     runtime = movie.get('runtime', 0)
                     duration_str = movie.get('duration', '')
@@ -1090,12 +1141,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                     all_events.append(event)
         except Exception as e:
             print(f"      ❌ Erreur {cinema.get('name', '?')[:20]}: {e}")
-        
-        # Délai pour éviter rate limit 429
-        if i < len(nearby_cinemas) - 1:
-            time.sleep(0.3)
     
-    print(f"   ✅ {len(all_events)} films en {time.time()-start_time:.1f}s")
+    print(f"   ✅ {len(all_events)} films en {time.time()-start_time:.1f}s (cache: {cache_hits}/{len(nearby_cinemas)})")
     return all_events
 
 
@@ -1287,23 +1334,145 @@ def get_nearby_events():
 
 @app.route('/api/cinema/nearby', methods=['GET'])
 def get_nearby_cinema():
-    """Cinémas à proximité (Allociné optimisé)."""
+    """Cinémas à proximité (Allociné optimisé) - avec pagination."""
     try:
         center_lat = request.args.get('lat', type=float)
         center_lon = request.args.get('lon', type=float)
         radius_km = request.args.get('radiusKm', RADIUS_KM_DEFAULT, type=int)
+        batch = request.args.get('batch', 0, type=int)  # 0 = premier batch, 1 = deuxième, etc.
+        batch_size = request.args.get('batchSize', 5, type=int)
         
         if center_lat is None or center_lon is None:
             return jsonify({"status": "error", "message": "Paramètres 'lat' et 'lon' requis"}), 400
         
-        cinema_events = fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km)
+        # Charger la base si pas encore fait
+        if not CINEMAS_ALLOCINE_DATA:
+            load_cinemas_allocine()
+        
+        if not CINEMAS_ALLOCINE_DATA:
+            return jsonify({"status": "success", "events": [], "count": 0, "hasMore": False}), 200
+        
+        # Recherche spatiale (très rapide ~2ms)
+        nearby_cinemas = []
+        for cinema in CINEMAS_ALLOCINE_DATA:
+            lat = cinema.get('lat')
+            lon = cinema.get('lon')
+            if not lat or not lon:
+                continue
+            dist = haversine_km(center_lat, center_lon, lat, lon)
+            if dist <= radius_km:
+                nearby_cinemas.append({
+                    'id': cinema['id'],
+                    'name': cinema['name'],
+                    'address': cinema.get('address', ''),
+                    'lat': lat,
+                    'lon': lon,
+                    'distance': dist
+                })
+        
+        nearby_cinemas.sort(key=lambda c: c['distance'])
+        total_cinemas = len(nearby_cinemas)
+        
+        # Pagination
+        start_idx = batch * batch_size
+        end_idx = start_idx + batch_size
+        cinemas_batch = nearby_cinemas[start_idx:end_idx]
+        has_more = end_idx < total_cinemas and end_idx < 20  # Max 20 cinémas total
+        
+        if not cinemas_batch:
+            return jsonify({
+                "status": "success",
+                "events": [],
+                "count": 0,
+                "totalCinemas": total_cinemas,
+                "batch": batch,
+                "hasMore": False
+            }), 200
+        
+        print(f"🎬 Cinéma batch {batch}: cinémas {start_idx+1}-{end_idx} sur {total_cinemas}")
+        
+        # Récupérer les films pour ce batch
+        today_str = date.today().strftime("%Y-%m-%d")
+        all_events = []
+        cache_hits = 0
+        start_time = time.time()
+        
+        for i, cinema in enumerate(cinemas_batch):
+            try:
+                cinema_id = cinema['id']
+                now = time.time()
+                
+                # Vérifier le cache
+                from_cache = False
+                if cinema_id in FILMS_CACHE:
+                    cached = FILMS_CACHE[cinema_id]
+                    if now - cached['timestamp'] < FILMS_CACHE_TTL:
+                        movies = cached['films']
+                        from_cache = True
+                        cache_hits += 1
+                
+                if not from_cache:
+                    cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+                    FILMS_CACHE[cinema_id] = {'films': movies, 'timestamp': now}
+                    if i < len(cinemas_batch) - 1:
+                        time.sleep(0.15)
+                
+                if movies:
+                    for movie in movies:
+                        runtime = movie.get('runtime', 0)
+                        duration_str = movie.get('duration', '')
+                        
+                        if runtime and isinstance(runtime, int):
+                            h, m = runtime // 3600, (runtime % 3600) // 60
+                            duration = f"{h}h{m:02d}" if h else f"{m}min"
+                        elif duration_str:
+                            duration = duration_str
+                        else:
+                            duration = ""
+                        
+                        showtimes_str = movie.get('showtimes_str', '')
+                        genres = movie.get('genres', [])
+                        genres_str = ", ".join(genres[:3]) if genres else ""
+                        
+                        desc_parts = []
+                        if duration:
+                            desc_parts.append(duration)
+                        if genres_str:
+                            desc_parts.append(genres_str)
+                        if showtimes_str:
+                            desc_parts.append(showtimes_str)
+                        
+                        event = {
+                            "uid": f"allocine-{cinema['id']}-{movie.get('title', '')[:20]}",
+                            "title": f"🎬 {movie.get('title', 'Film')}",
+                            "begin": today_str,
+                            "end": today_str,
+                            "locationName": cinema['name'],
+                            "city": "",
+                            "address": cinema['address'],
+                            "latitude": cinema['lat'],
+                            "longitude": cinema['lon'],
+                            "distanceKm": round(cinema['distance'], 1),
+                            "openagendaUrl": "",
+                            "source": "Allocine",
+                            "description": " • ".join(desc_parts) if desc_parts else "",
+                        }
+                        all_events.append(event)
+            except Exception as e:
+                print(f"      ❌ Erreur {cinema.get('name', '?')[:20]}: {e}")
+        
+        elapsed = time.time() - start_time
+        print(f"   ✅ Batch {batch}: {len(all_events)} films en {elapsed:.1f}s (cache: {cache_hits}/{len(cinemas_batch)})")
         
         return jsonify({
             "status": "success",
             "center": {"latitude": center_lat, "longitude": center_lon},
             "radiusKm": radius_km,
-            "events": cinema_events,
-            "count": len(cinema_events),
+            "events": all_events,
+            "count": len(all_events),
+            "totalCinemas": total_cinemas,
+            "batch": batch,
+            "hasMore": has_more,
             "source": "Allocine"
         }), 200
         
@@ -1326,12 +1495,33 @@ def load_salons_data():
         salons_file = os.path.join(os.path.dirname(__file__), 'salons_france.json')
         if os.path.exists(salons_file):
             with open(salons_file, 'r', encoding='utf-8') as f:
-                SALONS_DATA = json.load(f)
-            print(f"✅ Salons chargés: {len(SALONS_DATA)}")
+                data = json.load(f)
+            
+            # Gérer les deux formats possibles
+            if isinstance(data, list):
+                # Format attendu: liste de salons
+                SALONS_DATA = data
+            elif isinstance(data, dict) and 'events' in data:
+                # Format eventseye: {"events": [...]}
+                SALONS_DATA = data['events']
+            else:
+                print(f"⚠️ Format de fichier salons inconnu: {type(data)}")
+                SALONS_DATA = []
+            
+            # Vérifier que les éléments sont des dicts
+            if SALONS_DATA and not isinstance(SALONS_DATA[0], dict):
+                print(f"⚠️ Format invalide: les salons ne sont pas des dictionnaires")
+                print(f"   Type premier élément: {type(SALONS_DATA[0])}")
+                print(f"   Contenu: {str(SALONS_DATA[0])[:100]}")
+                SALONS_DATA = []
+            else:
+                print(f"✅ Salons chargés: {len(SALONS_DATA)}")
         else:
             print(f"⚠️ Fichier salons_france.json non trouvé")
     except Exception as e:
         print(f"❌ Erreur chargement salons: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def parse_salon_date(date_str):
