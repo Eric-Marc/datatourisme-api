@@ -1788,6 +1788,167 @@ def health():
 
 
 # ============================================================================
+# 📷 PROXY GEMINI (pour éviter les problèmes CORS)
+# ============================================================================
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDnqw7COYrxsgg5vCLHs6im7iP5NzR2SvE")
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"]
+
+@app.route('/api/scanner/analyze', methods=['POST'])
+def analyze_poster():
+    """
+    Proxy pour l'API Gemini - Analyse d'affiches d'événements
+    Évite les problèmes CORS en faisant la requête côté serveur
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"status": "error", "message": "Données manquantes"}), 400
+        
+        base64_image = data.get('image')
+        mime_type = data.get('mimeType', 'image/jpeg')
+        
+        if not base64_image:
+            return jsonify({"status": "error", "message": "Image manquante"}), 400
+        
+        prompt = """Analyse cette image d'affiche événementielle ou publicitaire.
+Extrais toutes les informations et retourne UNIQUEMENT un JSON valide avec cette structure exacte:
+{
+    "title": "Titre de l'événement",
+    "category": "Concert|Théâtre|Atelier|Conférence|Sport|Exposition|Festival|Autre",
+    "startDate": "YYYY-MM-DD ou texte brut",
+    "startTime": "HH:MM ou null",
+    "endDate": "YYYY-MM-DD ou null",
+    "endTime": "HH:MM ou null",
+    "location": {
+        "venueName": "Nom du lieu",
+        "address": "Adresse ou null",
+        "city": "Ville"
+    },
+    "organizer": {
+        "name": "Nom ou null",
+        "website": "URL ou null",
+        "email": "Email ou null",
+        "phone": "Téléphone ou null"
+    },
+    "pricing": {
+        "isFree": true/false,
+        "priceRange": "10€ - 25€ ou null",
+        "currency": "EUR ou null"
+    },
+    "description": "Résumé court (max 3 phrases) ou null",
+    "tags": ["tag1", "tag2"]
+}
+
+Réponds UNIQUEMENT avec le JSON, sans markdown ni explications."""
+
+        # Essayer plusieurs modèles
+        last_error = None
+        
+        for model in GEMINI_MODELS:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+                
+                request_body = {
+                    "contents": [{
+                        "parts": [
+                            {
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": base64_image
+                                }
+                            },
+                            {"text": prompt}
+                        ]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.2,
+                        "maxOutputTokens": 2048
+                    }
+                }
+                
+                print(f"🤖 Gemini: Tentative avec {model}...")
+                
+                response = requests.post(url, json=request_body, timeout=60)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                    
+                    if text:
+                        # Nettoyer le JSON
+                        json_text = text.strip()
+                        if json_text.startswith('```'):
+                            json_text = json_text.replace('```json', '').replace('```', '').strip()
+                        
+                        import json
+                        event_data = json.loads(json_text)
+                        print(f"✅ Gemini: Analyse réussie avec {model}")
+                        
+                        return jsonify({
+                            "status": "success",
+                            "data": event_data,
+                            "model": model
+                        }), 200
+                else:
+                    last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                    print(f"⚠️ Gemini {model}: {last_error}")
+                    
+            except Exception as e:
+                last_error = str(e)
+                print(f"⚠️ Gemini {model} erreur: {e}")
+                continue
+        
+        return jsonify({
+            "status": "error",
+            "message": f"Tous les modèles ont échoué. Dernière erreur: {last_error}"
+        }), 500
+        
+    except Exception as e:
+        print(f"❌ Erreur proxy Gemini: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/scanner/geocode', methods=['POST'])
+def geocode_address():
+    """
+    Géocode une adresse via Nominatim
+    """
+    try:
+        data = request.get_json()
+        address = data.get('address', '')
+        
+        if not address:
+            return jsonify({"status": "error", "message": "Adresse manquante"}), 400
+        
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {"q": address, "format": "json", "limit": 1}
+        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
+        
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            results = response.json()
+            if results:
+                return jsonify({
+                    "status": "success",
+                    "latitude": float(results[0]['lat']),
+                    "longitude": float(results[0]['lon']),
+                    "displayName": results[0].get('display_name', '')
+                }), 200
+            else:
+                return jsonify({"status": "error", "message": "Adresse non trouvée"}), 404
+        else:
+            return jsonify({"status": "error", "message": f"Erreur Nominatim: {response.status_code}"}), 500
+            
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 

@@ -102,6 +102,26 @@
             font-size: 18px;
         }
 
+        .scanner-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .scanner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
         .buttons-group {
             display: flex;
             gap: 6px;
@@ -207,7 +227,7 @@
             font-weight: bold;
         }
         
-        /* 🎯 COULEURS DISTINCTES : Bleu pour événements, Rouge pour cinéma, Vert pour salons */
+        /* 🎯 COULEURS DISTINCTES : Bleu pour événements, Rouge pour cinéma, Vert pour salons, Orange pour scannés */
         #toggle-events .toggle-value {
             color: #3b82f6;  /* Bleu vif */
         }
@@ -218,6 +238,14 @@
         
         #toggle-salons .toggle-value {
             color: #22c55e;  /* Vert salons */
+        }
+        
+        #toggle-scanned .toggle-value {
+            color: #f97316;  /* Orange scannés */
+        }
+        
+        #toggle-scanned.active {
+            border-color: #f97316;
         }
 
         .toggle-label {
@@ -252,6 +280,10 @@
         
         #toggle-salons.exclusive {
             box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.5);
+        }
+        
+        #toggle-scanned.exclusive {
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.5);
         }
         
         .source-toggle.loading {
@@ -363,6 +395,39 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
             background: #22c55e;
             animation: pulseSalon 1.8s ease-in-out infinite;
+        }
+
+        /* 📷 MARQUEURS SCANNÉS - ORANGE */
+        .scanned-marker {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 10px rgba(249, 115, 22, 0.6);
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            animation: pulseScanned 1.5s ease-in-out infinite;
+            position: relative;
+        }
+        
+        .scanned-marker::after {
+            content: '📷';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        @keyframes pulseScanned {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 2px 10px rgba(249, 115, 22, 0.6);
+            }
+            50% { 
+                transform: scale(1.1);
+                box-shadow: 0 2px 20px rgba(249, 115, 22, 0.9);
+            }
         }
 
         @keyframes pulseSalon {
@@ -661,6 +726,10 @@
             background: #22c55e;
         }
         
+        .legend-dot.scanned {
+            background: #f97316;
+        }
+        
         .legend-label {
             color: #555;
             font-weight: 500;
@@ -690,7 +759,8 @@
             }
             
             #btnMyPosition,
-            #resetViewBtn {
+            #resetViewBtn,
+            .scanner-btn {
                 width: 44px !important;
                 height: 44px;
                 font-size: 22px;
@@ -829,6 +899,7 @@
                 <div class="buttons-group">
                     <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
                     <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
+                    <a href="scanner.html" class="scanner-btn" title="Scanner une affiche">📷</a>
                 </div>
                 <div class="status" id="status">Maintenez appuyé sur la carte</div>
             </div>
@@ -871,6 +942,13 @@
             </div>
             <span class="toggle-check">✓</span>
         </div>
+        <div class="source-toggle active" id="toggle-scanned" onclick="toggleScanned()">
+            <div>
+                <div class="toggle-value" id="scanned-count">0</div>
+                <div class="toggle-label">Scannés</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
     </div>
 
     <div id="map-container">
@@ -890,6 +968,10 @@
             <div class="legend-item">
                 <div class="legend-dot salons"></div>
                 <span class="legend-label">Salons</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot scanned"></div>
+                <span class="legend-label">Scannés</span>
             </div>
         </div>
     </div>
@@ -959,7 +1041,9 @@
         var showEvents = true;
         var showCinema = true;
         var showSalons = true;
+        var showScanned = true;  // 📷 Événements scannés
         var salonsEventsData = [];
+        var scannedEventsData = [];  // 📷 Stockage des événements scannés
 
         // État du long-press
         var longPressTimer = null;
@@ -1003,6 +1087,16 @@
                 html: '<div class="salon-marker"></div>',
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
+            });
+        }
+
+        // 📷 ICÔNE SCANNÉ - ORANGE
+        function createScannedIcon() {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="scanned-marker"></div>',
+                iconSize: [26, 26],
+                iconAnchor: [13, 13]
             });
         }
 
@@ -1348,6 +1442,7 @@
             var toggleEventsEl = document.getElementById('toggle-events');
             var toggleCinemaEl = document.getElementById('toggle-cinema');
             var toggleSalonsEl = document.getElementById('toggle-salons');
+            var toggleScannedEl = document.getElementById('toggle-scanned');
             
             // Mode exclusif = un seul actif et mis en évidence
             toggleEventsEl.classList.toggle('active', showEvents);
@@ -1362,6 +1457,12 @@
                 toggleSalonsEl.classList.toggle('active', showSalons);
                 toggleSalonsEl.classList.toggle('inactive', !showSalons);
                 toggleSalonsEl.classList.toggle('exclusive', exclusiveMode === 'salons');
+            }
+            
+            if (toggleScannedEl) {
+                toggleScannedEl.classList.toggle('active', showScanned);
+                toggleScannedEl.classList.toggle('inactive', !showScanned);
+                toggleScannedEl.classList.toggle('exclusive', exclusiveMode === 'scanned');
             }
         }
         
@@ -1387,11 +1488,15 @@
                 eventsToShow = eventsToShow.concat(salonsEventsData);
             }
             
+            if (showScanned) {
+                eventsToShow = eventsToShow.concat(scannedEventsData);
+            }
+            
             displayEventsOnMap(eventsToShow, lat, lon, currentRadiusKm);
         }
         
         // 🎯 MODE EXCLUSIF : clic = affiche SEULEMENT cette source, reclic = affiche tout
-        var exclusiveMode = null;  // null = tout, 'events' | 'cinema' | 'salons' = exclusif
+        var exclusiveMode = null;  // null = tout, 'events' | 'cinema' | 'salons' | 'scanned' = exclusif
         
         function setExclusiveMode(source) {
             if (exclusiveMode === source) {
@@ -1400,12 +1505,14 @@
                 showEvents = true;
                 showCinema = true;
                 showSalons = true;
+                showScanned = true;
             } else {
                 // Passer en mode exclusif sur cette source
                 exclusiveMode = source;
                 showEvents = (source === 'events');
                 showCinema = (source === 'cinema');
                 showSalons = (source === 'salons');
+                showScanned = (source === 'scanned');
             }
             
             updateToggleVisuals();
@@ -1434,6 +1541,7 @@
                 exclusiveMode = 'cinema';
                 showEvents = false;
                 showSalons = false;
+                showScanned = false;
                 updateToggleVisuals();
             } else {
                 setExclusiveMode('cinema');
@@ -1455,9 +1563,64 @@
                 exclusiveMode = 'salons';
                 showEvents = false;
                 showCinema = false;
+                showScanned = false;
                 updateToggleVisuals();
             } else {
                 setExclusiveMode('salons');
+            }
+        }
+
+        // 📷 TOGGLE SCANNÉS
+        function toggleScanned() {
+            console.log('toggleScanned() appelé, scannedEventsData.length:', scannedEventsData.length);
+            
+            // Charger les événements scannés depuis localStorage
+            loadScannedEvents();
+            
+            // Passer en mode exclusif
+            setExclusiveMode('scanned');
+        }
+
+        // 📷 CHARGER LES ÉVÉNEMENTS SCANNÉS DEPUIS LOCALSTORAGE
+        function loadScannedEvents() {
+            try {
+                var stored = localStorage.getItem('gedeon_scanned_events');
+                if (stored) {
+                    var events = JSON.parse(stored);
+                    scannedEventsData = events.filter(function(e) {
+                        return e.latitude && e.longitude;
+                    });
+                    console.log('📷 Événements scannés chargés:', scannedEventsData.length);
+                } else {
+                    scannedEventsData = [];
+                }
+            } catch (e) {
+                console.error('Erreur chargement événements scannés:', e);
+                scannedEventsData = [];
+            }
+            
+            document.getElementById('scanned-count').textContent = scannedEventsData.length;
+            return scannedEventsData;
+        }
+        
+        // 📷 SUPPRIMER UN ÉVÉNEMENT SCANNÉ
+        function deleteScannedEvent(uid) {
+            if (!confirm('Supprimer cet événement scanné ?')) return;
+            
+            try {
+                var stored = localStorage.getItem('gedeon_scanned_events');
+                if (stored) {
+                    var events = JSON.parse(stored);
+                    events = events.filter(function(e) { return e.uid !== uid; });
+                    localStorage.setItem('gedeon_scanned_events', JSON.stringify(events));
+                    
+                    // Recharger et rafraîchir
+                    loadScannedEvents();
+                    refreshMapDisplay();
+                    map.closePopup();
+                }
+            } catch (e) {
+                console.error('Erreur suppression:', e);
             }
         }
 
@@ -1669,10 +1832,13 @@
                 var firstEvent = eventsAtLocation[0];
                 var isCinema = firstEvent.source === 'Allocine';
                 var isSalon = firstEvent.source === 'EventsEye';
+                var isScanned = firstEvent.source === 'Scanner';
                 
                 // 🎯 ICÔNE SELON LE TYPE
                 var icon;
-                if (isCinema) {
+                if (isScanned) {
+                    icon = createScannedIcon();
+                } else if (isCinema) {
                     icon = createCinemaIcon();
                 } else if (isSalon) {
                     icon = createSalonIcon();
@@ -1683,13 +1849,32 @@
                 var marker = L.marker([firstEvent.latitude, firstEvent.longitude], {
                     icon: icon,
                     isCinema: isCinema,
-                    isSalon: isSalon
+                    isSalon: isSalon,
+                    isScanned: isScanned
                 });
                 
                 // 🎯 POPUP SELON LE TYPE
                 var popupHtml;
                 
-                if (isSalon) {
+                if (isScanned) {
+                    // POPUP SCANNÉ - STYLE SPÉCIAL
+                    popupHtml = '<div class="scanned-popup" style="max-width:320px;">';
+                    var event = firstEvent;
+                    popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
+                    popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">📷 SCANNÉ</span>';
+                    popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;">' + (event.title || 'Événement scanné') + '</h3>';
+                    popupHtml += '</div>';
+                    
+                    if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
+                    if (event.locationName) popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + event.locationName + '</div>';
+                    if (event.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:8px;">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+                    if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
+                    
+                    popupHtml += '<div style="display:flex;gap:8px;margin-top:10px;">';
+                    popupHtml += '<button onclick="deleteScannedEvent(\'' + event.uid + '\')" style="flex:1;padding:6px;background:#fee2e2;color:#dc2626;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🗑️ Supprimer</button>';
+                    popupHtml += '</div>';
+                    popupHtml += '</div>';
+                } else if (isSalon) {
                     // POPUP SALON - AFFICHE TOUS LES SALONS AU MÊME ENDROIT
                     popupHtml = '<div class="salon-popup">';
                     
@@ -1922,6 +2107,9 @@
             }
             initMap();
             setupSliders();
+            
+            // 📷 Charger les événements scannés depuis localStorage
+            loadScannedEvents();
             
             var instructionText = DEVICE_INFO.isMobile 
                 ? '👆 Maintenez appuyé 1s pour sélectionner'
