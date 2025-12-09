@@ -1570,15 +1570,47 @@
             }
         }
 
-        // 📷 TOGGLE SCANNÉS
+        // 📷 TOGGLE SCANNÉS - Affiche TOUS les événements scannés (monde entier)
         function toggleScanned() {
-            console.log('toggleScanned() appelé, scannedEventsData.length:', scannedEventsData.length);
+            console.log('toggleScanned() appelé, exclusiveMode:', exclusiveMode, 'scannedEventsData.length:', scannedEventsData.length);
+            
+            // Si déjà en mode scannés, revenir au mode normal
+            if (exclusiveMode === 'scanned') {
+                exclusiveMode = null;
+                showEvents = true;
+                showCinema = true;
+                showSalons = true;
+                showScanned = true;
+                updateToggleVisuals();
+                
+                // Si on a une position, rafraîchir l'affichage normal
+                if (currentPosition) {
+                    refreshMapDisplay();
+                } else {
+                    // Sinon, garder les scannés affichés
+                    displayScannedEventsGlobal();
+                }
+                return;
+            }
             
             // Charger les événements scannés depuis localStorage
             loadScannedEvents();
             
-            // Passer en mode exclusif
-            setExclusiveMode('scanned');
+            if (scannedEventsData.length === 0) {
+                updateStatus('📷 Aucun événement scanné', 'waiting');
+                return;
+            }
+            
+            // Afficher les scannés en mode global (monde entier)
+            displayScannedEventsGlobal();
+            
+            // Mettre à jour les toggles visuellement
+            exclusiveMode = 'scanned';
+            showEvents = false;
+            showCinema = false;
+            showSalons = false;
+            showScanned = true;
+            updateToggleVisuals();
         }
 
         // 📷 CHARGER LES ÉVÉNEMENTS SCANNÉS DEPUIS LOCALSTORAGE
