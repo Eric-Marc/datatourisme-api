@@ -108,6 +108,13 @@
             flex-shrink: 0;
         }
 
+        .top-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+
         .sliders-row {
             display: flex;
             gap: 15px;
@@ -663,33 +670,23 @@
             #header h1 { font-size: 18px; }
             #header p { font-size: 11px; }
             #header img { max-height: 50px; }
-            #stats { gap: 8px; padding: 5px 10px; }
-            .control-group { flex-direction: row; flex-wrap: wrap; align-items: center; }
             
-            .sliders-row {
-                display: flex;
-                flex-direction: row;
-                gap: 10px;
-                flex: 1;
-                min-width: 200px;
+            #controls {
+                padding: 8px;
             }
             
-            .slider-group { 
-                min-width: auto;
-                flex: 1;
+            .control-group { 
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
             }
             
-            .slider-group input[type="range"] {
-                max-width: 80px;
-            }
-            
-            #map-container { height: calc(100vh - 180px); }
-            
-            /* Groupe de boutons icônes reste en ligne */
+            /* Première ligne: boutons + status */
             .buttons-group {
                 display: flex;
                 gap: 8px;
                 justify-content: flex-start;
+                width: 100%;
             }
             
             #btnMyPosition,
@@ -697,6 +694,70 @@
                 width: 44px !important;
                 height: 44px;
                 font-size: 22px;
+                flex-shrink: 0;
+            }
+            
+            .status {
+                flex: 1;
+                text-align: center;
+                margin-left: 8px;
+            }
+            
+            /* Sliders sur toute la largeur */
+            .sliders-row {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 100%;
+            }
+            
+            .slider-group { 
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+            }
+            
+            .slider-group .slider-label {
+                min-width: 55px;
+                font-size: 12px;
+            }
+            
+            .slider-group input[type="range"] {
+                flex: 1;
+                max-width: none;
+                min-width: 0;
+            }
+            
+            .slider-group .slider-value {
+                min-width: 55px;
+                text-align: right;
+            }
+            
+            /* Stats */
+            #stats { 
+                gap: 6px; 
+                padding: 6px 8px;
+                justify-content: space-around;
+            }
+            
+            .source-toggle {
+                padding: 6px 10px;
+                flex: 1;
+                min-width: 0;
+            }
+            
+            .toggle-value {
+                font-size: 16px;
+            }
+            
+            .toggle-label {
+                font-size: 9px;
+            }
+            
+            /* Map */
+            #map-container { 
+                height: calc(100vh - 200px); 
             }
             
             #map-legend {
@@ -704,6 +765,37 @@
                 right: 5px;
                 padding: 8px 10px;
                 font-size: 11px;
+            }
+            
+            #map-instructions {
+                font-size: 11px;
+                padding: 6px 12px;
+                bottom: 15px;
+            }
+        }
+        
+        /* Très petits écrans (iPhone SE, etc.) */
+        @media (max-width: 380px) {
+            .slider-group .slider-label {
+                min-width: 45px;
+                font-size: 11px;
+            }
+            
+            .slider-group .slider-value {
+                min-width: 45px;
+                font-size: 11px;
+            }
+            
+            .source-toggle {
+                padding: 5px 8px;
+            }
+            
+            .toggle-value {
+                font-size: 14px;
+            }
+            
+            .toggle-label {
+                font-size: 8px;
             }
         }
         
@@ -733,9 +825,12 @@
 
     <div id="controls">
         <div class="control-group">
-            <div class="buttons-group">
-                <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
-                <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
+            <div class="top-row">
+                <div class="buttons-group">
+                    <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
+                    <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
+                </div>
+                <div class="status" id="status">Maintenez appuyé sur la carte</div>
             </div>
 
             <div class="sliders-row">
@@ -751,8 +846,6 @@
                     <span class="slider-value"><span id="daysValue">7</span> jours</span>
                 </div>
             </div>
-
-            <div class="status" id="status">Maintenez appuyé sur la carte</div>
         </div>
     </div>
 
