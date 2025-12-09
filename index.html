@@ -1596,24 +1596,46 @@
                 var popupHtml;
                 
                 if (isSalon) {
-                    // POPUP SALON - SIMPLIFIÉ
+                    // POPUP SALON - AFFICHE TOUS LES SALONS AU MÊME ENDROIT
                     popupHtml = '<div class="salon-popup">';
-                    popupHtml += '<h3>' + firstEvent.title + '</h3>';
                     
-                    if (firstEvent.begin) {
-                        popupHtml += '<div class="date">' + firstEvent.begin;
-                        if (firstEvent.duration) {
-                            popupHtml += ' • ' + firstEvent.duration;
+                    if (eventsAtLocation.length > 1) {
+                        // Plusieurs salons au même endroit
+                        popupHtml += '<h3>' + eventsAtLocation.length + ' salons</h3>';
+                        if (firstEvent.locationName) {
+                            popupHtml += '<div class="venue">' + firstEvent.locationName + '</div>';
+                        }
+                        popupHtml += '<div style="max-height:300px;overflow-y:auto;margin-top:8px;">';
+                        
+                        for (var j = 0; j < eventsAtLocation.length; j++) {
+                            var salon = eventsAtLocation[j];
+                            popupHtml += '<div style="padding:6px 0;border-bottom:1px solid #e5e7eb;">';
+                            popupHtml += '<div style="font-weight:600;font-size:12px;color:#166534;">' + salon.title + '</div>';
+                            if (salon.begin) {
+                                popupHtml += '<div style="font-size:11px;color:#666;">' + salon.begin;
+                                if (salon.duration) popupHtml += ' • ' + salon.duration;
+                                popupHtml += '</div>';
+                            }
+                            if (salon.openagendaUrl) {
+                                popupHtml += '<a href="' + salon.openagendaUrl + '" target="_blank" style="font-size:10px;color:#22c55e;">Infos →</a>';
+                            }
+                            popupHtml += '</div>';
                         }
                         popupHtml += '</div>';
-                    }
-                    
-                    if (firstEvent.locationName) {
-                        popupHtml += '<div class="venue">' + firstEvent.locationName + '</div>';
-                    }
-                    
-                    if (firstEvent.openagendaUrl) {
-                        popupHtml += '<a href="' + firstEvent.openagendaUrl + '" target="_blank" class="link">Infos →</a>';
+                    } else {
+                        // Un seul salon
+                        popupHtml += '<h3>' + firstEvent.title + '</h3>';
+                        if (firstEvent.begin) {
+                            popupHtml += '<div class="date">' + firstEvent.begin;
+                            if (firstEvent.duration) popupHtml += ' • ' + firstEvent.duration;
+                            popupHtml += '</div>';
+                        }
+                        if (firstEvent.locationName) {
+                            popupHtml += '<div class="venue">' + firstEvent.locationName + '</div>';
+                        }
+                        if (firstEvent.openagendaUrl) {
+                            popupHtml += '<a href="' + firstEvent.openagendaUrl + '" target="_blank" class="link">Infos →</a>';
+                        }
                     }
                     popupHtml += '</div>';
                     
