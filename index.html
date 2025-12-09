@@ -1782,15 +1782,10 @@
                     // Afficher sur la carte
                     refreshMapDisplay();
                     
-                    // Charger les cinémas si le toggle est actif
-                    if (showCinema) {
-                        fetchCinemaEvents(lat, lon, currentRadiusKm);
-                    }
-                    
-                    // Charger les salons si le toggle est actif
-                    if (showSalons) {
-                        fetchSalonsEvents(lat, lon, currentRadiusKm);
-                    }
+                    // 🎯 TOUJOURS charger cinéma et salons (en arrière-plan)
+                    // L'affichage dépendra du toggle, mais les données sont prêtes
+                    fetchCinemaEvents(lat, lon, currentRadiusKm);
+                    fetchSalonsEvents(lat, lon, currentRadiusKm);
                 })
                 .catch(function(e) {
                     if (e.name === 'AbortError') return;
