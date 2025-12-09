@@ -524,13 +524,13 @@
             addBtn.disabled = true;
             addBtn.textContent = '⏳ Géocodage...';
             
-            // Construire l'adresse pour le géocodage
+            // Construire l'adresse pour le géocodage (sans forcer France)
             const addressParts = [
                 currentEventData.location?.venueName,
                 currentEventData.location?.address,
                 currentEventData.location?.city
             ].filter(Boolean);
-            const fullAddress = addressParts.join(', ') + ', France';
+            const fullAddress = addressParts.join(', ');
             
             // Géocoder l'adresse via l'API serveur
             let latitude = null;
@@ -556,7 +556,7 @@
                         const cityResponse = await fetch(`${SERVER_URL}/api/scanner/geocode`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ address: currentEventData.location.city + ', France' })
+                            body: JSON.stringify({ address: currentEventData.location.city })
                         });
                         const cityData = await cityResponse.json();
                         if (cityData.status === 'success') {
