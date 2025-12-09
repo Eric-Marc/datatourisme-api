@@ -1570,10 +1570,46 @@ def load_salons_data():
 
 
 def parse_salon_date(date_str):
-    """Parse une date de salon (format DD/MM/YYYY)."""
+    """Parse une date de salon (formats: DD/MM/YYYY ou 'mois YYYY')."""
+    if not date_str:
+        return None
+    
     try:
         from datetime import datetime
-        return datetime.strptime(date_str, '%d/%m/%Y').date()
+        
+        # Format 1: DD/MM/YYYY
+        if '/' in date_str:
+            return datetime.strptime(date_str, '%d/%m/%Y').date()
+        
+        # Format 2: "mois YYYY" (janv. 2026, avril 2026, etc.)
+        MOIS = {
+            'janv': 1, 'janvier': 1,
+            'fév': 2, 'fevr': 2, 'février': 2, 'fevrier': 2,
+            'mars': 3,
+            'avril': 4, 'avr': 4,
+            'mai': 5,
+            'juin': 6,
+            'juil': 7, 'juillet': 7,
+            'août': 8, 'aout': 8,
+            'sept': 9, 'septembre': 9,
+            'oct': 10, 'octobre': 10,
+            'nov': 11, 'novembre': 11,
+            'déc': 12, 'dec': 12, 'décembre': 12, 'decembre': 12
+        }
+        
+        date_lower = date_str.lower().replace('.', '').strip()
+        
+        for mois_str, mois_num in MOIS.items():
+            if mois_str in date_lower:
+                # Extraire l'année
+                import re
+                year_match = re.search(r'(\d{4})', date_str)
+                if year_match:
+                    year = int(year_match.group(1))
+                    # Retourner le 1er du mois
+                    return datetime(year, mois_num, 1).date()
+        
+        return None
     except:
         return None
 
