@@ -1791,7 +1791,9 @@ def health():
 # 📷 PROXY GEMINI (pour éviter les problèmes CORS)
 # ============================================================================
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDnqw7COYrxsgg5vCLHs6im7iP5NzR2SvE")
+# IMPORTANT: Ne jamais mettre la clé dans le code !
+# Configurer GEMINI_API_KEY dans les variables d'environnement Render
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"]
 
 @app.route('/api/scanner/analyze', methods=['POST'])
@@ -1801,6 +1803,13 @@ def analyze_poster():
     Évite les problèmes CORS en faisant la requête côté serveur
     """
     try:
+        # Vérifier que la clé API est configurée
+        if not GEMINI_API_KEY:
+            return jsonify({
+                "status": "error", 
+                "message": "GEMINI_API_KEY non configurée. Ajoutez-la dans les variables d'environnement Render."
+            }), 500
+        
         data = request.get_json()
         
         if not data:
