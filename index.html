@@ -108,16 +108,23 @@
             flex-shrink: 0;
         }
 
+        .sliders-row {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+            align-items: center;
+        }
+
         input[type="range"] {
             flex: 1;
-            max-width: 140px;
+            max-width: 120px;
         }
 
         .slider-value {
             font-size: 12px;
             font-weight: bold;
             color: #667eea;
-            min-width: 55px;
+            min-width: 50px;
         }
 
         .status {
@@ -188,10 +195,6 @@
             border-color: #dc2626;
         }
 
-        .toggle-icon {
-            font-size: 16px;
-        }
-
         .toggle-value {
             font-size: 16px;
             font-weight: bold;
@@ -206,16 +209,8 @@
             color: #dc2626;  /* Rouge cinéma */
         }
         
-        #toggle-cinema .toggle-icon {
-            color: #dc2626;
-        }
-        
         #toggle-salons .toggle-value {
             color: #22c55e;  /* Vert salons */
-        }
-        
-        #toggle-salons .toggle-icon {
-            color: #22c55e;
         }
 
         .toggle-label {
@@ -568,24 +563,31 @@
         }
 
         .cinema-popup .film-item {
-            margin: 8px 0;
-            padding: 10px;
-            background: linear-gradient(135deg, #fef2f2 0%, #fff 100%);
-            border-left: 4px solid #dc2626;
-            border-radius: 0 6px 6px 0;
+            margin: 6px 0;
+            padding: 8px;
+            background: #fef2f2;
+            border-left: 3px solid #dc2626;
+            border-radius: 0 4px 4px 0;
         }
 
         .cinema-popup .film-title {
-            font-weight: 700;
+            font-weight: 600;
             color: #991b1b;
-            font-size: 14px;
+            font-size: 13px;
+        }
+
+        .cinema-popup .film-showtimes {
+            font-size: 12px;
+            color: #333;
+            margin-top: 3px;
+            font-weight: 500;
         }
 
         .cinema-popup .film-info {
             font-size: 11px;
             color: #666;
-            line-height: 1.4;
-            margin-top: 4px;
+            line-height: 1.3;
+            margin-top: 3px;
         }
 
         .leaflet-popup-content {
@@ -692,12 +694,26 @@
             #header p { font-size: 11px; }
             #header img { max-height: 50px; }
             #stats { gap: 8px; padding: 5px 10px; }
-            .control-group { flex-direction: column; align-items: stretch; }
-            .slider-group { min-width: 100%; }
-            #map-container { height: calc(100vh - 180px); }
+            .control-group { flex-direction: row; flex-wrap: wrap; align-items: center; }
             
-            /* Boutons pleine largeur SAUF les boutons icônes */
-            .control-group > button { width: 100%; padding: 8px 12px; font-size: 13px; }
+            .sliders-row {
+                display: flex;
+                flex-direction: row;
+                gap: 10px;
+                flex: 1;
+                min-width: 200px;
+            }
+            
+            .slider-group { 
+                min-width: auto;
+                flex: 1;
+            }
+            
+            .slider-group input[type="range"] {
+                max-width: 80px;
+            }
+            
+            #map-container { height: calc(100vh - 180px); }
             
             /* Groupe de boutons icônes reste en ligne */
             .buttons-group {
@@ -752,25 +768,26 @@
                 <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
             </div>
 
-            <div class="slider-group">
-                <span class="slider-label">Rayon:</span>
-                <input type="range" id="radiusRange" min="5" max="100" value="30" step="5">
-                <span class="slider-value"><span id="radiusValue">30</span> km</span>
+            <div class="sliders-row">
+                <div class="slider-group">
+                    <span class="slider-label">Rayon:</span>
+                    <input type="range" id="radiusRange" min="5" max="100" value="30" step="5">
+                    <span class="slider-value"><span id="radiusValue">30</span> km</span>
+                </div>
+
+                <div class="slider-group">
+                    <span class="slider-label">Période:</span>
+                    <input type="range" id="daysRange" min="1" max="30" value="7" step="1">
+                    <span class="slider-value"><span id="daysValue">7</span> jours</span>
+                </div>
             </div>
 
-            <div class="slider-group">
-                <span class="slider-label">Période:</span>
-                <input type="range" id="daysRange" min="1" max="30" value="7" step="1">
-                <span class="slider-value"><span id="daysValue">7</span> jours</span>
-            </div>
-
-            <div class="status" id="status">👆 Maintenez appuyé sur la carte</div>
+            <div class="status" id="status">Maintenez appuyé sur la carte</div>
         </div>
     </div>
 
     <div id="stats">
         <div class="source-toggle active" id="toggle-events" onclick="toggleSource('events')">
-            <span class="toggle-icon">📅</span>
             <div>
                 <div class="toggle-value" id="events-count">0</div>
                 <div class="toggle-label">Événements</div>
@@ -778,7 +795,6 @@
             <span class="toggle-check">✓</span>
         </div>
         <div class="source-toggle active" id="toggle-cinema" onclick="toggleCinema()">
-            <span class="toggle-icon">🎬</span>
             <div>
                 <div class="toggle-value" id="cinema-count">0</div>
                 <div class="toggle-label">Films</div>
@@ -786,7 +802,6 @@
             <span class="toggle-check">✓</span>
         </div>
         <div class="source-toggle active" id="toggle-salons" onclick="toggleSalons()">
-            <span class="toggle-icon">🏢</span>
             <div>
                 <div class="toggle-value" id="salons-count">0</div>
                 <div class="toggle-label">Salons</div>
@@ -1617,20 +1632,17 @@
                     popupHtml += '<h3>🏢 ' + firstEvent.title + '</h3>';
                     
                     if (firstEvent.begin) {
-                        popupHtml += '<span class="date">📅 ' + firstEvent.begin + '</span>';
+                        popupHtml += '<span class="date">' + firstEvent.begin + '</span>';
                     }
                     if (firstEvent.duration) {
-                        popupHtml += '<span class="duration">' + firstEvent.duration + '</span>';
+                        popupHtml += '<span class="duration"> • ' + firstEvent.duration + '</span>';
                     }
                     
                     if (firstEvent.locationName) {
-                        popupHtml += '<div class="venue"><strong>📍</strong> ' + firstEvent.locationName + '</div>';
-                    }
-                    if (firstEvent.city) {
-                        popupHtml += '<div style="font-size:12px;color:#666;">' + firstEvent.city + '</div>';
+                        popupHtml += '<div class="venue">' + firstEvent.locationName + '</div>';
                     }
                     if (firstEvent.frequency) {
-                        popupHtml += '<div style="font-size:11px;color:#888;margin-top:5px;">🔄 ' + firstEvent.frequency + '</div>';
+                        popupHtml += '<div style="font-size:11px;color:#888;">' + firstEvent.frequency + '</div>';
                     }
                     
                     if (firstEvent.openagendaUrl) {
@@ -1639,61 +1651,50 @@
                     popupHtml += '</div>';
                     
                 } else if (isCinema) {
-                    // 🎬 POPUP CINÉMA - STYLE ROUGE
+                    // 🎬 POPUP CINÉMA - SIMPLIFIÉ
                     popupHtml = '<div class="cinema-popup">';
-                    popupHtml += '<span class="cinema-badge">🎬 CINÉMA</span>';
                     popupHtml += '<h3>' + firstEvent.locationName + '</h3>';
-                    if (firstEvent.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:10px;">' + firstEvent.address + '</div>';
+                    if (firstEvent.address) popupHtml += '<div style="font-size:11px;color:#666;margin-bottom:8px;">' + firstEvent.address + '</div>';
                     
-                    if (eventsAtLocation.length > 1) {
-                        popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
-                        popupHtml += '<div style="font-size:12px;color:#991b1b;font-weight:600;margin-bottom:8px;">' + eventsAtLocation.length + ' films à l\'affiche</div>';
-                        
-                        for (var j = 0; j < eventsAtLocation.length; j++) {
-                            var film = eventsAtLocation[j];
-                            var filmTitle = film.title.replace('🎬 ', '');
-                            popupHtml += '<div class="film-item">';
-                            popupHtml += '<div class="film-title">' + filmTitle + '</div>';
-                            if (film.description) {
-                                popupHtml += '<div class="film-info">' + film.description + '</div>';
-                            }
-                            popupHtml += '</div>';
-                        }
-                        popupHtml += '</div>';
-                    } else {
-                        var filmTitle = firstEvent.title.replace('🎬 ', '');
+                    popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
+                    
+                    for (var j = 0; j < eventsAtLocation.length; j++) {
+                        var film = eventsAtLocation[j];
+                        var filmTitle = film.title.replace('🎬 ', '');
                         popupHtml += '<div class="film-item">';
                         popupHtml += '<div class="film-title">' + filmTitle + '</div>';
-                        if (firstEvent.description) {
-                            popupHtml += '<div class="film-info">' + firstEvent.description + '</div>';
+                        if (film.description) {
+                            // Extraire juste les horaires (VF: xx:xx ou VO: xx:xx)
+                            var desc = film.description;
+                            popupHtml += '<div class="film-showtimes">' + desc + '</div>';
                         }
                         popupHtml += '</div>';
                     }
                     popupHtml += '</div>';
+                    popupHtml += '</div>';
                     
                 } else {
-                    // 📅 POPUP ÉVÉNEMENTS - STYLE BLEU
+                    // 📅 POPUP ÉVÉNEMENTS - SIMPLIFIÉ
                     popupHtml = '<div class="event-popup">';
                     
                     for (var j = 0; j < eventsAtLocation.length; j++) {
                         var event = eventsAtLocation[j];
-                        if (j > 0) popupHtml += '<hr style="margin:10px 0;border:none;border-top:1px solid #e5e7eb;">';
+                        if (j > 0) popupHtml += '<hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">';
                         
-                        var eventTitle = event.title || 'Événement sans titre';
+                        var eventTitle = event.title || 'Événement';
                         
                         popupHtml += '<h3>' + eventTitle + '</h3>';
                         
-                        if (event.begin) popupHtml += '<div class="date">📅 ' + formatDate(event.begin) + '</div>';
+                        if (event.begin) popupHtml += '<div class="date">' + formatDate(event.begin) + '</div>';
                         
-                        // 📍 Affichage simplifié : juste l'adresse
                         if (event.locationName) {
-                            popupHtml += '<div class="venue"><strong>📍</strong> ' + event.locationName + '</div>';
+                            popupHtml += '<div class="venue">' + event.locationName + '</div>';
                         }
                         if (event.address) {
                             popupHtml += '<div class="address">' + event.address + '</div>';
                         }
                         
-                        if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Voir les détails →</a>';
+                        if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Détails →</a>';
                     }
                     
                     popupHtml += '</div>';
