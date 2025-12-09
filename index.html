@@ -2111,12 +2111,87 @@
             // 📷 Charger les événements scannés depuis localStorage
             loadScannedEvents();
             
+            // 📷 Si on a des événements scannés, les afficher et centrer dessus
+            if (scannedEventsData.length > 0) {
+                displayScannedEventsGlobal();
+            }
+            
             var instructionText = DEVICE_INFO.isMobile 
                 ? '👆 Maintenez appuyé 1s pour sélectionner'
                 : '👆 Maintenez appuyé 2s pour sélectionner un point';
             document.getElementById('map-instructions').textContent = instructionText;
             
             updateStatus('👆 Maintenez appuyé sur la carte', 'waiting');
+        }
+        
+        // 📷 Afficher les événements scannés SANS zone de recherche (mode global)
+        function displayScannedEventsGlobal() {
+            if (scannedEventsData.length === 0) return;
+            
+            console.log('📷 Affichage global de', scannedEventsData.length, 'événements scannés');
+            
+            // Créer un cluster pour les scannés
+            if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
+            
+            currentMarkerCluster = L.markerClusterGroup({
+                chunkedLoading: true,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                maxClusterRadius: 50,
+                iconCreateFunction: function(cluster) {
+                    var count = cluster.getChildCount();
+                    return L.divIcon({
+                        html: '<div style="background:#f97316;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:14px;border:3px solid white;box-shadow:0 2px 8px rgba(249,115,22,0.5);">📷' + count + '</div>',
+                        className: 'marker-cluster-scanned',
+                        iconSize: [40, 40]
+                    });
+                }
+            });
+            
+            var bounds = L.latLngBounds();
+            var hasValidBounds = false;
+            
+            scannedEventsData.forEach(function(event) {
+                if (!event.latitude || !event.longitude) return;
+                
+                var icon = createScannedIcon();
+                var marker = L.marker([event.latitude, event.longitude], { icon: icon });
+                
+                // Popup
+                var popupHtml = '<div class="scanned-popup" style="max-width:320px;">';
+                popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
+                popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">📷 SCANNÉ</span>';
+                popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;">' + (event.title || 'Événement scanné') + '</h3>';
+                popupHtml += '</div>';
+                
+                if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
+                if (event.locationName) popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + event.locationName + '</div>';
+                if (event.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:8px;">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+                if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
+                
+                popupHtml += '<div style="display:flex;gap:8px;margin-top:10px;">';
+                popupHtml += '<button onclick="deleteScannedEvent(\'' + event.uid + '\')" style="flex:1;padding:6px;background:#fee2e2;color:#dc2626;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🗑️ Supprimer</button>';
+                popupHtml += '</div>';
+                popupHtml += '</div>';
+                
+                marker.bindPopup(popupHtml, { maxWidth: 320 });
+                currentMarkerCluster.addLayer(marker);
+                
+                bounds.extend([event.latitude, event.longitude]);
+                hasValidBounds = true;
+            });
+            
+            map.addLayer(currentMarkerCluster);
+            
+            // Centrer la carte sur les événements scannés
+            if (hasValidBounds) {
+                map.fitBounds(bounds.pad(0.2));
+                updateStatus('📷 ' + scannedEventsData.length + ' événement(s) scanné(s)', 'active');
+                
+                // Masquer les instructions
+                document.getElementById('map-instructions').classList.add('hidden');
+            }
         }
 
         if (document.readyState === 'loading') {
