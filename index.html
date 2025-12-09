@@ -347,26 +347,15 @@
             }
         }
 
-        /* 🏢 MARQUEURS SALONS - VERT */
+        /* MARQUEURS SALONS - VERT */
         .salon-marker {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
             border: 3px solid white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);  /* Vert dégradé */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            background: #22c55e;
             animation: pulseSalon 1.8s ease-in-out infinite;
-            position: relative;
-        }
-        
-        .salon-marker::after {
-            content: '🏢';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 10px;
-            line-height: 1;
         }
 
         @keyframes pulseSalon {
@@ -384,59 +373,39 @@
 
         /* 🏢 POPUP SALONS - STYLE VERT */
         .salon-popup {
-            max-width: 320px;
+            max-width: 280px;
         }
 
         .salon-popup h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
+            margin: 0 0 6px 0;
+            font-size: 14px;
             color: #166534;
-            line-height: 1.4;
-            border-left: 4px solid #22c55e;
-            padding-left: 10px;
+            line-height: 1.3;
         }
 
         .salon-popup .date {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
             font-size: 12px;
-            display: inline-block;
-            margin-bottom: 8px;
-        }
-
-        .salon-popup .duration {
-            background: #dcfce7;
-            color: #166534;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            display: inline-block;
-            margin-left: 5px;
-        }
-
-        .salon-popup .venue {
-            font-size: 13px;
-            color: #444;
+            color: #22c55e;
+            font-weight: 500;
             margin-bottom: 4px;
         }
 
-        .salon-popup .venue strong {
-            color: #16a34a;
+        .salon-popup .venue {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 6px;
         }
 
         .salon-popup .link {
             display: inline-block;
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            background: #22c55e;
             color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
+            padding: 5px 10px;
+            border-radius: 4px;
             text-decoration: none;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 10px;
-            transition: all 0.3s;
+            font-size: 11px;
+            font-weight: 500;
+            margin-top: 6px;
         }
 
         .salon-popup .link:hover {
@@ -1627,26 +1596,24 @@
                 var popupHtml;
                 
                 if (isSalon) {
-                    // 🏢 POPUP SALON - STYLE VERT
+                    // POPUP SALON - SIMPLIFIÉ
                     popupHtml = '<div class="salon-popup">';
-                    popupHtml += '<h3>🏢 ' + firstEvent.title + '</h3>';
+                    popupHtml += '<h3>' + firstEvent.title + '</h3>';
                     
                     if (firstEvent.begin) {
-                        popupHtml += '<span class="date">' + firstEvent.begin + '</span>';
-                    }
-                    if (firstEvent.duration) {
-                        popupHtml += '<span class="duration"> • ' + firstEvent.duration + '</span>';
+                        popupHtml += '<div class="date">' + firstEvent.begin;
+                        if (firstEvent.duration) {
+                            popupHtml += ' • ' + firstEvent.duration;
+                        }
+                        popupHtml += '</div>';
                     }
                     
                     if (firstEvent.locationName) {
                         popupHtml += '<div class="venue">' + firstEvent.locationName + '</div>';
                     }
-                    if (firstEvent.frequency) {
-                        popupHtml += '<div style="font-size:11px;color:#888;">' + firstEvent.frequency + '</div>';
-                    }
                     
                     if (firstEvent.openagendaUrl) {
-                        popupHtml += '<a href="' + firstEvent.openagendaUrl + '" target="_blank" class="link">Plus d\'infos →</a>';
+                        popupHtml += '<a href="' + firstEvent.openagendaUrl + '" target="_blank" class="link">Infos →</a>';
                     }
                     popupHtml += '</div>';
                     
