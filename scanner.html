@@ -5,609 +5,315 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEDEON - Scanner d'Affiches</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        primary: '#667eea',
-                        secondary: '#10B981',
-                        dark: '#111827',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
-        body { background-color: #f3f4f6; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
-        
-        .animate-fade-in {
-            animation: fadeIn 0.5s ease-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .drag-active {
-            border-color: #667eea !important;
-            background-color: #eef2ff !important;
-            transform: scale(1.01);
-        }
+        body { background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .drag-active { border-color: #667eea !important; background-color: #eef2ff !important; }
+        .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
     </style>
 </head>
-<body class="min-h-screen flex flex-col font-sans">
+<body class="min-h-screen flex flex-col">
     
+    <!-- Modal Login -->
+    <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-overlay hidden">
+        <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4 animate-fade-in">
+            <div class="text-center mb-6">
+                <div class="bg-indigo-500 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <span class="text-3xl">👤</span>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Bienvenue sur GEDEON</h2>
+                <p class="text-gray-500 mt-2">Entrez votre pseudo pour continuer</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Pseudo</label>
+                    <input type="text" id="login-pseudo" 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                           placeholder="Ex: Eric, Philippe..." maxlength="20" autocomplete="off">
+                    <p class="text-xs text-gray-400 mt-1">2-20 caractères (lettres, chiffres, _)</p>
+                </div>
+                <div id="login-error" class="text-red-500 text-sm hidden"></div>
+                <button id="login-btn" onclick="doLogin()" class="w-full bg-indigo-500 text-white py-3 rounded-xl font-semibold hover:bg-indigo-600">Continuer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Header -->
-    <header class="bg-white shadow-sm sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center gap-3">
-                    <a href="index.html" class="text-gray-500 hover:text-gray-700">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                        </svg>
-                    </a>
-                    <div class="bg-primary p-2 rounded-lg">
-                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="text-xl font-bold text-gray-900 tracking-tight">GEDEON Scanner</h1>
-                        <p class="text-xs text-gray-500">Extracteur d'Événements IA</p>
-                    </div>
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="text-gray-500 hover:text-gray-700">←</a>
+                <div class="bg-indigo-500 p-2 rounded-lg"><span class="text-white text-xl">📷</span></div>
+                <div>
+                    <h1 class="text-lg font-bold text-gray-900">GEDEON Scanner</h1>
+                    <p class="text-xs text-gray-500">Extracteur IA</p>
                 </div>
-                <div class="flex gap-4 text-sm text-gray-500 hidden sm:flex">
-                    <div class="flex items-center gap-1">📷 Capturer</div>
-                    <div class="flex items-center gap-1">🤖 Analyser</div>
-                    <div class="flex items-center gap-1">📄 Exporter</div>
-                </div>
+            </div>
+            <div id="user-info" class="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full">
+                <span>👤</span>
+                <span id="user-pseudo-display" class="font-medium text-gray-700">...</span>
+                <button onclick="logout()" class="text-gray-400 hover:text-red-500 ml-1" title="Déconnexion">✕</button>
             </div>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        <!-- Intro (visible quand pas d'image) -->
-        <div id="intro-section" class="text-center mb-10 space-y-2">
-            <h2 class="text-3xl font-bold text-gray-900">Transformez vos affiches en données</h2>
-            <p class="text-gray-600 max-w-2xl mx-auto">
-                Utilisez l'IA Gemini pour extraire automatiquement les dates, lieux, prix et descriptions depuis n'importe quelle photo d'affiche ou flyer.
-            </p>
-        </div>
-
-        <!-- Upload Section -->
-        <div id="upload-section" class="max-w-xl mx-auto">
-            <div id="drop-zone" class="relative border-2 border-dashed rounded-xl p-8 transition-all duration-300 ease-in-out text-center cursor-pointer bg-white border-gray-300 hover:border-primary hover:bg-gray-50">
-                <input type="file" id="file-input" class="hidden" accept="image/*">
-                
-                <div class="flex flex-col items-center justify-center space-y-4">
-                    <div id="upload-icon" class="p-4 bg-indigo-100 rounded-full text-primary">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                        </svg>
-                    </div>
-                    <div class="space-y-1">
-                        <h3 id="upload-text" class="text-lg font-medium text-gray-900">Télécharger une affiche</h3>
-                        <p class="text-sm text-gray-500">Glissez-déposez ou cliquez pour sélectionner</p>
-                    </div>
-                    <div class="flex gap-4 text-xs text-gray-400">
-                        <span>📷 Photo</span>
-                        <span>🖼️ PNG, JPG, WEBP</span>
+    <!-- Main -->
+    <main class="flex-grow max-w-5xl w-full mx-auto px-4 py-6">
+        <div class="grid md:grid-cols-2 gap-6">
+            
+            <!-- Gauche: Zone image -->
+            <div class="space-y-4">
+                <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center cursor-pointer bg-white hover:border-indigo-500">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center text-3xl">🖼️</div>
+                    <p class="text-gray-600 font-medium">Glissez une affiche ici</p>
+                    <p class="text-gray-400 text-sm">ou cliquez pour sélectionner</p>
+                    <input type="file" id="file-input" accept="image/*" class="hidden">
+                </div>
+                <div id="image-preview" class="hidden bg-white rounded-2xl overflow-hidden shadow-lg relative">
+                    <img id="preview-img" class="w-full max-h-96 object-contain bg-gray-100">
+                    <button onclick="clearImage()" class="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600">✕</button>
+                </div>
+                <div id="processing-overlay" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-2xl p-8 text-center">
+                        <div class="animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p class="text-gray-700 font-medium">Analyse en cours...</p>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Results Section (hidden initially) -->
-        <div id="results-section" class="hidden">
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                <!-- Left: Image Source -->
-                <div class="lg:col-span-4 space-y-4">
-                    <div class="bg-white rounded-xl shadow-md p-4">
-                        <h3 class="text-sm font-semibold text-gray-700 mb-3">Image Source</h3>
-                        <div class="relative rounded-lg overflow-hidden border border-gray-200 bg-gray-50 aspect-[3/4] flex items-center justify-center">
-                            <img id="preview-image" src="" alt="Affiche source" class="max-h-full max-w-full object-contain">
-                            
-                            <!-- Processing Overlay -->
-                            <div id="processing-overlay" class="hidden absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center">
-                                <div class="flex flex-col items-center">
-                                    <div class="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent"></div>
-                                    <span class="mt-3 text-sm font-medium text-primary animate-pulse">Analyse Gemini en cours...</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button id="reset-btn" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors">
-                        🔄 Nouvelle analyse
-                    </button>
+            <!-- Droite: Résultat -->
+            <div class="space-y-4">
+                <div id="skeleton-loader" class="hidden bg-white rounded-2xl p-6 shadow-lg animate-pulse">
+                    <div class="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
+                    <div class="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                    <div class="h-4 bg-gray-200 rounded w-5/6"></div>
                 </div>
 
-                <!-- Right: Results -->
-                <div class="lg:col-span-8">
-                    
-                    <!-- Error Message -->
-                    <div id="error-container" class="hidden bg-red-50 border border-red-200 rounded-xl p-6 flex items-start gap-4">
-                        <span class="text-red-500 text-xl">⚠️</span>
-                        <div>
-                            <h3 class="font-semibold text-red-900">Erreur d'analyse</h3>
-                            <p id="error-message" class="text-red-700 text-sm mt-1 whitespace-pre-line"></p>
+                <div id="event-container" class="hidden animate-fade-in">
+                    <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-5 text-white">
+                            <span id="event-category" class="inline-block px-3 py-1 bg-white/20 rounded-full text-sm mb-2">Événement</span>
+                            <h2 id="event-title" class="text-xl font-bold">Titre</h2>
                         </div>
-                    </div>
-                    
-                    <!-- Event Display -->
-                    <div id="event-container" class="hidden space-y-6 animate-fade-in">
-                        <!-- Event Card -->
-                        <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                            <!-- Header -->
-                            <div class="bg-primary px-6 py-4">
-                                <span id="event-category" class="inline-block px-2 py-1 rounded bg-white/20 text-white text-xs font-semibold mb-2 backdrop-blur-sm">Événement</span>
-                                <h2 id="event-title" class="text-2xl font-bold text-white leading-tight">Titre de l'événement</h2>
+                        <div class="p-5 space-y-3 text-sm">
+                            <div class="flex gap-3"><span class="text-xl">📅</span><div><p class="text-gray-500">Date</p><p id="event-date" class="text-gray-900">-</p><p id="event-time" class="text-gray-600">-</p></div></div>
+                            <div class="flex gap-3"><span class="text-xl">📍</span><div><p class="text-gray-500">Lieu</p><p id="event-venue" class="text-gray-900">-</p><p id="event-address" class="text-gray-600">-</p></div></div>
+                            <div class="flex gap-3"><span class="text-xl">👥</span><div><p class="text-gray-500">Organisateur</p><p id="event-organizer" class="text-gray-900">-</p></div></div>
+                            <div class="flex gap-3"><span class="text-xl">💰</span><div><p class="text-gray-500">Tarif</p><p id="event-pricing" class="text-gray-900">-</p></div></div>
+                            <div id="event-description-container" class="hidden"><p class="text-gray-500 mb-1">Description</p><p id="event-description" class="text-gray-700 bg-gray-50 p-3 rounded-lg">-</p></div>
+                            <div id="event-tags-container" class="hidden"><p class="text-gray-500 mb-1">Tags</p><div id="event-tags" class="flex flex-wrap gap-2"></div></div>
+                        </div>
+                        <div class="p-5 bg-gray-50 border-t space-y-3">
+                            <div class="flex items-center gap-3 p-3 bg-white rounded-xl border">
+                                <input type="checkbox" id="is-private" class="w-5 h-5">
+                                <label for="is-private" class="flex-1"><span class="font-medium text-gray-700">Événement privé</span><p class="text-xs text-gray-400">Visible uniquement par vous</p></label>
+                                <span class="text-xl">🔒</span>
                             </div>
-                            
-                            <div class="p-6 grid gap-6">
-                                <!-- Date & Time -->
-                                <div class="flex items-start gap-4">
-                                    <div class="bg-indigo-50 p-2 rounded-lg text-primary">📅</div>
-                                    <div>
-                                        <h3 class="font-semibold text-gray-900">Date et Heure</h3>
-                                        <p id="event-date" class="text-gray-600">Date non spécifiée</p>
-                                        <p id="event-time" class="text-sm text-gray-500 mt-1"></p>
-                                    </div>
-                                </div>
-                                
-                                <!-- Location -->
-                                <div class="flex items-start gap-4">
-                                    <div class="bg-emerald-50 p-2 rounded-lg text-secondary">📍</div>
-                                    <div class="w-full">
-                                        <h3 class="font-semibold text-gray-900">Lieu</h3>
-                                        <p id="event-venue" class="text-gray-800 font-medium">Lieu inconnu</p>
-                                        <p id="event-address" class="text-gray-600 text-sm"></p>
-                                        
-                                        <!-- Map -->
-                                        <div id="map-container" class="hidden w-full h-48 rounded-lg overflow-hidden border border-gray-200 shadow-sm mt-3">
-                                            <iframe id="event-map" width="100%" height="100%" frameborder="0" scrolling="no" loading="lazy"></iframe>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Description -->
-                                <div id="description-container" class="hidden bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                    <h3 class="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Résumé</h3>
-                                    <p id="event-description" class="text-gray-600 text-sm leading-relaxed"></p>
-                                </div>
-                                
-                                <!-- Organizer & Pricing -->
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div class="border border-gray-100 rounded-lg p-4">
-                                        <h3 class="text-sm font-semibold text-gray-900 mb-3">Organisateur</h3>
-                                        <p id="event-organizer" class="font-medium text-gray-600">Non spécifié</p>
-                                        <div id="organizer-details" class="space-y-1 mt-2 text-sm text-gray-500"></div>
-                                    </div>
-                                    
-                                    <div class="border border-gray-100 rounded-lg p-4">
-                                        <h3 class="text-sm font-semibold text-gray-900 mb-3">Billetterie</h3>
-                                        <div class="flex items-center gap-3">
-                                            <div id="pricing-icon" class="p-2 rounded-full bg-green-100 text-green-700">🎟️</div>
-                                            <div>
-                                                <p id="event-price" class="font-bold text-gray-900">Gratuit</p>
-                                                <p id="event-currency" class="text-xs text-gray-500"></p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Tags -->
-                                <div id="tags-container" class="hidden flex flex-wrap gap-2 pt-2 border-t border-gray-100"></div>
+                            <div class="flex gap-3">
+                                <button id="add-to-gedeon-btn" onclick="addToGedeon()" class="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600">➕ Ajouter à GEDEON</button>
+                                <button onclick="toggleJson()" class="px-4 py-3 bg-gray-200 rounded-xl hover:bg-gray-300">{ }</button>
                             </div>
                         </div>
-                        
-                        <!-- JSON Viewer -->
-                        <div class="mt-8">
-                            <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <span class="w-1.5 h-6 bg-secondary rounded-full"></span>
-                                Structure JSON générée
-                            </h3>
-                            <div class="bg-gray-900 rounded-xl overflow-hidden shadow-lg">
-                                <div class="bg-gray-800 px-4 py-3 flex justify-between items-center border-b border-gray-700">
-                                    <span class="text-xs font-mono text-gray-400">event_data.json</span>
-                                    <div class="flex gap-2">
-                                        <button id="copy-btn" class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors">
-                                            📋 Copier
-                                        </button>
-                                        <button id="download-btn" class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors">
-                                            ⬇️ Télécharger
-                                        </button>
-                                        <button id="add-to-gedeon-btn" class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-white hover:bg-indigo-600 transition-colors">
-                                            ➕ Ajouter à GEDEON
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="p-4 overflow-auto max-h-96">
-                                    <pre id="json-output" class="text-xs sm:text-sm font-mono text-green-400 whitespace-pre-wrap break-all"></pre>
-                                </div>
-                            </div>
-                        </div>
+                        <div id="json-viewer" class="hidden border-t"><pre id="json-content" class="p-4 bg-gray-900 text-green-400 text-xs overflow-auto max-h-48"></pre></div>
                     </div>
-                    
-                    <!-- Skeleton Loader -->
-                    <div id="skeleton-loader" class="hidden space-y-4 animate-pulse">
-                        <div class="h-32 bg-gray-200 rounded-xl w-full"></div>
-                        <div class="h-20 bg-gray-200 rounded-xl w-full"></div>
-                        <div class="h-64 bg-gray-200 rounded-xl w-full"></div>
-                    </div>
+                </div>
+
+                <div id="error-message" class="hidden bg-red-50 border border-red-200 rounded-2xl p-5">
+                    <span class="text-xl">⚠️</span> <span id="error-text" class="text-red-600">-</span>
+                </div>
+
+                <div id="placeholder" class="bg-white rounded-2xl p-8 text-center shadow-lg">
+                    <div class="text-5xl mb-4">📄</div>
+                    <h3 class="text-lg font-semibold text-gray-700">En attente d'une image</h3>
+                    <p class="text-gray-400 text-sm">Téléchargez une affiche pour l'analyser</p>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 py-6 mt-auto">
-        <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
-            <p>© 2025 GEDEON Scanner. Propulsé par Google Gemini.</p>
-        </div>
+    <footer class="bg-white border-t py-3 text-center text-sm text-gray-400">
+        Propulsé par <span class="font-medium text-indigo-500">Gemini AI</span> • GEDEON Scanner v2.0
     </footer>
 
     <script>
-        // Configuration - Utilise l'API serveur (proxy Gemini)
         const SERVER_URL = window.location.origin;
-        
-        // État
         let currentEventData = null;
+        let currentUser = null;
         
-        // DOM Elements
-        const introSection = document.getElementById('intro-section');
-        const uploadSection = document.getElementById('upload-section');
-        const resultsSection = document.getElementById('results-section');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
-        const previewImage = document.getElementById('preview-image');
-        const processingOverlay = document.getElementById('processing-overlay');
-        const errorContainer = document.getElementById('error-container');
-        const errorMessage = document.getElementById('error-message');
+        const imagePreview = document.getElementById('image-preview');
+        const previewImg = document.getElementById('preview-img');
         const eventContainer = document.getElementById('event-container');
+        const errorMessage = document.getElementById('error-message');
+        const placeholder = document.getElementById('placeholder');
+        const processingOverlay = document.getElementById('processing-overlay');
         const skeletonLoader = document.getElementById('skeleton-loader');
-        const resetBtn = document.getElementById('reset-btn');
-        const copyBtn = document.getElementById('copy-btn');
-        const downloadBtn = document.getElementById('download-btn');
-        const addToGedeonBtn = document.getElementById('add-to-gedeon-btn');
+        const loginModal = document.getElementById('login-modal');
         
-        // Event Listeners
+        // === AUTH ===
+        function checkAuth() {
+            const stored = localStorage.getItem('gedeon_user');
+            if (stored) {
+                try {
+                    currentUser = JSON.parse(stored);
+                    document.getElementById('user-pseudo-display').textContent = currentUser.pseudo;
+                    loginModal.classList.add('hidden');
+                    return true;
+                } catch (e) {}
+            }
+            loginModal.classList.remove('hidden');
+            return false;
+        }
+        
+        async function doLogin() {
+            const pseudo = document.getElementById('login-pseudo').value.trim();
+            const errorDiv = document.getElementById('login-error');
+            const btn = document.getElementById('login-btn');
+            
+            if (pseudo.length < 2 || pseudo.length > 20) {
+                errorDiv.textContent = 'Pseudo: 2-20 caractères'; errorDiv.classList.remove('hidden'); return;
+            }
+            if (!/^[a-zA-Z0-9_àâäéèêëïîôùûüçÀÂÄÉÈÊËÏÎÔÙÛÜÇ]+$/.test(pseudo)) {
+                errorDiv.textContent = 'Caractères: lettres, chiffres, _'; errorDiv.classList.remove('hidden'); return;
+            }
+            
+            btn.disabled = true; btn.textContent = 'Connexion...'; errorDiv.classList.add('hidden');
+            
+            try {
+                const res = await fetch(`${SERVER_URL}/api/users/login`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pseudo})
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    currentUser = data.user;
+                    localStorage.setItem('gedeon_user', JSON.stringify(currentUser));
+                    document.getElementById('user-pseudo-display').textContent = currentUser.pseudo;
+                    loginModal.classList.add('hidden');
+                } else {
+                    errorDiv.textContent = data.message || 'Erreur'; errorDiv.classList.remove('hidden');
+                }
+            } catch (e) { errorDiv.textContent = 'Erreur serveur'; errorDiv.classList.remove('hidden'); }
+            btn.disabled = false; btn.textContent = 'Continuer';
+        }
+        
+        function logout() { if (confirm('Déconnexion ?')) { localStorage.removeItem('gedeon_user'); location.reload(); } }
+        document.getElementById('login-pseudo').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+        
+        // === DRAG & DROP ===
         dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', handleFileSelect);
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
+        dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-active'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) handleImageFile(f); });
+        fileInput.addEventListener('change', e => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
         
-        // Drag & Drop
-        dropZone.addEventListener('dragenter', handleDrag);
-        dropZone.addEventListener('dragleave', handleDrag);
-        dropZone.addEventListener('dragover', handleDrag);
-        dropZone.addEventListener('drop', handleDrop);
-        
-        resetBtn.addEventListener('click', reset);
-        copyBtn.addEventListener('click', copyJson);
-        downloadBtn.addEventListener('click', downloadJson);
-        addToGedeonBtn.addEventListener('click', addToGedeon);
-        
-        function handleDrag(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.type === 'dragenter' || e.type === 'dragover') {
-                dropZone.classList.add('drag-active');
-            } else {
-                dropZone.classList.remove('drag-active');
-            }
-        }
-        
-        function handleDrop(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            dropZone.classList.remove('drag-active');
-            
-            const file = e.dataTransfer.files[0];
-            if (file) processFile(file);
-        }
-        
-        function handleFileSelect(e) {
-            const file = e.target.files[0];
-            if (file) processFile(file);
-        }
-        
-        function processFile(file) {
-            if (!file.type.startsWith('image/')) {
-                alert('Veuillez sélectionner une image valide.');
-                return;
-            }
-            
+        function handleImageFile(file) {
+            if (file.size > 10*1024*1024) { showError('Max 10 MB'); return; }
             const reader = new FileReader();
-            reader.onloadend = () => {
-                const dataUrl = reader.result;
-                const base64 = dataUrl.split(',')[1];
-                analyzeImage(base64, file.type, dataUrl);
-            };
+            reader.onload = e => { previewImg.src = e.target.result; imagePreview.classList.remove('hidden'); dropZone.classList.add('hidden'); analyzeImage(e.target.result, file.type); };
             reader.readAsDataURL(file);
         }
         
-        async function analyzeImage(base64, mimeType, previewUrl) {
-            // Show results section
-            introSection.classList.add('hidden');
-            uploadSection.classList.add('hidden');
-            resultsSection.classList.remove('hidden');
-            
-            // Show preview
-            previewImage.src = previewUrl;
-            
-            // Show processing state
-            processingOverlay.classList.remove('hidden');
-            skeletonLoader.classList.remove('hidden');
-            errorContainer.classList.add('hidden');
-            eventContainer.classList.add('hidden');
-            
+        function clearImage() { imagePreview.classList.add('hidden'); dropZone.classList.remove('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden'); placeholder.classList.remove('hidden'); fileInput.value = ''; currentEventData = null; }
+        function showError(msg) { document.getElementById('error-text').textContent = msg; errorMessage.classList.remove('hidden'); eventContainer.classList.add('hidden'); placeholder.classList.add('hidden'); }
+        
+        // === ANALYSE ===
+        async function analyzeImage(dataUrl, mimeType) {
+            placeholder.classList.add('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden');
+            skeletonLoader.classList.remove('hidden'); processingOverlay.classList.remove('hidden');
             try {
-                const data = await callGeminiAPI(base64, mimeType);
-                currentEventData = data;
-                displayEventData(data);
-            } catch (err) {
-                console.error('Erreur complète:', err);
-                let errorMsg = "Impossible d'extraire les informations.";
-                if (err.message) {
-                    errorMsg += "\n\nDétails: " + err.message;
-                }
-                errorMsg += "\n\nOuvrez la console (F12) pour plus de détails.";
-                showError(errorMsg);
-            } finally {
-                processingOverlay.classList.add('hidden');
-                skeletonLoader.classList.add('hidden');
-            }
+                const base64 = dataUrl.split(',')[1];
+                const res = await fetch(`${SERVER_URL}/api/scanner/analyze`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({image: base64, mimeType}) });
+                const result = await res.json();
+                if (result.status === 'success') { currentEventData = result.data; displayEventData(result.data); }
+                else { throw new Error(result.message || 'Erreur'); }
+            } catch (e) { showError(e.message); }
+            finally { processingOverlay.classList.add('hidden'); skeletonLoader.classList.add('hidden'); }
         }
         
-        async function callGeminiAPI(base64Image, mimeType) {
-            // Utilise le proxy serveur pour éviter les problèmes CORS
-            const url = `${SERVER_URL}/api/scanner/analyze`;
-            
-            console.log('🤖 Envoi au serveur GEDEON...');
-            
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: base64Image,
-                    mimeType: mimeType
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.status === 'success') {
-                console.log(`✅ Analyse réussie (modèle: ${result.model})`);
-                return result.data;
-            } else {
-                throw new Error(result.message || 'Erreur analyse');
-            }
-        }
-        
-        function displayEventData(data) {
+        function displayEventData(d) {
             eventContainer.classList.remove('hidden');
-            
-            // Title & Category
-            document.getElementById('event-title').textContent = data.title || 'Événement sans titre';
-            document.getElementById('event-category').textContent = data.category || 'Événement';
-            
-            // Date & Time
-            let dateText = data.startDate || 'Date non spécifiée';
-            if (data.endDate && data.endDate !== data.startDate) {
-                dateText += ` - ${data.endDate}`;
-            }
+            document.getElementById('event-title').textContent = d.title || 'Sans titre';
+            document.getElementById('event-category').textContent = d.category || 'Événement';
+            let dateText = d.startDate || '-'; if (d.endDate && d.endDate !== d.startDate) dateText += ` → ${d.endDate}`;
             document.getElementById('event-date').textContent = dateText;
-            
-            let timeText = '';
-            if (data.startTime) {
-                timeText = `🕐 ${data.startTime}`;
-                if (data.endTime) timeText += ` à ${data.endTime}`;
-            }
-            document.getElementById('event-time').textContent = timeText;
-            
-            // Location
-            const venue = data.location?.venueName || 'Lieu inconnu';
-            const address = [data.location?.address, data.location?.city].filter(Boolean).join(', ');
-            document.getElementById('event-venue').textContent = venue;
-            document.getElementById('event-address').textContent = address;
-            
-            // Map
-            const mapQuery = [venue, address].filter(Boolean).join(', ');
-            if (mapQuery && data.location?.city) {
-                const mapContainer = document.getElementById('map-container');
-                const mapFrame = document.getElementById('event-map');
-                mapFrame.src = `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
-                mapContainer.classList.remove('hidden');
-            }
-            
-            // Description
-            if (data.description) {
-                document.getElementById('event-description').textContent = data.description;
-                document.getElementById('description-container').classList.remove('hidden');
-            }
-            
-            // Organizer
-            document.getElementById('event-organizer').textContent = data.organizer?.name || 'Non spécifié';
-            const orgDetails = document.getElementById('organizer-details');
-            orgDetails.innerHTML = '';
-            if (data.organizer?.website) {
-                orgDetails.innerHTML += `<div>🌐 <a href="${data.organizer.website}" target="_blank" class="text-primary hover:underline">Site web</a></div>`;
-            }
-            if (data.organizer?.email) {
-                orgDetails.innerHTML += `<div>📧 ${data.organizer.email}</div>`;
-            }
-            if (data.organizer?.phone) {
-                orgDetails.innerHTML += `<div>📞 ${data.organizer.phone}</div>`;
-            }
-            
-            // Pricing
-            const pricingIcon = document.getElementById('pricing-icon');
-            const priceText = document.getElementById('event-price');
-            const currencyText = document.getElementById('event-currency');
-            
-            if (data.pricing?.isFree) {
-                pricingIcon.className = 'p-2 rounded-full bg-green-100 text-green-700';
-                pricingIcon.textContent = '🎟️';
-                priceText.textContent = 'Gratuit';
-                currencyText.textContent = '';
-            } else {
-                pricingIcon.className = 'p-2 rounded-full bg-yellow-100 text-yellow-700';
-                pricingIcon.textContent = '💰';
-                priceText.textContent = data.pricing?.priceRange || 'Payant';
-                currencyText.textContent = data.pricing?.currency ? `Devise: ${data.pricing.currency}` : '';
-            }
-            
-            // Tags
-            const tagsContainer = document.getElementById('tags-container');
-            if (data.tags && data.tags.length > 0) {
-                tagsContainer.innerHTML = data.tags.map(tag => 
-                    `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">🏷️ ${tag}</span>`
-                ).join('');
-                tagsContainer.classList.remove('hidden');
-            } else {
-                tagsContainer.classList.add('hidden');
-            }
-            
-            // JSON Output
-            document.getElementById('json-output').textContent = JSON.stringify(data, null, 2);
+            document.getElementById('event-time').textContent = d.startTime ? (d.startTime + (d.endTime ? ` - ${d.endTime}` : '')) : '-';
+            document.getElementById('event-venue').textContent = d.location?.venueName || '-';
+            document.getElementById('event-address').textContent = [d.location?.address, d.location?.city].filter(Boolean).join(', ') || '-';
+            document.getElementById('event-organizer').textContent = d.organizer?.name || '-';
+            document.getElementById('event-pricing').textContent = d.pricing?.isFree ? 'Gratuit' : (d.pricing?.priceRange || '-');
+            if (d.description) { document.getElementById('event-description').textContent = d.description; document.getElementById('event-description-container').classList.remove('hidden'); }
+            else { document.getElementById('event-description-container').classList.add('hidden'); }
+            if (d.tags && d.tags.length) { document.getElementById('event-tags').innerHTML = d.tags.map(t => `<span class="px-2 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs">${t}</span>`).join(''); document.getElementById('event-tags-container').classList.remove('hidden'); }
+            else { document.getElementById('event-tags-container').classList.add('hidden'); }
+            document.getElementById('json-content').textContent = JSON.stringify(d, null, 2);
         }
         
-        function showError(message) {
-            errorContainer.classList.remove('hidden');
-            errorMessage.textContent = message;
-            eventContainer.classList.add('hidden');
-        }
+        function toggleJson() { document.getElementById('json-viewer').classList.toggle('hidden'); }
         
-        function reset() {
-            introSection.classList.remove('hidden');
-            uploadSection.classList.remove('hidden');
-            resultsSection.classList.add('hidden');
-            currentEventData = null;
-            fileInput.value = '';
-        }
-        
-        function copyJson() {
-            if (!currentEventData) return;
-            navigator.clipboard.writeText(JSON.stringify(currentEventData, null, 2));
-            copyBtn.textContent = '✅ Copié !';
-            setTimeout(() => { copyBtn.innerHTML = '📋 Copier'; }, 2000);
-        }
-        
-        function downloadJson() {
-            if (!currentEventData) return;
-            const blob = new Blob([JSON.stringify(currentEventData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `event-${(currentEventData.title || 'unknown').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
-            link.click();
-            URL.revokeObjectURL(url);
-        }
-        
+        // === AJOUTER À GEDEON ===
         async function addToGedeon() {
             if (!currentEventData) return;
+            if (!currentUser) { checkAuth(); return; }
             
-            const addBtn = document.getElementById('add-to-gedeon-btn');
-            addBtn.disabled = true;
-            addBtn.textContent = '⏳ Géocodage...';
+            const btn = document.getElementById('add-to-gedeon-btn');
+            const isPrivate = document.getElementById('is-private').checked;
+            btn.disabled = true; btn.textContent = '⏳ Géocodage...';
             
-            // Construire l'adresse pour le géocodage (sans forcer France)
-            const addressParts = [
-                currentEventData.location?.venueName,
-                currentEventData.location?.address,
-                currentEventData.location?.city
-            ].filter(Boolean);
-            const fullAddress = addressParts.join(', ');
+            const addr = [currentEventData.location?.venueName, currentEventData.location?.address, currentEventData.location?.city].filter(Boolean).join(', ');
+            let lat = null, lon = null;
             
-            // Géocoder l'adresse via l'API serveur
-            let latitude = null;
-            let longitude = null;
+            if (addr) {
+                try {
+                    let res = await fetch(`${SERVER_URL}/api/scanner/geocode`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({address: addr}) });
+                    let geo = await res.json();
+                    if (geo.status === 'success') { lat = geo.latitude; lon = geo.longitude; }
+                    else if (currentEventData.location?.city) {
+                        res = await fetch(`${SERVER_URL}/api/scanner/geocode`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({address: currentEventData.location.city}) });
+                        geo = await res.json();
+                        if (geo.status === 'success') { lat = geo.latitude; lon = geo.longitude; }
+                    }
+                } catch (e) { console.error('Geocode error:', e); }
+            }
+            
+            btn.textContent = '⏳ Enregistrement...';
             
             try {
-                console.log('🌍 Géocodage:', fullAddress);
-                const geoResponse = await fetch(`${SERVER_URL}/api/scanner/geocode`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address: fullAddress })
+                const res = await fetch(`${SERVER_URL}/api/scanned`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        user_id: currentUser.id,
+                        title: currentEventData.title,
+                        category: currentEventData.category,
+                        begin: currentEventData.startDate,
+                        end: currentEventData.endDate,
+                        startTime: currentEventData.startTime,
+                        endTime: currentEventData.endTime,
+                        locationName: currentEventData.location?.venueName,
+                        city: currentEventData.location?.city,
+                        address: currentEventData.location?.address,
+                        latitude: lat, longitude: lon,
+                        description: currentEventData.description,
+                        organizer: currentEventData.organizer?.name,
+                        pricing: currentEventData.pricing?.isFree ? 'Gratuit' : currentEventData.pricing?.priceRange,
+                        tags: currentEventData.tags || [],
+                        is_private: isPrivate
+                    })
                 });
-                const geoData = await geoResponse.json();
-                
-                if (geoData.status === 'success') {
-                    latitude = geoData.latitude;
-                    longitude = geoData.longitude;
-                    console.log('✅ Coordonnées trouvées:', latitude, longitude);
-                } else {
-                    console.warn('⚠️ Adresse non trouvée, essai avec la ville seule');
-                    // Essayer avec juste la ville
-                    if (currentEventData.location?.city) {
-                        const cityResponse = await fetch(`${SERVER_URL}/api/scanner/geocode`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ address: currentEventData.location.city })
-                        });
-                        const cityData = await cityResponse.json();
-                        if (cityData.status === 'success') {
-                            latitude = cityData.latitude;
-                            longitude = cityData.longitude;
-                            console.log('✅ Coordonnées ville:', latitude, longitude);
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('❌ Erreur géocodage:', e);
-            }
+                const result = await res.json();
+                if (result.status === 'success') {
+                    const priv = isPrivate ? ' (privé)' : ' (public)';
+                    if (lat && lon) { if (confirm(`✅ Ajouté${priv} !\n\nVoir la carte ?`)) window.location.href = 'index.html'; }
+                    else { alert(`✅ Ajouté${priv} mais non géolocalisé.`); }
+                } else { alert('❌ ' + (result.message || 'Erreur')); }
+            } catch (e) { alert('❌ Erreur serveur'); }
             
-            // Créer l'événement pour GEDEON
-            const gedeonEvent = {
-                uid: 'scanned-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-                title: currentEventData.title,
-                category: currentEventData.category,
-                begin: currentEventData.startDate,
-                end: currentEventData.endDate,
-                startTime: currentEventData.startTime,
-                endTime: currentEventData.endTime,
-                locationName: currentEventData.location?.venueName,
-                city: currentEventData.location?.city,
-                address: currentEventData.location?.address,
-                latitude: latitude,
-                longitude: longitude,
-                description: currentEventData.description,
-                organizer: currentEventData.organizer?.name,
-                pricing: currentEventData.pricing?.isFree ? 'Gratuit' : currentEventData.pricing?.priceRange,
-                tags: currentEventData.tags,
-                source: 'Scanner',
-                scannedAt: new Date().toISOString()
-            };
-            
-            // Sauvegarder dans localStorage
-            const existing = JSON.parse(localStorage.getItem('gedeon_scanned_events') || '[]');
-            existing.push(gedeonEvent);
-            localStorage.setItem('gedeon_scanned_events', JSON.stringify(existing));
-            
-            addBtn.disabled = false;
-            addBtn.textContent = '➕ Ajouter à GEDEON';
-            
-            if (latitude && longitude) {
-                if (confirm('✅ Événement géolocalisé et ajouté à GEDEON !\n\nVoulez-vous voir la carte maintenant ?')) {
-                    window.location.href = 'index.html';
-                }
-            } else {
-                alert('⚠️ Événement ajouté mais impossible de le géolocaliser.\nIl ne sera pas visible sur la carte.');
-            }
+            btn.disabled = false; btn.textContent = '➕ Ajouter à GEDEON';
         }
+        
+        // Init
+        checkAuth();
     </script>
 </body>
 </html>
