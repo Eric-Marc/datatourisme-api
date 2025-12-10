@@ -1116,8 +1116,14 @@
                 center: [46.603354, 1.888334],
                 zoom: 6,
                 tap: true,
-                tapTolerance: 15
+                tapTolerance: 15,
+                zoomControl: false
             });
+            
+            // Ajouter le contrôle de zoom en bas à gauche
+            L.control.zoom({
+                position: 'bottomleft'
+            }).addTo(map);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors',
