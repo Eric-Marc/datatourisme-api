@@ -111,6 +111,7 @@
                             <div class="flex gap-3"><span class="text-xl">📍</span><div><p class="text-gray-500">Lieu</p><p id="event-venue" class="text-gray-900">-</p><p id="event-address" class="text-gray-600">-</p></div></div>
                             <div class="flex gap-3"><span class="text-xl">👥</span><div><p class="text-gray-500">Organisateur</p><p id="event-organizer" class="text-gray-900">-</p></div></div>
                             <div class="flex gap-3"><span class="text-xl">💰</span><div><p class="text-gray-500">Tarif</p><p id="event-pricing" class="text-gray-900">-</p></div></div>
+                            <div id="event-website-container" class="hidden flex gap-3"><span class="text-xl">🌐</span><div><p class="text-gray-500">Site web</p><a id="event-website" href="#" target="_blank" class="text-indigo-600 hover:underline">-</a></div></div>
                             <div id="event-description-container" class="hidden"><p class="text-gray-500 mb-1">Description</p><p id="event-description" class="text-gray-700 bg-gray-50 p-3 rounded-lg">-</p></div>
                             <div id="event-tags-container" class="hidden"><p class="text-gray-500 mb-1">Tags</p><div id="event-tags" class="flex flex-wrap gap-2"></div></div>
                         </div>
@@ -247,6 +248,12 @@
             document.getElementById('event-address').textContent = [d.location?.address, d.location?.city].filter(Boolean).join(', ') || '-';
             document.getElementById('event-organizer').textContent = d.organizer?.name || '-';
             document.getElementById('event-pricing').textContent = d.pricing?.isFree ? 'Gratuit' : (d.pricing?.priceRange || '-');
+            if (d.website) { 
+                document.getElementById('event-website').textContent = d.website; 
+                document.getElementById('event-website').href = d.website.startsWith('http') ? d.website : 'https://' + d.website;
+                document.getElementById('event-website-container').classList.remove('hidden'); 
+            }
+            else { document.getElementById('event-website-container').classList.add('hidden'); }
             if (d.description) { document.getElementById('event-description').textContent = d.description; document.getElementById('event-description-container').classList.remove('hidden'); }
             else { document.getElementById('event-description-container').classList.add('hidden'); }
             if (d.tags && d.tags.length) { document.getElementById('event-tags').innerHTML = d.tags.map(t => `<span class="px-2 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs">${t}</span>`).join(''); document.getElementById('event-tags-container').classList.remove('hidden'); }
@@ -301,6 +308,7 @@
                         description: currentEventData.description,
                         organizer: currentEventData.organizer?.name,
                         pricing: currentEventData.pricing?.isFree ? 'Gratuit' : currentEventData.pricing?.priceRange,
+                        website: currentEventData.website,
                         tags: currentEventData.tags || [],
                         is_private: isPrivate
                     })
