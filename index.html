@@ -1696,11 +1696,27 @@
             return scannedEventsData;
         }
         
+        // Récupérer le device ID
+        function getDeviceId() {
+            var deviceId = localStorage.getItem('gedeon_device_id');
+            if (!deviceId) {
+                deviceId = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 16);
+                localStorage.setItem('gedeon_device_id', deviceId);
+            }
+            return deviceId;
+        }
+        
         // Récupérer l'utilisateur courant
         function getCurrentUser() {
             try {
                 var stored = localStorage.getItem('gedeon_user');
-                if (stored) return JSON.parse(stored);
+                if (stored) {
+                    var user = JSON.parse(stored);
+                    // Vérifier que le device_id correspond
+                    if (user.device_id === getDeviceId()) {
+                        return user;
+                    }
+                }
             } catch (e) {}
             return null;
         }
