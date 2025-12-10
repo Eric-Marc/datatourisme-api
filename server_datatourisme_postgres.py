@@ -2249,12 +2249,13 @@ def get_scanned_events():
         cur = conn.cursor()
         
         if user_id and mine_only:
-            # L'utilisateur veut voir SES événements (publics + privés)
+            # L'utilisateur veut voir TOUS les publics + SES privés
             cur.execute("""
                 SELECT s.*, u.pseudo as user_pseudo
                 FROM scanned_events s
                 JOIN users u ON s.user_id = u.id
-                WHERE s.user_id = %s
+                WHERE s.is_private = FALSE 
+                   OR (s.is_private = TRUE AND s.user_id = %s)
                 ORDER BY s.created_at DESC
             """, (user_id,))
         elif user_id:
