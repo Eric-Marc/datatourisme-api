@@ -1985,7 +1985,7 @@
                 
                 if (isScanned) {
                     // POPUP SCANNÉ - STYLE SPÉCIAL
-                    popupHtml = '<div class="scanned-popup" style="max-width:320px;">';
+                    popupHtml = '<div class="scanned-popup" style="max-width:260px;">';
                     var event = firstEvent;
                     popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
                     popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">📷 SCANNÉ</span>';
@@ -2290,7 +2290,7 @@
                 var isOwner = currentUser && event.user_id === currentUser.id;
                 
                 // Popup
-                var popupHtml = '<div class="scanned-popup" style="max-width:320px;">';
+                var popupHtml = '<div class="scanned-popup" style="max-width:260px;">';
                 popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
                 
                 // Badge privé/public
@@ -2324,7 +2324,7 @@
                 }
                 popupHtml += '</div>';
                 
-                marker.bindPopup(popupHtml, { maxWidth: 320, className: 'scanned-popup-container' });
+                marker.bindPopup(popupHtml, { maxWidth: 260, className: 'scanned-popup-container' });
                 currentMarkerCluster.addLayer(marker);
                 
                 bounds.extend([event.latitude, event.longitude]);
