@@ -1579,7 +1579,7 @@
         }
 
         // 📷 TOGGLE SCANNÉS - Affiche TOUS les événements scannés (monde entier)
-        function toggleScanned() {
+        async function toggleScanned() {
             console.log('toggleScanned() appelé, exclusiveMode:', exclusiveMode, 'scannedEventsData.length:', scannedEventsData.length);
             
             // Si déjà en mode scannés, revenir au mode normal
@@ -1601,8 +1601,9 @@
                 return;
             }
             
-            // Charger les événements scannés depuis localStorage
-            loadScannedEvents();
+            // Charger les événements scannés depuis le serveur
+            updateStatus('📷 Chargement...', 'active');
+            await loadScannedEventsFromServer();
             
             if (scannedEventsData.length === 0) {
                 updateStatus('📷 Aucun événement scanné', 'waiting');
@@ -1621,16 +1622,51 @@
             updateToggleVisuals();
         }
 
-        // 📷 CHARGER LES ÉVÉNEMENTS SCANNÉS DEPUIS LOCALSTORAGE
-        function loadScannedEvents() {
+        // 📷 CHARGER LES ÉVÉNEMENTS SCANNÉS DEPUIS LE SERVEUR
+        async function loadScannedEventsFromServer() {
             try {
-                var stored = localStorage.getItem('gedeon_scanned_events');
-                if (stored) {
-                    var events = JSON.parse(stored);
-                    scannedEventsData = events.filter(function(e) {
+                var user = getCurrentUser();
+                var url = SERVER_URL + '/api/scanned';
+                
+                // Si connecté, récupérer tous les events (publics + ses privés)
+                if (user) {
+                    url += '?user_id=' + user.id + '&mine=1';
+                }
+                // Sinon, juste les publics
+                
+                var response = await fetch(url);
+                var data = await response.json();
+                
+                if (data.status === 'success') {
+                    scannedEventsData = data.events.filter(function(e) {
                         return e.latitude && e.longitude;
+                    }).map(function(e) {
+                        // Adapter le format serveur au format attendu
+                        return {
+                            uid: e.uid,
+                            id: e.id,
+                            title: e.title,
+                            category: e.category,
+                            begin: e.begin_date,
+                            end: e.end_date,
+                            startTime: e.start_time,
+                            endTime: e.end_time,
+                            locationName: e.location_name,
+                            city: e.city,
+                            address: e.address,
+                            latitude: e.latitude,
+                            longitude: e.longitude,
+                            description: e.description,
+                            organizer: e.organizer,
+                            pricing: e.pricing,
+                            tags: e.tags,
+                            is_private: e.is_private,
+                            user_id: e.user_id,
+                            user_pseudo: e.user_pseudo,
+                            source: 'Scanner'
+                        };
                     });
-                    console.log('📷 Événements scannés chargés:', scannedEventsData.length);
+                    console.log('📷 Événements scannés chargés depuis serveur:', scannedEventsData.length);
                 } else {
                     scannedEventsData = [];
                 }
@@ -1643,24 +1679,54 @@
             return scannedEventsData;
         }
         
+        // Ancienne fonction pour compatibilité (charge depuis serveur maintenant)
+        function loadScannedEvents() {
+            // Version synchrone - utilise les données déjà chargées
+            document.getElementById('scanned-count').textContent = scannedEventsData.length;
+            return scannedEventsData;
+        }
+        
+        // Récupérer l'utilisateur courant
+        function getCurrentUser() {
+            try {
+                var stored = localStorage.getItem('gedeon_user');
+                if (stored) return JSON.parse(stored);
+            } catch (e) {}
+            return null;
+        }
+        
         // 📷 SUPPRIMER UN ÉVÉNEMENT SCANNÉ
-        function deleteScannedEvent(uid) {
+        async function deleteScannedEvent(eventId) {
             if (!confirm('Supprimer cet événement scanné ?')) return;
             
+            var user = getCurrentUser();
+            if (!user) {
+                alert('Vous devez être connecté pour supprimer');
+                return;
+            }
+            
             try {
-                var stored = localStorage.getItem('gedeon_scanned_events');
-                if (stored) {
-                    var events = JSON.parse(stored);
-                    events = events.filter(function(e) { return e.uid !== uid; });
-                    localStorage.setItem('gedeon_scanned_events', JSON.stringify(events));
-                    
-                    // Recharger et rafraîchir
-                    loadScannedEvents();
-                    refreshMapDisplay();
+                var response = await fetch(SERVER_URL + '/api/scanned/' + eventId + '?user_id=' + user.id, {
+                    method: 'DELETE'
+                });
+                var data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Recharger depuis le serveur et rafraîchir
+                    await loadScannedEventsFromServer();
+                    if (exclusiveMode === 'scanned') {
+                        displayScannedEventsGlobal();
+                    } else {
+                        refreshMapDisplay();
+                    }
                     map.closePopup();
+                    updateStatus('🗑️ Événement supprimé', 'active');
+                } else {
+                    alert('Erreur: ' + (data.message || 'Suppression impossible'));
                 }
             } catch (e) {
                 console.error('Erreur suppression:', e);
+                alert('Erreur de connexion au serveur');
             }
         }
 
@@ -2140,7 +2206,7 @@
             });
         }
 
-        function init() {
+        async function init() {
             if (typeof L === 'undefined') {
                 setTimeout(init, 100);
                 return;
@@ -2148,8 +2214,8 @@
             initMap();
             setupSliders();
             
-            // 📷 Charger les événements scannés depuis localStorage
-            loadScannedEvents();
+            // 📷 Charger les événements scannés depuis le serveur
+            await loadScannedEventsFromServer();
             
             // 📷 Si on a des événements scannés, les afficher et centrer dessus
             if (scannedEventsData.length > 0) {
@@ -2198,10 +2264,22 @@
                 var icon = createScannedIcon();
                 var marker = L.marker([event.latitude, event.longitude], { icon: icon });
                 
+                // Vérifier si c'est notre événement
+                var currentUser = getCurrentUser();
+                var isOwner = currentUser && event.user_id === currentUser.id;
+                
                 // Popup
                 var popupHtml = '<div class="scanned-popup" style="max-width:320px;">';
                 popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
-                popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">📷 SCANNÉ</span>';
+                
+                // Badge privé/public + pseudo
+                var badge = event.is_private ? '🔒 PRIVÉ' : '📷 SCANNÉ';
+                popupHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+                popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + '</span>';
+                if (event.user_pseudo) {
+                    popupHtml += '<span style="color:rgba(255,255,255,0.8);font-size:10px;">par ' + event.user_pseudo + '</span>';
+                }
+                popupHtml += '</div>';
                 popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;">' + (event.title || 'Événement scanné') + '</h3>';
                 popupHtml += '</div>';
                 
@@ -2210,9 +2288,12 @@
                 if (event.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:8px;">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
                 if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
                 
-                popupHtml += '<div style="display:flex;gap:8px;margin-top:10px;">';
-                popupHtml += '<button onclick="deleteScannedEvent(\'' + event.uid + '\')" style="flex:1;padding:6px;background:#fee2e2;color:#dc2626;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🗑️ Supprimer</button>';
-                popupHtml += '</div>';
+                // Bouton supprimer seulement si owner
+                if (isOwner && event.id) {
+                    popupHtml += '<div style="margin-top:10px;">';
+                    popupHtml += '<button onclick="deleteScannedEvent(' + event.id + ')" style="width:100%;padding:6px;background:#fee2e2;color:#dc2626;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🗑️ Supprimer</button>';
+                    popupHtml += '</div>';
+                }
                 popupHtml += '</div>';
                 
                 marker.bindPopup(popupHtml, { maxWidth: 320 });
