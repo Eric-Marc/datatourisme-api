@@ -122,12 +122,6 @@
                 <div id="error-message" class="hidden bg-red-50 border border-red-200 rounded-2xl p-5">
                     <span class="text-xl">⚠️</span> <span id="error-text" class="text-red-600">-</span>
                 </div>
-
-                <div id="placeholder" class="bg-white rounded-2xl p-8 text-center shadow-lg">
-                    <div class="text-5xl mb-4">📄</div>
-                    <h3 class="text-lg font-semibold text-gray-700">En attente d'une image</h3>
-                    <p class="text-gray-400 text-sm">Téléchargez une affiche pour l'analyser</p>
-                </div>
             </div>
         </div>
     </main>
@@ -147,7 +141,6 @@
         const previewImg = document.getElementById('preview-img');
         const eventContainer = document.getElementById('event-container');
         const errorMessage = document.getElementById('error-message');
-        const placeholder = document.getElementById('placeholder');
         const processingOverlay = document.getElementById('processing-overlay');
         const skeletonLoader = document.getElementById('skeleton-loader');
         const loginModal = document.getElementById('login-modal');
@@ -215,12 +208,12 @@
             reader.readAsDataURL(file);
         }
         
-        function clearImage() { imagePreview.classList.add('hidden'); dropZone.classList.remove('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden'); placeholder.classList.remove('hidden'); fileInput.value = ''; currentEventData = null; }
-        function showError(msg) { document.getElementById('error-text').textContent = msg; errorMessage.classList.remove('hidden'); eventContainer.classList.add('hidden'); placeholder.classList.add('hidden'); }
+        function clearImage() { imagePreview.classList.add('hidden'); dropZone.classList.remove('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden'); fileInput.value = ''; currentEventData = null; }
+        function showError(msg) { document.getElementById('error-text').textContent = msg; errorMessage.classList.remove('hidden'); eventContainer.classList.add('hidden'); }
         
         // === ANALYSE ===
         async function analyzeImage(dataUrl, mimeType) {
-            placeholder.classList.add('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden');
+            eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden');
             skeletonLoader.classList.remove('hidden'); processingOverlay.classList.remove('hidden');
             try {
                 const base64 = dataUrl.split(',')[1];
