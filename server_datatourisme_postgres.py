@@ -1009,90 +1009,108 @@ def geocode_cinema(cinema_name, cinema_address, dept_code=None):
     return (None, None)
 
 
-def fetch_movies_for_cinema(cinema_info, today_str):
-    """Worker pour récupérer les films d'un cinéma."""
+def fetch_movies_for_cinema(cinema_info, today_str, tomorrow_str=None):
+    """Worker pour récupérer les films d'un cinéma (aujourd'hui + demain)."""
     try:
         api = allocineAPI()
         cinema_id = cinema_info['id']
         
-        # Essayer d'abord get_showtime (plus fiable)
-        try:
-            showtimes = api.get_showtime(cinema_id, today_str)
-            
-            # DEBUG: Voir ce que retourne l'API
-            if showtimes:
-                print(f"      📋 {cinema_id}: {len(showtimes)} films reçus")
-                if len(showtimes) > 0:
-                    print(f"         Exemple: {showtimes[0]}")
-            else:
-                print(f"      📋 {cinema_id}: showtimes vide ou None")
-            
-            if showtimes:
-                movies = []
-                for show in showtimes:
-                    title = show.get('title', 'Film')
+        all_movies = {}  # {title: movie_data} pour dédupliquer
+        
+        # Récupérer les séances d'aujourd'hui
+        for date_str in [today_str, tomorrow_str] if tomorrow_str else [today_str]:
+            try:
+                showtimes = api.get_showtime(cinema_id, date_str)
+                
+                if showtimes:
+                    is_today = (date_str == today_str)
+                    date_label = "Auj" if is_today else "Dem"
                     
-                    # Nouveau format: showtimes avec startsAt et diffusionVersion
-                    show_times = show.get('showtimes', [])
+                    if is_today:
+                        print(f"      📋 {cinema_id}: {len(showtimes)} films reçus")
+                        if len(showtimes) > 0:
+                            print(f"         Exemple: {showtimes[0]}")
                     
-                    if show_times:
-                        # Grouper par version (LOCAL=VF, ORIGINAL=VO)
-                        vf_times = []
-                        vo_times = []
+                    for show in showtimes:
+                        title = show.get('title', 'Film')
                         
-                        for st in show_times:
-                            starts_at = st.get('startsAt', '')
-                            version = st.get('diffusionVersion', '')
+                        # Nouveau format: showtimes avec startsAt et diffusionVersion
+                        show_times = show.get('showtimes', [])
+                        
+                        if show_times:
+                            # Grouper par version (LOCAL=VF, ORIGINAL=VO)
+                            vf_times = []
+                            vo_times = []
                             
-                            # Extraire l'heure (HH:MM)
-                            if 'T' in starts_at:
-                                time_part = starts_at.split('T')[1][:5]
-                            else:
-                                time_part = starts_at
+                            for st in show_times:
+                                starts_at = st.get('startsAt', '')
+                                version = st.get('diffusionVersion', '')
+                                
+                                # Extraire l'heure (HH:MM)
+                                if 'T' in starts_at:
+                                    time_part = starts_at.split('T')[1][:5]
+                                else:
+                                    time_part = starts_at
+                                
+                                if version == 'LOCAL':
+                                    vf_times.append(f"{time_part}")
+                                else:  # ORIGINAL
+                                    vo_times.append(f"{time_part}")
                             
-                            if version == 'LOCAL':
-                                vf_times.append(time_part)
-                            else:  # ORIGINAL
-                                vo_times.append(time_part)
+                            # Construire la chaîne d'horaires avec date
+                            versions = []
+                            if vf_times:
+                                versions.append(f"VF {date_label}: {', '.join(vf_times[:3])}")
+                            if vo_times:
+                                versions.append(f"VO {date_label}: {', '.join(vo_times[:3])}")
+                            
+                            showtimes_str = " | ".join(versions) if versions else ""
+                        else:
+                            # Ancien format avec VF/VO/VOST
+                            vf = show.get('VF', [])
+                            vo = show.get('VO', [])
+                            vost = show.get('VOST', [])
+                            
+                            versions = []
+                            if vf:
+                                versions.append(f"VF {date_label}: {', '.join(vf[:3])}")
+                            if vo:
+                                versions.append(f"VO {date_label}: {', '.join(vo[:3])}")
+                            if vost:
+                                versions.append(f"VOST {date_label}: {', '.join(vost[:3])}")
+                            
+                            showtimes_str = " | ".join(versions) if versions else ""
                         
-                        # Construire la chaîne d'horaires
-                        versions = []
-                        if vf_times:
-                            versions.append(f"VF: {', '.join(vf_times[:4])}")
-                        if vo_times:
-                            versions.append(f"VO: {', '.join(vo_times[:4])}")
-                        
-                        showtimes_str = " | ".join(versions) if versions else "Horaires disponibles"
-                    else:
-                        # Ancien format avec VF/VO/VOST
-                        vf = show.get('VF', [])
-                        vo = show.get('VO', [])
-                        vost = show.get('VOST', [])
-                        
-                        versions = []
-                        if vf:
-                            versions.append(f"VF: {', '.join(vf[:4])}")
-                        if vo:
-                            versions.append(f"VO: {', '.join(vo[:4])}")
-                        if vost:
-                            versions.append(f"VOST: {', '.join(vost[:4])}")
-                        
-                        showtimes_str = " | ".join(versions) if versions else "Horaires non disponibles"
+                        # Ajouter ou fusionner avec film existant
+                        if title in all_movies:
+                            # Ajouter les horaires
+                            if showtimes_str:
+                                existing = all_movies[title]['showtimes_str']
+                                if existing:
+                                    all_movies[title]['showtimes_str'] = existing + " | " + showtimes_str
+                                else:
+                                    all_movies[title]['showtimes_str'] = showtimes_str
+                        else:
+                            all_movies[title] = {
+                                'title': title,
+                                'runtime': 0,
+                                'genres': [],
+                                'urlPoster': '',
+                                'director': '',
+                                'isPremiere': False,
+                                'weeklyOuting': False,
+                                'showtimes_str': showtimes_str,
+                                'duration': show.get('duration', ''),
+                            }
+                elif date_str == today_str:
+                    print(f"      📋 {cinema_id}: showtimes vide ou None")
                     
-                    movies.append({
-                        'title': title,
-                        'runtime': 0,
-                        'genres': [],
-                        'urlPoster': '',
-                        'director': '',
-                        'isPremiere': False,
-                        'weeklyOuting': False,
-                        'showtimes_str': showtimes_str,
-                        'duration': show.get('duration', ''),
-                    })
-                return cinema_info, movies
-        except Exception as e:
-            print(f"      ⚠️ get_showtime({cinema_id}) failed: {e}")
+            except Exception as e:
+                if date_str == today_str:
+                    print(f"      ⚠️ get_showtime({cinema_id}, {date_str}) failed: {e}")
+        
+        if all_movies:
+            return cinema_info, list(all_movies.values())
         
         # Fallback sur get_movies (données enrichies mais moins fiable)
         try:
@@ -1216,6 +1234,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     
     # 2. Récupérer les films (avec cache)
     today_str = date.today().strftime("%Y-%m-%d")
+    tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
     all_events = []
     cache_hits = 0
     
@@ -1236,8 +1255,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                     cache_hits += 1
             
             if not from_cache:
-                # Requête API
-                cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+                # Requête API (aujourd'hui + demain)
+                cinema_info, movies = fetch_movies_for_cinema(cinema, today_str, tomorrow_str)
                 # Stocker en cache
                 FILMS_CACHE[cinema_id] = {'films': movies, 'timestamp': now}
                 # Délai seulement si pas de cache
@@ -1550,6 +1569,7 @@ def get_nearby_cinema():
         
         # Récupérer les films pour ce batch
         today_str = date.today().strftime("%Y-%m-%d")
+        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
         all_events = []
         cache_hits = 0
         start_time = time.time()
@@ -1569,7 +1589,7 @@ def get_nearby_cinema():
                         cache_hits += 1
                 
                 if not from_cache:
-                    cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+                    cinema_info, movies = fetch_movies_for_cinema(cinema, today_str, tomorrow_str)
                     FILMS_CACHE[cinema_id] = {'films': movies, 'timestamp': now}
                     if i < len(cinemas_batch) - 1:
                         time.sleep(0.15)
