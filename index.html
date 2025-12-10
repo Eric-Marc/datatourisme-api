@@ -1048,10 +1048,10 @@
         var currentRadiusCircle = null;
         var currentCenterMarker = null;
         var initialMapBounds = null;
-        var showEvents = true;
-        var showCinema = true;
-        var showSalons = true;
-        var showScanned = true;  // 📷 Événements scannés
+        var showEvents = false;
+        var showCinema = false;
+        var showSalons = false;
+        var showScanned = true;  // 📷 Par défaut, afficher seulement les scans
         var salonsEventsData = [];
         var scannedEventsData = [];  // 📷 Stockage des événements scannés
 
@@ -2243,6 +2243,10 @@
             // 📷 Charger les événements scannés depuis le serveur
             await loadScannedEventsFromServer();
             
+            // 📷 Par défaut, mode scannés uniquement
+            exclusiveMode = 'scanned';
+            updateToggleVisuals();
+            
             // 📷 Si on a des événements scannés, les afficher et centrer dessus
             if (scannedEventsData.length > 0) {
                 displayScannedEventsGlobal();
@@ -2253,7 +2257,7 @@
                 : '👆 Maintenez appuyé 2s pour sélectionner un point';
             document.getElementById('map-instructions').textContent = instructionText;
             
-            updateStatus('👆 Maintenez appuyé sur la carte', 'waiting');
+            updateStatus('📷 ' + scannedEventsData.length + ' événement(s) scanné(s)', 'active');
         }
         
         // 📷 Afficher les événements scannés SANS zone de recherche (mode global)
