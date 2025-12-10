@@ -403,8 +403,8 @@
             height: 26px;
             border-radius: 50%;
             border: 3px solid white;
-            box-shadow: 0 2px 10px rgba(249, 115, 22, 0.6);
-            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            box-shadow: 0 2px 10px rgba(251, 146, 60, 0.5);
+            background: linear-gradient(135deg, #fdba74 0%, #fb923c 100%);
             animation: pulseScanned 1.5s ease-in-out infinite;
             position: relative;
         }
@@ -1663,6 +1663,7 @@
                             is_private: e.is_private,
                             user_id: e.user_id,
                             user_pseudo: e.user_pseudo,
+                            created_at: e.created_at,
                             source: 'Scanner'
                         };
                     });
@@ -2274,19 +2275,26 @@
                 
                 // Badge privé/public + pseudo
                 var badge = event.is_private ? '🔒 PRIVÉ' : '📷 SCANNÉ';
-                popupHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+                popupHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">';
                 popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + '</span>';
                 if (event.user_pseudo) {
                     popupHtml += '<span style="color:rgba(255,255,255,0.8);font-size:10px;">par ' + event.user_pseudo + '</span>';
                 }
                 popupHtml += '</div>';
-                popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;">' + (event.title || 'Événement scanné') + '</h3>';
+                popupHtml += '<h3 style="color:white;margin:0;font-size:16px;padding-right:25px;">' + (event.title || 'Événement scanné') + '</h3>';
                 popupHtml += '</div>';
                 
                 if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
                 if (event.locationName) popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + event.locationName + '</div>';
                 if (event.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:8px;">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
                 if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
+                
+                // Date de scan
+                if (event.created_at) {
+                    var scanDate = new Date(event.created_at);
+                    var scanDateStr = scanDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    popupHtml += '<div style="font-size:11px;color:#999;margin-bottom:8px;font-style:italic;">📷 Scanné le ' + scanDateStr + '</div>';
+                }
                 
                 // Bouton supprimer seulement si owner
                 if (isOwner && event.id) {
@@ -2296,7 +2304,7 @@
                 }
                 popupHtml += '</div>';
                 
-                marker.bindPopup(popupHtml, { maxWidth: 320 });
+                marker.bindPopup(popupHtml, { maxWidth: 320, className: 'scanned-popup-container' });
                 currentMarkerCluster.addLayer(marker);
                 
                 bounds.extend([event.latitude, event.longitude]);
