@@ -2482,6 +2482,47 @@ def delete_scanned_event(event_id):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route('/api/scanned/reset', methods=['DELETE'])
+def reset_scanned_events():
+    """
+    Supprime TOUS les événements scannés d'un utilisateur.
+    Permet de repartir à zéro.
+    
+    Params:
+    - user_id: ID de l'utilisateur
+    """
+    try:
+        user_id = request.args.get('user_id', type=int)
+        
+        if not user_id:
+            return jsonify({"status": "error", "message": "user_id requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Compter avant suppression
+        cur.execute("SELECT COUNT(*) as count FROM scanned_events WHERE user_id = %s", (user_id,))
+        count = cur.fetchone()['count']
+        
+        # Supprimer tous les scans de cet utilisateur
+        cur.execute("DELETE FROM scanned_events WHERE user_id = %s", (user_id,))
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"🗑️ Reset: {count} événements supprimés pour user_id={user_id}")
+        
+        return jsonify({
+            "status": "success", 
+            "message": f"{count} événement(s) supprimé(s)",
+            "deleted_count": count
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # ============================================================================
 # MAIN
 # ============================================================================
