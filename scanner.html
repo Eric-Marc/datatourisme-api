@@ -156,15 +156,29 @@
         const skeletonLoader = document.getElementById('skeleton-loader');
         const loginModal = document.getElementById('login-modal');
         
+        // === DEVICE ID ===
+        function getDeviceId() {
+            let deviceId = localStorage.getItem('gedeon_device_id');
+            if (!deviceId) {
+                // Générer un ID unique pour ce device
+                deviceId = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 16);
+                localStorage.setItem('gedeon_device_id', deviceId);
+            }
+            return deviceId;
+        }
+        
         // === AUTH ===
         function checkAuth() {
             const stored = localStorage.getItem('gedeon_user');
             if (stored) {
                 try {
                     currentUser = JSON.parse(stored);
-                    document.getElementById('user-pseudo-display').textContent = currentUser.pseudo;
-                    loginModal.classList.add('hidden');
-                    return true;
+                    // Vérifier que le device_id correspond
+                    if (currentUser.device_id === getDeviceId()) {
+                        document.getElementById('user-pseudo-display').textContent = currentUser.pseudo;
+                        loginModal.classList.add('hidden');
+                        return true;
+                    }
                 } catch (e) {}
             }
             loginModal.classList.remove('hidden');
@@ -185,9 +199,12 @@
             
             btn.disabled = true; btn.textContent = 'Connexion...'; errorDiv.classList.add('hidden');
             
+            const deviceId = getDeviceId();
+            
             try {
                 const res = await fetch(`${SERVER_URL}/api/users/login`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pseudo})
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ pseudo, device_id: deviceId })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
