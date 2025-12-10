@@ -2319,6 +2319,7 @@ def add_scanned_event():
     try:
         import hashlib
         import json
+        from difflib import SequenceMatcher
         
         data = request.get_json()
         
@@ -2326,8 +2327,33 @@ def add_scanned_event():
         if not user_id:
             return jsonify({"status": "error", "message": "user_id requis"}), 400
         
+        # Fonction de similarité de titre
+        def normalize_title(title):
+            if not title:
+                return ""
+            t = title.lower().strip()
+            for char in ".,;:!?-_'\"()[]{}":
+                t = t.replace(char, " ")
+            return " ".join(t.split())
+        
+        def title_similarity(a, b):
+            if not a or not b:
+                return 0
+            return SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100
+        
+        # Fonction de distance GPS
+        def haversine_km(lat1, lon1, lat2, lon2):
+            if None in (lat1, lon1, lat2, lon2):
+                return None
+            import math
+            R = 6371.0
+            phi1, phi2 = math.radians(lat1), math.radians(lat2)
+            dphi = math.radians(lat2 - lat1)
+            dlambda = math.radians(lon2 - lon1)
+            a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+            return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        
         # Générer un UID unique basé sur le hash du contenu
-        # Sans user_id pour que le même événement ne puisse pas être scanné 2x par personne
         content_for_hash = {
             "title": data.get('title'),
             "category": data.get('category'),
@@ -2355,12 +2381,46 @@ def add_scanned_event():
             conn.close()
             return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
         
-        # Vérifier si cet événement existe déjà pour cet utilisateur
+        # Vérifier si cet événement existe déjà (hash exact)
         cur.execute("SELECT id FROM scanned_events WHERE uid = %s", (uid,))
         if cur.fetchone():
             cur.close()
             conn.close()
-            return jsonify({"status": "error", "message": "Cet événement a déjà été scanné"}), 409
+            return jsonify({"status": "error", "message": "Cet événement a déjà été scanné (identique)"}), 409
+        
+        # 🔍 DÉTECTION INTELLIGENTE DE DOUBLONS
+        # Chercher des événements similaires (même titre + même ville/GPS)
+        new_title = data.get('title', '')
+        new_city = data.get('city', '')
+        new_lat = data.get('latitude')
+        new_lon = data.get('longitude')
+        
+        cur.execute("""
+            SELECT id, title, city, latitude, longitude 
+            FROM scanned_events
+        """)
+        existing_events = cur.fetchall()
+        
+        for existing in existing_events:
+            # Comparer les titres
+            title_match = normalize_title(new_title) == normalize_title(existing['title'])
+            title_sim = title_similarity(new_title, existing['title'])
+            
+            if not title_match and title_sim < 80:
+                continue  # Titres trop différents
+            
+            # Comparer la localisation
+            same_city = (new_city or '').lower() == (existing['city'] or '').lower() if new_city and existing['city'] else False
+            distance = haversine_km(new_lat, new_lon, existing['latitude'], existing['longitude'])
+            close_location = distance is not None and distance < 1  # < 1km
+            
+            if same_city or close_location:
+                cur.close()
+                conn.close()
+                return jsonify({
+                    "status": "error", 
+                    "message": f"Un événement similaire existe déjà : '{existing['title']}' (ID={existing['id']})"
+                }), 409
         
         # Parser les dates
         begin_date = None
