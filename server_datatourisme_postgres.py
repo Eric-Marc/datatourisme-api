@@ -2327,7 +2327,7 @@ def add_scanned_event():
             return jsonify({"status": "error", "message": "user_id requis"}), 400
         
         # Générer un UID unique basé sur le hash du contenu
-        # On exclut user_id et is_private pour que le même événement scanné par 2 users ait le même hash de contenu
+        # Sans user_id pour que le même événement ne puisse pas être scanné 2x par personne
         content_for_hash = {
             "title": data.get('title'),
             "category": data.get('category'),
@@ -2343,7 +2343,7 @@ def add_scanned_event():
         }
         content_json = json.dumps(content_for_hash, sort_keys=True, ensure_ascii=False)
         content_hash = hashlib.sha256(content_json.encode('utf-8')).hexdigest()[:16]
-        uid = f"scanned-{user_id}-{content_hash}"
+        uid = f"scanned-{content_hash}"
         
         conn = get_db_connection()
         cur = conn.cursor()
