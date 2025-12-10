@@ -182,6 +182,82 @@ CINEMAS_BY_DEPT_CACHE = {}
 CINEMAS_CACHE_TIMESTAMPS = {}
 CINEMAS_CACHE_DURATION = 3600 * 6  # 6 heures
 
+
+# ============================================================================
+# INITIALISATION DES TABLES USERS & SCANNED_EVENTS
+# ============================================================================
+
+def init_user_tables():
+    """
+    Crée les tables users et scanned_events si elles n'existent pas.
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Table users
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                pseudo VARCHAR(20) UNIQUE NOT NULL,
+                pseudo_lower VARCHAR(20) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Index pour recherche rapide par pseudo
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_pseudo_lower ON users(pseudo_lower)
+        """)
+        
+        # Table scanned_events
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS scanned_events (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                uid VARCHAR(100) UNIQUE NOT NULL,
+                title VARCHAR(500),
+                category VARCHAR(100),
+                begin_date DATE,
+                end_date DATE,
+                start_time VARCHAR(10),
+                end_time VARCHAR(10),
+                location_name VARCHAR(500),
+                city VARCHAR(200),
+                address VARCHAR(500),
+                latitude DOUBLE PRECISION,
+                longitude DOUBLE PRECISION,
+                description TEXT,
+                organizer VARCHAR(500),
+                pricing VARCHAR(200),
+                tags TEXT[],
+                is_private BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Index pour recherche géographique
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scanned_events_user ON scanned_events(user_id)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scanned_events_private ON scanned_events(is_private)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_scanned_events_coords ON scanned_events(latitude, longitude)
+        """)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        print("✅ Tables users et scanned_events initialisées")
+        
+    except Exception as e:
+        print(f"⚠️ Erreur init tables users/scanned: {e}")
+
+
 # Bounding boxes approximatives des départements français (lat_min, lat_max, lon_min, lon_max)
 # Utilisé pour vérifier la cohérence des résultats Nominatim
 DEPT_BOUNDING_BOXES = {
@@ -1958,6 +2034,353 @@ def geocode_address():
 
 
 # ============================================================================
+# 👤 API USERS
+# ============================================================================
+
+import re
+
+def validate_pseudo(pseudo):
+    """Valide un pseudo (2-20 chars, lettres/chiffres/underscore)"""
+    if not pseudo or len(pseudo) < 2 or len(pseudo) > 20:
+        return False, "Le pseudo doit faire entre 2 et 20 caractères"
+    if not re.match(r'^[a-zA-Z0-9_àâäéèêëïîôùûüç]+$', pseudo):
+        return False, "Le pseudo ne peut contenir que des lettres, chiffres et underscore"
+    return True, None
+
+
+@app.route('/api/users/login', methods=['POST'])
+def user_login():
+    """
+    Connexion/Inscription d'un utilisateur.
+    Si le pseudo existe → retourne l'utilisateur
+    Sinon → crée l'utilisateur et le retourne
+    """
+    try:
+        data = request.get_json()
+        pseudo = data.get('pseudo', '').strip()
+        
+        # Validation
+        valid, error = validate_pseudo(pseudo)
+        if not valid:
+            return jsonify({"status": "error", "message": error}), 400
+        
+        pseudo_lower = pseudo.lower()
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Chercher l'utilisateur existant
+        cur.execute(
+            "SELECT id, pseudo, created_at FROM users WHERE pseudo_lower = %s",
+            (pseudo_lower,)
+        )
+        user = cur.fetchone()
+        
+        if user:
+            # Mise à jour last_seen
+            cur.execute(
+                "UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = %s",
+                (user['id'],)
+            )
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                "status": "success",
+                "user": {
+                    "id": user['id'],
+                    "pseudo": user['pseudo'],
+                    "isNew": False
+                }
+            }), 200
+        
+        else:
+            # Créer le nouvel utilisateur
+            cur.execute(
+                "INSERT INTO users (pseudo, pseudo_lower) VALUES (%s, %s) RETURNING id, pseudo, created_at",
+                (pseudo, pseudo_lower)
+            )
+            new_user = cur.fetchone()
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            print(f"👤 Nouvel utilisateur créé: {pseudo}")
+            
+            return jsonify({
+                "status": "success",
+                "user": {
+                    "id": new_user['id'],
+                    "pseudo": new_user['pseudo'],
+                    "isNew": True
+                }
+            }), 201
+        
+    except Exception as e:
+        print(f"❌ Erreur login: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/users', methods=['GET'])
+def list_users():
+    """Liste tous les utilisateurs"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT u.id, u.pseudo, u.created_at, u.last_seen,
+                   COUNT(s.id) as scan_count
+            FROM users u
+            LEFT JOIN scanned_events s ON u.id = s.user_id
+            GROUP BY u.id
+            ORDER BY u.pseudo
+        """)
+        users = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "users": [dict(u) for u in users]
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================================
+# 📷 API SCANNED EVENTS
+# ============================================================================
+
+@app.route('/api/scanned', methods=['GET'])
+def get_scanned_events():
+    """
+    Récupère les événements scannés.
+    
+    Params:
+    - user_id: (optionnel) Filtrer par utilisateur
+    - mine: (optionnel) Si "1" et user_id fourni, inclut les événements privés de cet utilisateur
+    """
+    try:
+        user_id = request.args.get('user_id', type=int)
+        mine_only = request.args.get('mine', '') == '1'
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        if user_id and mine_only:
+            # L'utilisateur veut voir SES événements (publics + privés)
+            cur.execute("""
+                SELECT s.*, u.pseudo as user_pseudo
+                FROM scanned_events s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.user_id = %s
+                ORDER BY s.created_at DESC
+            """, (user_id,))
+        elif user_id:
+            # Voir les événements d'un utilisateur spécifique (publics uniquement)
+            cur.execute("""
+                SELECT s.*, u.pseudo as user_pseudo
+                FROM scanned_events s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.user_id = %s AND s.is_private = FALSE
+                ORDER BY s.created_at DESC
+            """, (user_id,))
+        else:
+            # Tous les événements publics
+            cur.execute("""
+                SELECT s.*, u.pseudo as user_pseudo
+                FROM scanned_events s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.is_private = FALSE
+                ORDER BY s.created_at DESC
+            """)
+        
+        events = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        # Formater les événements
+        formatted = []
+        for e in events:
+            event = dict(e)
+            # Convertir les dates en string
+            if event.get('begin_date'):
+                event['begin_date'] = event['begin_date'].isoformat()
+            if event.get('end_date'):
+                event['end_date'] = event['end_date'].isoformat()
+            if event.get('created_at'):
+                event['created_at'] = event['created_at'].isoformat()
+            formatted.append(event)
+        
+        return jsonify({
+            "status": "success",
+            "events": formatted,
+            "count": len(formatted)
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur get scanned: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/scanned', methods=['POST'])
+def add_scanned_event():
+    """
+    Ajoute un événement scanné.
+    
+    Body JSON requis:
+    - user_id: ID de l'utilisateur
+    - title: Titre de l'événement
+    - is_private: (optionnel) true/false
+    - ... autres champs
+    """
+    try:
+        data = request.get_json()
+        
+        user_id = data.get('user_id')
+        if not user_id:
+            return jsonify({"status": "error", "message": "user_id requis"}), 400
+        
+        # Générer un UID unique
+        uid = f"scanned-{user_id}-{int(time.time())}-{os.urandom(4).hex()}"
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Vérifier que l'utilisateur existe
+        cur.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
+        
+        # Parser les dates
+        begin_date = None
+        end_date = None
+        if data.get('begin'):
+            try:
+                begin_date = datetime.strptime(data['begin'][:10], '%Y-%m-%d').date()
+            except:
+                pass
+        if data.get('end'):
+            try:
+                end_date = datetime.strptime(data['end'][:10], '%Y-%m-%d').date()
+            except:
+                pass
+        
+        # Insérer l'événement
+        cur.execute("""
+            INSERT INTO scanned_events (
+                user_id, uid, title, category, begin_date, end_date,
+                start_time, end_time, location_name, city, address,
+                latitude, longitude, description, organizer, pricing,
+                tags, is_private
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            ) RETURNING id, uid, created_at
+        """, (
+            user_id,
+            uid,
+            data.get('title'),
+            data.get('category'),
+            begin_date,
+            end_date,
+            data.get('startTime'),
+            data.get('endTime'),
+            data.get('locationName'),
+            data.get('city'),
+            data.get('address'),
+            data.get('latitude'),
+            data.get('longitude'),
+            data.get('description'),
+            data.get('organizer'),
+            data.get('pricing'),
+            data.get('tags', []),
+            data.get('is_private', False)
+        ))
+        
+        result = cur.fetchone()
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"📷 Événement scanné ajouté: {data.get('title')} par user {user_id}")
+        
+        return jsonify({
+            "status": "success",
+            "event": {
+                "id": result['id'],
+                "uid": result['uid'],
+                "created_at": result['created_at'].isoformat()
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f"❌ Erreur add scanned: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/scanned/<int:event_id>', methods=['DELETE'])
+def delete_scanned_event(event_id):
+    """
+    Supprime un événement scanné.
+    Seul le propriétaire peut supprimer.
+    
+    Params:
+    - user_id: ID de l'utilisateur (pour vérification)
+    """
+    try:
+        user_id = request.args.get('user_id', type=int)
+        
+        if not user_id:
+            return jsonify({"status": "error", "message": "user_id requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Vérifier que l'événement appartient à l'utilisateur
+        cur.execute(
+            "SELECT id, user_id, title FROM scanned_events WHERE id = %s",
+            (event_id,)
+        )
+        event = cur.fetchone()
+        
+        if not event:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Événement non trouvé"}), 404
+        
+        if event['user_id'] != user_id:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Non autorisé"}), 403
+        
+        # Supprimer
+        cur.execute("DELETE FROM scanned_events WHERE id = %s", (event_id,))
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"🗑️ Événement scanné supprimé: {event['title']}")
+        
+        return jsonify({"status": "success", "message": "Événement supprimé"}), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -1965,10 +2388,13 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     
     print("=" * 70)
-    print("🚀 GEDEON API - VERSION AVEC BASE CNC")
+    print("🚀 GEDEON API - VERSION AVEC SCANNER")
     print("=" * 70)
     print(f"Port: {port}")
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
+    
+    # Initialiser les tables users et scanned_events
+    init_user_tables()
     
     # Charger les caches au démarrage
     load_cinema_coords_cache()
@@ -1985,6 +2411,7 @@ if __name__ == '__main__':
     print("  ✅ MAPPING DYNAMIQUE Allociné (vrais IDs)")
     print("  ✅ Cache persistant des cinémas")
     print("  ✅ Parallélisation DATAtourisme + OpenAgenda")
+    print("  ✅ Scanner avec gestion utilisateurs")
     print("=" * 70)
     
     app.run(host='0.0.0.0', port=port, debug=True)
