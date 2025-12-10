@@ -1667,6 +1667,7 @@
                             description: e.description,
                             organizer: e.organizer,
                             pricing: e.pricing,
+                            website: e.website,
                             tags: e.tags,
                             is_private: e.is_private,
                             user_id: e.user_id,
@@ -2291,6 +2292,12 @@
                 if (event.locationName) popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + event.locationName + '</div>';
                 if (event.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:8px;">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
                 if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
+                
+                // Lien site web
+                if (event.website) {
+                    var websiteUrl = event.website.startsWith('http') ? event.website : 'https://' + event.website;
+                    popupHtml += '<div style="margin-bottom:8px;"><a href="' + websiteUrl + '" target="_blank" style="color:#4f46e5;font-size:12px;text-decoration:none;">🌐 ' + event.website + '</a></div>';
+                }
                 
                 // Date de scan + auteur
                 var scanInfo = '📷 Scanné';
