@@ -68,7 +68,7 @@
                     <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center text-3xl">🖼️</div>
                     
                     <!-- Mobile : 2 boutons -->
-                    <div id="mobile-buttons" class="hidden flex-col gap-3 justify-center">
+                    <div id="mobile-buttons" style="display:none;" class="flex flex-col gap-3 justify-center">
                         <p class="text-gray-600 font-medium mb-2">Choisissez une source</p>
                         <button onclick="document.getElementById('camera-input').click()" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition">
                             📸 Prendre une photo
@@ -79,7 +79,7 @@
                     </div>
                     
                     <!-- Desktop : drag & drop classique -->
-                    <div id="desktop-dropzone" class="cursor-pointer" onclick="document.getElementById('file-input').click()">
+                    <div id="desktop-dropzone" style="display:none;" class="cursor-pointer" onclick="document.getElementById('file-input').click()">
                         <p class="text-gray-600 font-medium">Glissez une affiche ici</p>
                         <p class="text-gray-400 text-sm">ou cliquez pour sélectionner</p>
                     </div>
