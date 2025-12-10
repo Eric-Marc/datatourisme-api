@@ -253,16 +253,15 @@ def init_user_tables():
         conn.close()
         
         print("✅ Tables users et scanned_events initialisées")
+        return True
         
     except Exception as e:
         print(f"⚠️ Erreur init tables users/scanned: {e}")
+        return False
 
 
-# Appeler init_user_tables au chargement du module (pour gunicorn)
-try:
-    init_user_tables()
-except:
-    pass  # Sera réessayé au démarrage
+# Variable pour savoir si les tables ont été initialisées
+USER_TABLES_INITIALIZED = False
 
 
 # Bounding boxes approximatives des départements français (lat_min, lat_max, lon_min, lon_max)
@@ -2055,6 +2054,33 @@ def validate_pseudo(pseudo):
     return True, None
 
 
+@app.route('/api/init', methods=['GET', 'POST'])
+def api_init():
+    """
+    Endpoint pour initialiser les tables manuellement.
+    Utile pour le premier déploiement.
+    """
+    global USER_TABLES_INITIALIZED
+    
+    try:
+        if init_user_tables():
+            USER_TABLES_INITIALIZED = True
+            return jsonify({
+                "status": "success",
+                "message": "Tables users et scanned_events créées"
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Erreur lors de la création des tables"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
 @app.route('/api/users/login', methods=['POST'])
 def user_login():
     """
@@ -2062,7 +2088,14 @@ def user_login():
     Si le pseudo existe → retourne l'utilisateur
     Sinon → crée l'utilisateur et le retourne
     """
+    global USER_TABLES_INITIALIZED
+    
     try:
+        # Initialiser les tables si pas encore fait
+        if not USER_TABLES_INITIALIZED:
+            if init_user_tables():
+                USER_TABLES_INITIALIZED = True
+        
         data = request.get_json()
         pseudo = data.get('pseudo', '').strip()
         
