@@ -2317,14 +2317,33 @@ def add_scanned_event():
     - ... autres champs
     """
     try:
+        import hashlib
+        import json
+        
         data = request.get_json()
         
         user_id = data.get('user_id')
         if not user_id:
             return jsonify({"status": "error", "message": "user_id requis"}), 400
         
-        # Générer un UID unique
-        uid = f"scanned-{user_id}-{int(time.time())}-{os.urandom(4).hex()}"
+        # Générer un UID unique basé sur le hash du contenu
+        # On exclut user_id et is_private pour que le même événement scanné par 2 users ait le même hash de contenu
+        content_for_hash = {
+            "title": data.get('title'),
+            "category": data.get('category'),
+            "begin": data.get('begin'),
+            "end": data.get('end'),
+            "startTime": data.get('startTime'),
+            "endTime": data.get('endTime'),
+            "locationName": data.get('locationName'),
+            "city": data.get('city'),
+            "address": data.get('address'),
+            "description": data.get('description'),
+            "organizer": data.get('organizer')
+        }
+        content_json = json.dumps(content_for_hash, sort_keys=True, ensure_ascii=False)
+        content_hash = hashlib.sha256(content_json.encode('utf-8')).hexdigest()[:16]
+        uid = f"scanned-{user_id}-{content_hash}"
         
         conn = get_db_connection()
         cur = conn.cursor()
@@ -2335,6 +2354,13 @@ def add_scanned_event():
             cur.close()
             conn.close()
             return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
+        
+        # Vérifier si cet événement existe déjà pour cet utilisateur
+        cur.execute("SELECT id FROM scanned_events WHERE uid = %s", (uid,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Cet événement a déjà été scanné"}), 409
         
         # Parser les dates
         begin_date = None
