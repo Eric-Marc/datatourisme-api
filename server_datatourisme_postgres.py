@@ -258,6 +258,13 @@ def init_user_tables():
         print(f"⚠️ Erreur init tables users/scanned: {e}")
 
 
+# Appeler init_user_tables au chargement du module (pour gunicorn)
+try:
+    init_user_tables()
+except:
+    pass  # Sera réessayé au démarrage
+
+
 # Bounding boxes approximatives des départements français (lat_min, lat_max, lon_min, lon_max)
 # Utilisé pour vérifier la cohérence des résultats Nominatim
 DEPT_BOUNDING_BOXES = {
