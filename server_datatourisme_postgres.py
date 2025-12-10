@@ -1534,7 +1534,7 @@ def get_nearby_cinema():
         start_idx = batch * batch_size
         end_idx = start_idx + batch_size
         cinemas_batch = nearby_cinemas[start_idx:end_idx]
-        has_more = end_idx < total_cinemas and end_idx < 20  # Max 20 cinémas total
+        has_more = end_idx < total_cinemas and end_idx < 50  # Max 50 cinémas total
         
         if not cinemas_batch:
             return jsonify({
