@@ -181,8 +181,14 @@
                     }
                 } catch (e) {}
             }
-            loginModal.classList.remove('hidden');
+            // Ne PAS afficher le modal automatiquement, seulement à la demande
+            document.getElementById('user-pseudo-display').textContent = 'Non connecté';
             return false;
+        }
+        
+        // Afficher le modal login (appelé quand nécessaire)
+        function showLoginModal() {
+            loginModal.classList.remove('hidden');
         }
         
         async function doLogin() {
@@ -283,7 +289,10 @@
         // === AJOUTER À GEDEON ===
         async function addToGedeon() {
             if (!currentEventData) return;
-            if (!currentUser) { checkAuth(); return; }
+            if (!currentUser) { 
+                showLoginModal(); 
+                return; 
+            }
             
             const btn = document.getElementById('add-to-gedeon-btn');
             const isPrivate = document.getElementById('is-private').checked;
