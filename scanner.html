@@ -23,18 +23,80 @@
                     <span class="text-3xl">👤</span>
                 </div>
                 <h2 class="text-2xl font-bold text-gray-900">Bienvenue sur GEDEON</h2>
-                <p class="text-gray-500 mt-2">Entrez votre pseudo pour continuer</p>
+                <p class="text-gray-500 mt-2" id="login-subtitle">Connectez-vous pour ajouter des événements</p>
             </div>
+            
+            <!-- Tabs -->
+            <div class="flex mb-6 bg-gray-100 rounded-xl p-1">
+                <button id="tab-login" onclick="showTab('login')" class="flex-1 py-2 rounded-lg font-medium transition-all bg-white text-indigo-600 shadow-sm">Connexion</button>
+                <button id="tab-register" onclick="showTab('register')" class="flex-1 py-2 rounded-lg font-medium transition-all text-gray-500">Inscription</button>
+            </div>
+            
             <div class="space-y-4">
+                <!-- Email -->
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input type="email" id="login-email" 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                           placeholder="votre@email.com" autocomplete="email">
+                </div>
+                
+                <!-- Pseudo (inscription uniquement) -->
+                <div id="pseudo-field" class="hidden">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Pseudo</label>
                     <input type="text" id="login-pseudo" 
                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                           placeholder="Ex: Eric, Philippe..." maxlength="20" autocomplete="off">
+                           placeholder="Ex: Eric, Philippe..." maxlength="20" autocomplete="username">
                     <p class="text-xs text-gray-400 mt-1">2-20 caractères (lettres, chiffres, _)</p>
                 </div>
+                
+                <!-- Mot de passe -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
+                    <input type="password" id="login-password" 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                           placeholder="••••••••" maxlength="50" autocomplete="current-password">
+                    <p class="text-xs text-gray-400 mt-1">4 caractères minimum</p>
+                </div>
+                
+                <!-- Erreur -->
                 <div id="login-error" class="text-red-500 text-sm hidden"></div>
-                <button id="login-btn" onclick="doLogin()" class="w-full bg-indigo-500 text-white py-3 rounded-xl font-semibold hover:bg-indigo-600">Continuer</button>
+                
+                <!-- Succès inscription -->
+                <div id="login-success" class="bg-green-50 text-green-700 text-sm p-3 rounded-lg hidden">
+                    ✅ Compte créé ! Vérifiez votre email pour confirmer.
+                </div>
+                
+                <!-- Bouton -->
+                <button id="login-btn" onclick="doAuth()" class="w-full bg-indigo-500 text-white py-3 rounded-xl font-semibold hover:bg-indigo-600">Se connecter</button>
+                
+                <!-- Mot de passe oublié -->
+                <button id="forgot-password-btn" onclick="showForgotPassword()" class="w-full text-gray-500 text-sm hover:text-indigo-500">Mot de passe oublié ?</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Mot de passe oublié -->
+    <div id="forgot-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-overlay hidden">
+        <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4 animate-fade-in">
+            <div class="text-center mb-6">
+                <div class="bg-orange-500 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <span class="text-3xl">🔐</span>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Mot de passe oublié</h2>
+                <p class="text-gray-500 mt-2">Entrez votre email pour recevoir un lien de réinitialisation</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <input type="email" id="forgot-email" 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                           placeholder="votre@email.com">
+                </div>
+                <div id="forgot-error" class="text-red-500 text-sm hidden"></div>
+                <div id="forgot-success" class="bg-green-50 text-green-700 text-sm p-3 rounded-lg hidden"></div>
+                <button id="forgot-btn" onclick="doForgotPassword()" class="w-full bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600">Envoyer le lien</button>
+                <button onclick="hideForgotPassword()" class="w-full text-gray-500 text-sm hover:text-gray-700">← Retour à la connexion</button>
             </div>
         </div>
     </div>
@@ -64,10 +126,20 @@
             
             <!-- Gauche: Zone image -->
             <div class="space-y-4">
-                <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center cursor-pointer bg-white hover:border-indigo-500">
+                <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center bg-white hover:border-indigo-500">
                     <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center text-3xl">🖼️</div>
-                    <p class="text-gray-600 font-medium">Glissez une affiche ici</p>
-                    <p class="text-gray-400 text-sm">ou cliquez pour sélectionner</p>
+                    <p class="text-gray-600 font-medium mb-4">Choisissez une source</p>
+                    
+                    <div class="flex flex-col gap-3 justify-center">
+                        <button onclick="document.getElementById('camera-input').click()" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition">
+                            📸 Prendre une photo
+                        </button>
+                        <button onclick="document.getElementById('file-input').click()" class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-300 transition">
+                            📁 Choisir un fichier
+                        </button>
+                    </div>
+                    
+                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
                     <input type="file" id="file-input" accept="image/*" class="hidden">
                 </div>
                 <div id="image-preview" class="hidden bg-white rounded-2xl overflow-hidden shadow-lg relative">
@@ -101,6 +173,7 @@
                             <div class="flex gap-3"><span class="text-xl">📍</span><div><p class="text-gray-500">Lieu</p><p id="event-venue" class="text-gray-900">-</p><p id="event-address" class="text-gray-600">-</p></div></div>
                             <div class="flex gap-3"><span class="text-xl">👥</span><div><p class="text-gray-500">Organisateur</p><p id="event-organizer" class="text-gray-900">-</p></div></div>
                             <div class="flex gap-3"><span class="text-xl">💰</span><div><p class="text-gray-500">Tarif</p><p id="event-pricing" class="text-gray-900">-</p></div></div>
+                            <div id="event-website-container" class="hidden flex gap-3"><span class="text-xl">🌐</span><div><p class="text-gray-500">Site web</p><a id="event-website" href="#" target="_blank" class="text-indigo-600 hover:underline">-</a></div></div>
                             <div id="event-description-container" class="hidden"><p class="text-gray-500 mb-1">Description</p><p id="event-description" class="text-gray-700 bg-gray-50 p-3 rounded-lg">-</p></div>
                             <div id="event-tags-container" class="hidden"><p class="text-gray-500 mb-1">Tags</p><div id="event-tags" class="flex flex-wrap gap-2"></div></div>
                         </div>
@@ -122,12 +195,6 @@
                 <div id="error-message" class="hidden bg-red-50 border border-red-200 rounded-2xl p-5">
                     <span class="text-xl">⚠️</span> <span id="error-text" class="text-red-600">-</span>
                 </div>
-
-                <div id="placeholder" class="bg-white rounded-2xl p-8 text-center shadow-lg">
-                    <div class="text-5xl mb-4">📄</div>
-                    <h3 class="text-lg font-semibold text-gray-700">En attente d'une image</h3>
-                    <p class="text-gray-400 text-sm">Téléchargez une affiche pour l'analyser</p>
-                </div>
             </div>
         </div>
     </main>
@@ -147,10 +214,20 @@
         const previewImg = document.getElementById('preview-img');
         const eventContainer = document.getElementById('event-container');
         const errorMessage = document.getElementById('error-message');
-        const placeholder = document.getElementById('placeholder');
         const processingOverlay = document.getElementById('processing-overlay');
         const skeletonLoader = document.getElementById('skeleton-loader');
         const loginModal = document.getElementById('login-modal');
+        
+        // === DEVICE ID ===
+        function getDeviceId() {
+            let deviceId = localStorage.getItem('gedeon_device_id');
+            if (!deviceId) {
+                // Générer un ID unique pour ce device
+                deviceId = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 16);
+                localStorage.setItem('gedeon_device_id', deviceId);
+            }
+            return deviceId;
+        }
         
         // === AUTH ===
         function checkAuth() {
@@ -163,50 +240,233 @@
                     return true;
                 } catch (e) {}
             }
-            loginModal.classList.remove('hidden');
+            // Ne PAS afficher le modal automatiquement, seulement à la demande
+            document.getElementById('user-pseudo-display').textContent = 'Non connecté';
             return false;
         }
         
-        async function doLogin() {
+        // Afficher le modal login (appelé quand nécessaire)
+        function showLoginModal() {
+            loginModal.classList.remove('hidden');
+            showTab('login');
+        }
+        
+        // Tabs login/register
+        let authMode = 'login';
+        
+        function showTab(mode) {
+            authMode = mode;
+            const tabLogin = document.getElementById('tab-login');
+            const tabRegister = document.getElementById('tab-register');
+            const btn = document.getElementById('login-btn');
+            const subtitle = document.getElementById('login-subtitle');
+            const pseudoField = document.getElementById('pseudo-field');
+            const forgotBtn = document.getElementById('forgot-password-btn');
+            
+            // Reset messages
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('login-success').classList.add('hidden');
+            
+            if (mode === 'login') {
+                tabLogin.classList.add('bg-white', 'text-indigo-600', 'shadow-sm');
+                tabLogin.classList.remove('text-gray-500');
+                tabRegister.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
+                tabRegister.classList.add('text-gray-500');
+                btn.textContent = 'Se connecter';
+                subtitle.textContent = 'Connectez-vous pour ajouter des événements';
+                pseudoField.classList.add('hidden');
+                forgotBtn.classList.remove('hidden');
+            } else {
+                tabRegister.classList.add('bg-white', 'text-indigo-600', 'shadow-sm');
+                tabRegister.classList.remove('text-gray-500');
+                tabLogin.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
+                tabLogin.classList.add('text-gray-500');
+                btn.textContent = 'Créer mon compte';
+                subtitle.textContent = 'Créez votre compte pour commencer';
+                pseudoField.classList.remove('hidden');
+                forgotBtn.classList.add('hidden');
+            }
+        }
+        
+        async function doAuth() {
+            const email = document.getElementById('login-email').value.trim().toLowerCase();
             const pseudo = document.getElementById('login-pseudo').value.trim();
+            const password = document.getElementById('login-password').value;
             const errorDiv = document.getElementById('login-error');
+            const successDiv = document.getElementById('login-success');
             const btn = document.getElementById('login-btn');
             
-            if (pseudo.length < 2 || pseudo.length > 20) {
-                errorDiv.textContent = 'Pseudo: 2-20 caractères'; errorDiv.classList.remove('hidden'); return;
-            }
-            if (!/^[a-zA-Z0-9_àâäéèêëïîôùûüçÀÂÄÉÈÊËÏÎÔÙÛÜÇ]+$/.test(pseudo)) {
-                errorDiv.textContent = 'Caractères: lettres, chiffres, _'; errorDiv.classList.remove('hidden'); return;
+            errorDiv.classList.add('hidden');
+            successDiv.classList.add('hidden');
+            
+            // Validation email
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                errorDiv.textContent = 'Email invalide'; 
+                errorDiv.classList.remove('hidden'); 
+                return;
             }
             
-            btn.disabled = true; btn.textContent = 'Connexion...'; errorDiv.classList.add('hidden');
+            // Validation pseudo (inscription uniquement)
+            if (authMode === 'register') {
+                if (pseudo.length < 2 || pseudo.length > 20) {
+                    errorDiv.textContent = 'Pseudo: 2-20 caractères'; 
+                    errorDiv.classList.remove('hidden'); 
+                    return;
+                }
+                if (!/^[a-zA-Z0-9_àâäéèêëïîôùûüçÀÂÄÉÈÊËÏÎÔÙÛÜÇ]+$/.test(pseudo)) {
+                    errorDiv.textContent = 'Pseudo: lettres, chiffres, _ uniquement'; 
+                    errorDiv.classList.remove('hidden'); 
+                    return;
+                }
+            }
+            
+            // Validation mot de passe
+            if (password.length < 4) {
+                errorDiv.textContent = 'Mot de passe: 4 caractères minimum'; 
+                errorDiv.classList.remove('hidden'); 
+                return;
+            }
+            
+            const originalText = btn.textContent;
+            btn.disabled = true; 
+            btn.textContent = authMode === 'login' ? 'Connexion...' : 'Création...'; 
+            
+            const deviceId = getDeviceId();
+            const endpoint = authMode === 'login' ? '/api/users/login' : '/api/users/register';
             
             try {
-                const res = await fetch(`${SERVER_URL}/api/users/login`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pseudo})
+                const res = await fetch(`${SERVER_URL}${endpoint}`, {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ email, pseudo, password, device_id: deviceId })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    if (authMode === 'register') {
+                        // Inscription réussie - attendre confirmation email
+                        successDiv.textContent = '✅ ' + (data.message || 'Compte créé ! Vérifiez votre email pour confirmer.');
+                        successDiv.classList.remove('hidden');
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                        // Ne pas fermer le modal
+                    } else {
+                        // Connexion réussie
+                        currentUser = data.user;
+                        localStorage.setItem('gedeon_user', JSON.stringify(currentUser));
+                        document.getElementById('user-pseudo-display').textContent = currentUser.pseudo;
+                        loginModal.classList.add('hidden');
+                    }
+                } else {
+                    // Erreur
+                    if (data.code === 'EMAIL_NOT_CONFIRMED') {
+                        errorDiv.innerHTML = data.message + '<br><button onclick="resendConfirmation(\'' + email + '\')" class="text-indigo-500 underline mt-1">Renvoyer l\'email</button>';
+                    } else {
+                        errorDiv.textContent = data.message || 'Erreur';
+                    }
+                    errorDiv.classList.remove('hidden');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            } catch (e) { 
+                errorDiv.textContent = 'Erreur serveur'; 
+                errorDiv.classList.remove('hidden'); 
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        async function resendConfirmation(email) {
+            try {
+                const res = await fetch(`${SERVER_URL}/api/users/resend-confirmation`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    currentUser = data.user;
-                    localStorage.setItem('gedeon_user', JSON.stringify(currentUser));
-                    document.getElementById('user-pseudo-display').textContent = currentUser.pseudo;
-                    loginModal.classList.add('hidden');
+                    document.getElementById('login-success').textContent = '✅ Email renvoyé ! Vérifiez votre boîte mail.';
+                    document.getElementById('login-success').classList.remove('hidden');
+                    document.getElementById('login-error').classList.add('hidden');
                 } else {
-                    errorDiv.textContent = data.message || 'Erreur'; errorDiv.classList.remove('hidden');
+                    alert('❌ ' + (data.message || 'Erreur'));
                 }
-            } catch (e) { errorDiv.textContent = 'Erreur serveur'; errorDiv.classList.remove('hidden'); }
-            btn.disabled = false; btn.textContent = 'Continuer';
+            } catch (e) {
+                alert('❌ Erreur serveur');
+            }
+        }
+        
+        function showForgotPassword() {
+            loginModal.classList.add('hidden');
+            document.getElementById('forgot-modal').classList.remove('hidden');
+            document.getElementById('forgot-email').value = document.getElementById('login-email').value;
+            document.getElementById('forgot-error').classList.add('hidden');
+            document.getElementById('forgot-success').classList.add('hidden');
+        }
+        
+        function hideForgotPassword() {
+            document.getElementById('forgot-modal').classList.add('hidden');
+            loginModal.classList.remove('hidden');
+        }
+        
+        async function doForgotPassword() {
+            const email = document.getElementById('forgot-email').value.trim().toLowerCase();
+            const errorDiv = document.getElementById('forgot-error');
+            const successDiv = document.getElementById('forgot-success');
+            const btn = document.getElementById('forgot-btn');
+            
+            if (!email) {
+                errorDiv.textContent = 'Email requis';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Envoi...';
+            errorDiv.classList.add('hidden');
+            
+            try {
+                const res = await fetch(`${SERVER_URL}/api/users/forgot-password`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+                
+                successDiv.textContent = '✅ Si cet email existe, vous recevrez un lien de réinitialisation.';
+                successDiv.classList.remove('hidden');
+            } catch (e) {
+                errorDiv.textContent = 'Erreur serveur';
+                errorDiv.classList.remove('hidden');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Envoyer le lien';
         }
         
         function logout() { if (confirm('Déconnexion ?')) { localStorage.removeItem('gedeon_user'); location.reload(); } }
-        document.getElementById('login-pseudo').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+        
+        // Event listeners
+        document.getElementById('login-email').addEventListener('keypress', e => { 
+            if (e.key === 'Enter') {
+                if (authMode === 'register') {
+                    document.getElementById('login-pseudo').focus();
+                } else {
+                    document.getElementById('login-password').focus();
+                }
+            }
+        });
+        document.getElementById('login-pseudo').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
+        document.getElementById('login-password').addEventListener('keypress', e => { if (e.key === 'Enter') doAuth(); });
+        document.getElementById('forgot-email').addEventListener('keypress', e => { if (e.key === 'Enter') doForgotPassword(); });
         
         // === DRAG & DROP ===
-        dropZone.addEventListener('click', () => fileInput.click());
+        const cameraInput = document.getElementById('camera-input');
         dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
         dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-active'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) handleImageFile(f); });
         fileInput.addEventListener('change', e => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
+        cameraInput.addEventListener('change', e => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
         
         function handleImageFile(file) {
             if (file.size > 10*1024*1024) { showError('Max 10 MB'); return; }
@@ -215,12 +475,12 @@
             reader.readAsDataURL(file);
         }
         
-        function clearImage() { imagePreview.classList.add('hidden'); dropZone.classList.remove('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden'); placeholder.classList.remove('hidden'); fileInput.value = ''; currentEventData = null; }
-        function showError(msg) { document.getElementById('error-text').textContent = msg; errorMessage.classList.remove('hidden'); eventContainer.classList.add('hidden'); placeholder.classList.add('hidden'); }
+        function clearImage() { imagePreview.classList.add('hidden'); dropZone.classList.remove('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden'); fileInput.value = ''; currentEventData = null; }
+        function showError(msg) { document.getElementById('error-text').textContent = msg; errorMessage.classList.remove('hidden'); eventContainer.classList.add('hidden'); }
         
         // === ANALYSE ===
         async function analyzeImage(dataUrl, mimeType) {
-            placeholder.classList.add('hidden'); eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden');
+            eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden');
             skeletonLoader.classList.remove('hidden'); processingOverlay.classList.remove('hidden');
             try {
                 const base64 = dataUrl.split(',')[1];
@@ -243,6 +503,12 @@
             document.getElementById('event-address').textContent = [d.location?.address, d.location?.city].filter(Boolean).join(', ') || '-';
             document.getElementById('event-organizer').textContent = d.organizer?.name || '-';
             document.getElementById('event-pricing').textContent = d.pricing?.isFree ? 'Gratuit' : (d.pricing?.priceRange || '-');
+            if (d.website) { 
+                document.getElementById('event-website').textContent = d.website; 
+                document.getElementById('event-website').href = d.website.startsWith('http') ? d.website : 'https://' + d.website;
+                document.getElementById('event-website-container').classList.remove('hidden'); 
+            }
+            else { document.getElementById('event-website-container').classList.add('hidden'); }
             if (d.description) { document.getElementById('event-description').textContent = d.description; document.getElementById('event-description-container').classList.remove('hidden'); }
             else { document.getElementById('event-description-container').classList.add('hidden'); }
             if (d.tags && d.tags.length) { document.getElementById('event-tags').innerHTML = d.tags.map(t => `<span class="px-2 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs">${t}</span>`).join(''); document.getElementById('event-tags-container').classList.remove('hidden'); }
@@ -255,7 +521,10 @@
         // === AJOUTER À GEDEON ===
         async function addToGedeon() {
             if (!currentEventData) return;
-            if (!currentUser) { checkAuth(); return; }
+            if (!currentUser) { 
+                showLoginModal(); 
+                return; 
+            }
             
             const btn = document.getElementById('add-to-gedeon-btn');
             const isPrivate = document.getElementById('is-private').checked;
@@ -297,6 +566,7 @@
                         description: currentEventData.description,
                         organizer: currentEventData.organizer?.name,
                         pricing: currentEventData.pricing?.isFree ? 'Gratuit' : currentEventData.pricing?.priceRange,
+                        website: currentEventData.website,
                         tags: currentEventData.tags || [],
                         is_private: isPrivate
                     })

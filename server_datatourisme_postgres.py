@@ -11,19 +11,37 @@ Optimisations :
 6. Utilisation de get_movies() pour données enrichies (poster, genres, etc.)
 """
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect
 from flask_cors import CORS
 from datetime import datetime, timezone, timedelta, date
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 import json
+import re
 from urllib.parse import urlparse
 import requests
 import math
 import time
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# Module d'authentification email
+try:
+    from auth_email import (
+        generate_confirmation_token,
+        send_confirmation_email,
+        send_password_reset_email,
+        is_valid_email,
+        is_token_expired,
+        TOKEN_EXPIRY_HOURS
+    )
+    AUTH_EMAIL_AVAILABLE = True
+    print("✅ Module auth_email disponible")
+except ImportError:
+    AUTH_EMAIL_AVAILABLE = False
+    print("⚠️ Module auth_email non disponible")
 
 # ============================================================================
 # IMPORT DES MODULES OPTIMISÉS
@@ -199,16 +217,57 @@ def init_user_tables():
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                pseudo VARCHAR(20) UNIQUE NOT NULL,
-                pseudo_lower VARCHAR(20) UNIQUE NOT NULL,
+                pseudo VARCHAR(20) NOT NULL UNIQUE,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                email_confirmed BOOLEAN DEFAULT FALSE,
+                confirmation_token VARCHAR(64),
+                confirmation_sent_at TIMESTAMP,
+                reset_token VARCHAR(64),
+                reset_sent_at TIMESTAMP,
+                device_id VARCHAR(64),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
-        # Index pour recherche rapide par pseudo
+        # Migration : ajouter les nouvelles colonnes si elles n'existent pas
         cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_users_pseudo_lower ON users(pseudo_lower)
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='email') THEN
+                    ALTER TABLE users ADD COLUMN email VARCHAR(255);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='email_confirmed') THEN
+                    ALTER TABLE users ADD COLUMN email_confirmed BOOLEAN DEFAULT FALSE;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='confirmation_token') THEN
+                    ALTER TABLE users ADD COLUMN confirmation_token VARCHAR(64);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='confirmation_sent_at') THEN
+                    ALTER TABLE users ADD COLUMN confirmation_sent_at TIMESTAMP;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='reset_token') THEN
+                    ALTER TABLE users ADD COLUMN reset_token VARCHAR(64);
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='reset_sent_at') THEN
+                    ALTER TABLE users ADD COLUMN reset_sent_at TIMESTAMP;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='password_hash') THEN
+                    ALTER TABLE users ADD COLUMN password_hash VARCHAR(255);
+                END IF;
+            END $$;
+        """)
+        
+        # Index pour recherche rapide
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_pseudo ON users(pseudo)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_confirmation_token ON users(confirmation_token)
         """)
         
         # Table scanned_events
@@ -231,10 +290,21 @@ def init_user_tables():
                 description TEXT,
                 organizer VARCHAR(500),
                 pricing VARCHAR(200),
+                website VARCHAR(500),
                 tags TEXT[],
                 is_private BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+        
+        # Ajouter colonne website si elle n'existe pas (migration)
+        cur.execute("""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='scanned_events' AND column_name='website') THEN
+                    ALTER TABLE scanned_events ADD COLUMN website VARCHAR(500);
+                END IF;
+            END $$;
         """)
         
         # Index pour recherche géographique
@@ -979,90 +1049,108 @@ def geocode_cinema(cinema_name, cinema_address, dept_code=None):
     return (None, None)
 
 
-def fetch_movies_for_cinema(cinema_info, today_str):
-    """Worker pour récupérer les films d'un cinéma."""
+def fetch_movies_for_cinema(cinema_info, today_str, tomorrow_str=None):
+    """Worker pour récupérer les films d'un cinéma (aujourd'hui + demain)."""
     try:
         api = allocineAPI()
         cinema_id = cinema_info['id']
         
-        # Essayer d'abord get_showtime (plus fiable)
-        try:
-            showtimes = api.get_showtime(cinema_id, today_str)
-            
-            # DEBUG: Voir ce que retourne l'API
-            if showtimes:
-                print(f"      📋 {cinema_id}: {len(showtimes)} films reçus")
-                if len(showtimes) > 0:
-                    print(f"         Exemple: {showtimes[0]}")
-            else:
-                print(f"      📋 {cinema_id}: showtimes vide ou None")
-            
-            if showtimes:
-                movies = []
-                for show in showtimes:
-                    title = show.get('title', 'Film')
+        all_movies = {}  # {title: movie_data} pour dédupliquer
+        
+        # Récupérer les séances d'aujourd'hui
+        for date_str in [today_str, tomorrow_str] if tomorrow_str else [today_str]:
+            try:
+                showtimes = api.get_showtime(cinema_id, date_str)
+                
+                if showtimes:
+                    is_today = (date_str == today_str)
+                    date_label = "Auj" if is_today else "Dem"
                     
-                    # Nouveau format: showtimes avec startsAt et diffusionVersion
-                    show_times = show.get('showtimes', [])
+                    if is_today:
+                        print(f"      📋 {cinema_id}: {len(showtimes)} films reçus")
+                        if len(showtimes) > 0:
+                            print(f"         Exemple: {showtimes[0]}")
                     
-                    if show_times:
-                        # Grouper par version (LOCAL=VF, ORIGINAL=VO)
-                        vf_times = []
-                        vo_times = []
+                    for show in showtimes:
+                        title = show.get('title', 'Film')
                         
-                        for st in show_times:
-                            starts_at = st.get('startsAt', '')
-                            version = st.get('diffusionVersion', '')
+                        # Nouveau format: showtimes avec startsAt et diffusionVersion
+                        show_times = show.get('showtimes', [])
+                        
+                        if show_times:
+                            # Grouper par version (LOCAL=VF, ORIGINAL=VO)
+                            vf_times = []
+                            vo_times = []
                             
-                            # Extraire l'heure (HH:MM)
-                            if 'T' in starts_at:
-                                time_part = starts_at.split('T')[1][:5]
-                            else:
-                                time_part = starts_at
+                            for st in show_times:
+                                starts_at = st.get('startsAt', '')
+                                version = st.get('diffusionVersion', '')
+                                
+                                # Extraire l'heure (HH:MM)
+                                if 'T' in starts_at:
+                                    time_part = starts_at.split('T')[1][:5]
+                                else:
+                                    time_part = starts_at
+                                
+                                if version == 'LOCAL':
+                                    vf_times.append(f"{time_part}")
+                                else:  # ORIGINAL
+                                    vo_times.append(f"{time_part}")
                             
-                            if version == 'LOCAL':
-                                vf_times.append(time_part)
-                            else:  # ORIGINAL
-                                vo_times.append(time_part)
+                            # Construire la chaîne d'horaires avec date
+                            versions = []
+                            if vf_times:
+                                versions.append(f"VF {date_label}: {', '.join(vf_times[:3])}")
+                            if vo_times:
+                                versions.append(f"VO {date_label}: {', '.join(vo_times[:3])}")
+                            
+                            showtimes_str = " | ".join(versions) if versions else ""
+                        else:
+                            # Ancien format avec VF/VO/VOST
+                            vf = show.get('VF', [])
+                            vo = show.get('VO', [])
+                            vost = show.get('VOST', [])
+                            
+                            versions = []
+                            if vf:
+                                versions.append(f"VF {date_label}: {', '.join(vf[:3])}")
+                            if vo:
+                                versions.append(f"VO {date_label}: {', '.join(vo[:3])}")
+                            if vost:
+                                versions.append(f"VOST {date_label}: {', '.join(vost[:3])}")
+                            
+                            showtimes_str = " | ".join(versions) if versions else ""
                         
-                        # Construire la chaîne d'horaires
-                        versions = []
-                        if vf_times:
-                            versions.append(f"VF: {', '.join(vf_times[:4])}")
-                        if vo_times:
-                            versions.append(f"VO: {', '.join(vo_times[:4])}")
-                        
-                        showtimes_str = " | ".join(versions) if versions else "Horaires disponibles"
-                    else:
-                        # Ancien format avec VF/VO/VOST
-                        vf = show.get('VF', [])
-                        vo = show.get('VO', [])
-                        vost = show.get('VOST', [])
-                        
-                        versions = []
-                        if vf:
-                            versions.append(f"VF: {', '.join(vf[:4])}")
-                        if vo:
-                            versions.append(f"VO: {', '.join(vo[:4])}")
-                        if vost:
-                            versions.append(f"VOST: {', '.join(vost[:4])}")
-                        
-                        showtimes_str = " | ".join(versions) if versions else "Horaires non disponibles"
+                        # Ajouter ou fusionner avec film existant
+                        if title in all_movies:
+                            # Ajouter les horaires
+                            if showtimes_str:
+                                existing = all_movies[title]['showtimes_str']
+                                if existing:
+                                    all_movies[title]['showtimes_str'] = existing + " | " + showtimes_str
+                                else:
+                                    all_movies[title]['showtimes_str'] = showtimes_str
+                        else:
+                            all_movies[title] = {
+                                'title': title,
+                                'runtime': 0,
+                                'genres': [],
+                                'urlPoster': '',
+                                'director': '',
+                                'isPremiere': False,
+                                'weeklyOuting': False,
+                                'showtimes_str': showtimes_str,
+                                'duration': show.get('duration', ''),
+                            }
+                elif date_str == today_str:
+                    print(f"      📋 {cinema_id}: showtimes vide ou None")
                     
-                    movies.append({
-                        'title': title,
-                        'runtime': 0,
-                        'genres': [],
-                        'urlPoster': '',
-                        'director': '',
-                        'isPremiere': False,
-                        'weeklyOuting': False,
-                        'showtimes_str': showtimes_str,
-                        'duration': show.get('duration', ''),
-                    })
-                return cinema_info, movies
-        except Exception as e:
-            print(f"      ⚠️ get_showtime({cinema_id}) failed: {e}")
+            except Exception as e:
+                if date_str == today_str:
+                    print(f"      ⚠️ get_showtime({cinema_id}, {date_str}) failed: {e}")
+        
+        if all_movies:
+            return cinema_info, list(all_movies.values())
         
         # Fallback sur get_movies (données enrichies mais moins fiable)
         try:
@@ -1186,6 +1274,7 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
     
     # 2. Récupérer les films (avec cache)
     today_str = date.today().strftime("%Y-%m-%d")
+    tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
     all_events = []
     cache_hits = 0
     
@@ -1206,8 +1295,8 @@ def fetch_allocine_cinemas_nearby(center_lat, center_lon, radius_km, max_cinemas
                     cache_hits += 1
             
             if not from_cache:
-                # Requête API
-                cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+                # Requête API (aujourd'hui + demain)
+                cinema_info, movies = fetch_movies_for_cinema(cinema, today_str, tomorrow_str)
                 # Stocker en cache
                 FILMS_CACHE[cinema_id] = {'films': movies, 'timestamp': now}
                 # Délai seulement si pas de cache
@@ -1504,7 +1593,7 @@ def get_nearby_cinema():
         start_idx = batch * batch_size
         end_idx = start_idx + batch_size
         cinemas_batch = nearby_cinemas[start_idx:end_idx]
-        has_more = end_idx < total_cinemas and end_idx < 20  # Max 20 cinémas total
+        has_more = end_idx < total_cinemas and end_idx < 50  # Max 50 cinémas total
         
         if not cinemas_batch:
             return jsonify({
@@ -1520,6 +1609,7 @@ def get_nearby_cinema():
         
         # Récupérer les films pour ce batch
         today_str = date.today().strftime("%Y-%m-%d")
+        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
         all_events = []
         cache_hits = 0
         start_time = time.time()
@@ -1539,7 +1629,7 @@ def get_nearby_cinema():
                         cache_hits += 1
                 
                 if not from_cache:
-                    cinema_info, movies = fetch_movies_for_cinema(cinema, today_str)
+                    cinema_info, movies = fetch_movies_for_cinema(cinema, today_str, tomorrow_str)
                     FILMS_CACHE[cinema_id] = {'films': movies, 'timestamp': now}
                     if i < len(cinemas_batch) - 1:
                         time.sleep(0.15)
@@ -1918,11 +2008,9 @@ Extrais toutes les informations et retourne UNIQUEMENT un JSON valide avec cette
         "city": "Ville"
     },
     "organizer": {
-        "name": "Nom ou null",
-        "website": "URL ou null",
-        "email": "Email ou null",
-        "phone": "Téléphone ou null"
+        "name": "Nom ou null"
     },
+    "website": "URL du site web de l'événement ou null",
     "pricing": {
         "isFree": true/false,
         "priceRange": "10€ - 25€ ou null",
@@ -2081,12 +2169,12 @@ def api_init():
         }), 500
 
 
-@app.route('/api/users/login', methods=['POST'])
-def user_login():
+@app.route('/api/users/register', methods=['POST'])
+def user_register():
     """
-    Connexion/Inscription d'un utilisateur.
-    Si le pseudo existe → retourne l'utilisateur
-    Sinon → crée l'utilisateur et le retourne
+    Inscription d'un nouvel utilisateur.
+    Requiert: email + pseudo + password
+    Envoie un email de confirmation.
     """
     global USER_TABLES_INITIALIZED
     
@@ -2097,70 +2185,373 @@ def user_login():
                 USER_TABLES_INITIALIZED = True
         
         data = request.get_json()
+        email = data.get('email', '').strip().lower()
         pseudo = data.get('pseudo', '').strip()
+        password = data.get('password', '')
+        device_id = data.get('device_id', '').strip()
         
-        # Validation
+        # Validation email
+        if not email or not is_valid_email(email):
+            return jsonify({"status": "error", "message": "Email invalide"}), 400
+        
+        # Validation pseudo
         valid, error = validate_pseudo(pseudo)
         if not valid:
             return jsonify({"status": "error", "message": error}), 400
         
-        pseudo_lower = pseudo.lower()
+        # Validation mot de passe
+        if not password or len(password) < 4:
+            return jsonify({"status": "error", "message": "Mot de passe: 4 caractères minimum"}), 400
+        
+        if len(password) > 50:
+            return jsonify({"status": "error", "message": "Mot de passe trop long (50 max)"}), 400
         
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Chercher l'utilisateur existant
+        # Vérifier si l'email existe déjà
+        cur.execute("SELECT id, email_confirmed FROM users WHERE email = %s", (email,))
+        existing_email = cur.fetchone()
+        if existing_email:
+            cur.close()
+            conn.close()
+            if not existing_email['email_confirmed']:
+                return jsonify({"status": "error", "message": "Cet email est en attente de confirmation. Vérifiez vos emails."}), 409
+            return jsonify({"status": "error", "message": "Cet email est déjà utilisé"}), 409
+        
+        # Vérifier si le pseudo existe déjà
+        cur.execute("SELECT id FROM users WHERE pseudo = %s", (pseudo,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Ce pseudo est déjà pris"}), 409
+        
+        # Générer le token de confirmation
+        confirmation_token = generate_confirmation_token()
+        
+        # Créer l'utilisateur (non confirmé)
+        password_hash = generate_password_hash(password)
         cur.execute(
-            "SELECT id, pseudo, created_at FROM users WHERE pseudo_lower = %s",
-            (pseudo_lower,)
+            """INSERT INTO users (email, pseudo, password_hash, device_id, email_confirmed, confirmation_token, confirmation_sent_at) 
+               VALUES (%s, %s, %s, %s, FALSE, %s, CURRENT_TIMESTAMP) 
+               RETURNING id, pseudo, email""",
+            (email, pseudo, password_hash, device_id or None, confirmation_token)
+        )
+        new_user = cur.fetchone()
+        conn.commit()
+        
+        # Envoyer l'email de confirmation
+        if AUTH_EMAIL_AVAILABLE:
+            success, error_msg = send_confirmation_email(email, pseudo, confirmation_token)
+            if not success:
+                print(f"⚠️ Erreur envoi email: {error_msg}")
+        
+        cur.close()
+        conn.close()
+        
+        print(f"👤 Inscription: {pseudo} ({email}) - En attente de confirmation")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Compte créé ! Vérifiez votre email pour confirmer.",
+            "user": {
+                "id": new_user['id'],
+                "pseudo": new_user['pseudo'],
+                "email": new_user['email'],
+                "confirmed": False
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f"❌ Erreur register: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/users/resend-confirmation', methods=['POST'])
+def resend_confirmation():
+    """Renvoie l'email de confirmation"""
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        
+        if not email:
+            return jsonify({"status": "error", "message": "Email requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT id, pseudo, email_confirmed, confirmation_sent_at FROM users WHERE email = %s",
+            (email,)
         )
         user = cur.fetchone()
         
-        if user:
-            # Mise à jour last_seen
-            cur.execute(
-                "UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = %s",
-                (user['id'],)
-            )
-            conn.commit()
-            
+        if not user:
             cur.close()
             conn.close()
-            
-            return jsonify({
-                "status": "success",
-                "user": {
-                    "id": user['id'],
-                    "pseudo": user['pseudo'],
-                    "isNew": False
-                }
-            }), 200
+            return jsonify({"status": "error", "message": "Email non trouvé"}), 404
         
-        else:
-            # Créer le nouvel utilisateur
-            cur.execute(
-                "INSERT INTO users (pseudo, pseudo_lower) VALUES (%s, %s) RETURNING id, pseudo, created_at",
-                (pseudo, pseudo_lower)
-            )
-            new_user = cur.fetchone()
-            conn.commit()
-            
+        if user['email_confirmed']:
             cur.close()
             conn.close()
-            
-            print(f"👤 Nouvel utilisateur créé: {pseudo}")
-            
+            return jsonify({"status": "error", "message": "Email déjà confirmé"}), 400
+        
+        # Générer nouveau token
+        new_token = generate_confirmation_token()
+        cur.execute(
+            "UPDATE users SET confirmation_token = %s, confirmation_sent_at = CURRENT_TIMESTAMP WHERE id = %s",
+            (new_token, user['id'])
+        )
+        conn.commit()
+        
+        # Envoyer l'email
+        if AUTH_EMAIL_AVAILABLE:
+            send_confirmation_email(email, user['pseudo'], new_token)
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({"status": "success", "message": "Email de confirmation renvoyé"}), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/confirm', methods=['GET'])
+def confirm_email():
+    """
+    Confirme l'email via le lien cliqué.
+    Redirige vers la page de succès.
+    """
+    token = request.args.get('token', '').strip()
+    
+    if not token:
+        return redirect('/confirmation-error.html?error=missing_token')
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT id, pseudo, email_confirmed, confirmation_sent_at FROM users WHERE confirmation_token = %s",
+            (token,)
+        )
+        user = cur.fetchone()
+        
+        if not user:
+            cur.close()
+            conn.close()
+            return redirect('/confirmation-error.html?error=invalid_token')
+        
+        if user['email_confirmed']:
+            cur.close()
+            conn.close()
+            return redirect('/confirmation-success.html?already=true')
+        
+        # Vérifier expiration (24h)
+        if is_token_expired(user['confirmation_sent_at']):
+            cur.close()
+            conn.close()
+            return redirect('/confirmation-error.html?error=expired_token')
+        
+        # Confirmer l'email
+        cur.execute(
+            "UPDATE users SET email_confirmed = TRUE, confirmation_token = NULL WHERE id = %s",
+            (user['id'],)
+        )
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"✅ Email confirmé: {user['pseudo']}")
+        
+        return redirect('/confirmation-success.html')
+        
+    except Exception as e:
+        print(f"❌ Erreur confirmation: {e}")
+        return redirect('/confirmation-error.html?error=server_error')
+
+
+@app.route('/api/users/login', methods=['POST'])
+def user_login():
+    """
+    Connexion d'un utilisateur existant.
+    Requiert: email + password
+    L'email doit être confirmé.
+    """
+    global USER_TABLES_INITIALIZED
+    
+    try:
+        # Initialiser les tables si pas encore fait
+        if not USER_TABLES_INITIALIZED:
+            if init_user_tables():
+                USER_TABLES_INITIALIZED = True
+        
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        device_id = data.get('device_id', '').strip()
+        
+        # Validation
+        if not email:
+            return jsonify({"status": "error", "message": "Email requis"}), 400
+        
+        if not password:
+            return jsonify({"status": "error", "message": "Mot de passe requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Chercher l'utilisateur par email
+        cur.execute(
+            "SELECT id, pseudo, email, password_hash, email_confirmed, device_id FROM users WHERE email = %s",
+            (email,)
+        )
+        user = cur.fetchone()
+        
+        if not user:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Email ou mot de passe incorrect"}), 401
+        
+        # Vérifier le mot de passe
+        if not user['password_hash'] or not check_password_hash(user['password_hash'], password):
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Email ou mot de passe incorrect"}), 401
+        
+        # Vérifier si l'email est confirmé
+        if not user['email_confirmed']:
+            cur.close()
+            conn.close()
             return jsonify({
-                "status": "success",
-                "user": {
-                    "id": new_user['id'],
-                    "pseudo": new_user['pseudo'],
-                    "isNew": True
-                }
-            }), 201
+                "status": "error", 
+                "message": "Email non confirmé. Vérifiez votre boîte mail.",
+                "code": "EMAIL_NOT_CONFIRMED"
+            }), 403
+        
+        # Mise à jour last_seen et device_id
+        cur.execute(
+            "UPDATE users SET last_seen = CURRENT_TIMESTAMP, device_id = %s WHERE id = %s",
+            (device_id or user['device_id'], user['id'])
+        )
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"👤 Connexion: {user['pseudo']} ({email})")
+        
+        return jsonify({
+            "status": "success",
+            "user": {
+                "id": user['id'],
+                "pseudo": user['pseudo'],
+                "email": user['email'],
+                "confirmed": True
+            }
+        }), 200
         
     except Exception as e:
         print(f"❌ Erreur login: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/users/forgot-password', methods=['POST'])
+def forgot_password():
+    """Demande de réinitialisation du mot de passe"""
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        
+        if not email:
+            return jsonify({"status": "error", "message": "Email requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT id, pseudo, email_confirmed FROM users WHERE email = %s", (email,))
+        user = cur.fetchone()
+        
+        # Ne pas révéler si l'email existe ou pas
+        if user and user['email_confirmed']:
+            reset_token = generate_confirmation_token()
+            cur.execute(
+                "UPDATE users SET reset_token = %s, reset_sent_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (reset_token, user['id'])
+            )
+            conn.commit()
+            
+            if AUTH_EMAIL_AVAILABLE:
+                send_password_reset_email(email, user['pseudo'], reset_token)
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Si cet email existe, vous recevrez un lien de réinitialisation."
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/users/reset-password', methods=['POST'])
+def reset_password():
+    """Réinitialise le mot de passe avec le token"""
+    try:
+        data = request.get_json()
+        token = data.get('token', '').strip()
+        new_password = data.get('password', '')
+        
+        if not token:
+            return jsonify({"status": "error", "message": "Token requis"}), 400
+        
+        if not new_password or len(new_password) < 4:
+            return jsonify({"status": "error", "message": "Mot de passe: 4 caractères minimum"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT id, pseudo, reset_sent_at FROM users WHERE reset_token = %s",
+            (token,)
+        )
+        user = cur.fetchone()
+        
+        if not user:
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Token invalide"}), 400
+        
+        # Vérifier expiration (1h pour reset)
+        if is_token_expired(user['reset_sent_at'], hours=1):
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Token expiré. Refaites une demande."}), 400
+        
+        # Mettre à jour le mot de passe
+        password_hash = generate_password_hash(new_password)
+        cur.execute(
+            "UPDATE users SET password_hash = %s, reset_token = NULL WHERE id = %s",
+            (password_hash, user['id'])
+        )
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"🔐 Mot de passe réinitialisé: {user['pseudo']}")
+        
+        return jsonify({"status": "success", "message": "Mot de passe modifié !"}), 200
+        
+    except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -2214,12 +2605,13 @@ def get_scanned_events():
         cur = conn.cursor()
         
         if user_id and mine_only:
-            # L'utilisateur veut voir SES événements (publics + privés)
+            # L'utilisateur veut voir TOUS les publics + SES privés
             cur.execute("""
                 SELECT s.*, u.pseudo as user_pseudo
                 FROM scanned_events s
                 JOIN users u ON s.user_id = u.id
-                WHERE s.user_id = %s
+                WHERE s.is_private = FALSE 
+                   OR (s.is_private = TRUE AND s.user_id = %s)
                 ORDER BY s.created_at DESC
             """, (user_id,))
         elif user_id:
@@ -2282,14 +2674,59 @@ def add_scanned_event():
     - ... autres champs
     """
     try:
+        import hashlib
+        import json
+        from difflib import SequenceMatcher
+        
         data = request.get_json()
         
         user_id = data.get('user_id')
         if not user_id:
             return jsonify({"status": "error", "message": "user_id requis"}), 400
         
-        # Générer un UID unique
-        uid = f"scanned-{user_id}-{int(time.time())}-{os.urandom(4).hex()}"
+        # Fonction de similarité de titre
+        def normalize_title(title):
+            if not title:
+                return ""
+            t = title.lower().strip()
+            for char in ".,;:!?-_'\"()[]{}":
+                t = t.replace(char, " ")
+            return " ".join(t.split())
+        
+        def title_similarity(a, b):
+            if not a or not b:
+                return 0
+            return SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100
+        
+        # Fonction de distance GPS
+        def haversine_km(lat1, lon1, lat2, lon2):
+            if None in (lat1, lon1, lat2, lon2):
+                return None
+            import math
+            R = 6371.0
+            phi1, phi2 = math.radians(lat1), math.radians(lat2)
+            dphi = math.radians(lat2 - lat1)
+            dlambda = math.radians(lon2 - lon1)
+            a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+            return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        
+        # Générer un UID unique basé sur le hash du contenu
+        content_for_hash = {
+            "title": data.get('title'),
+            "category": data.get('category'),
+            "begin": data.get('begin'),
+            "end": data.get('end'),
+            "startTime": data.get('startTime'),
+            "endTime": data.get('endTime'),
+            "locationName": data.get('locationName'),
+            "city": data.get('city'),
+            "address": data.get('address'),
+            "description": data.get('description'),
+            "organizer": data.get('organizer')
+        }
+        content_json = json.dumps(content_for_hash, sort_keys=True, ensure_ascii=False)
+        content_hash = hashlib.sha256(content_json.encode('utf-8')).hexdigest()[:16]
+        uid = f"scanned-{content_hash}"
         
         conn = get_db_connection()
         cur = conn.cursor()
@@ -2300,6 +2737,47 @@ def add_scanned_event():
             cur.close()
             conn.close()
             return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
+        
+        # Vérifier si cet événement existe déjà (hash exact)
+        cur.execute("SELECT id FROM scanned_events WHERE uid = %s", (uid,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"status": "error", "message": "Cet événement a déjà été scanné (identique)"}), 409
+        
+        # 🔍 DÉTECTION INTELLIGENTE DE DOUBLONS
+        # Chercher des événements similaires (même titre + même ville/GPS)
+        new_title = data.get('title', '')
+        new_city = data.get('city', '')
+        new_lat = data.get('latitude')
+        new_lon = data.get('longitude')
+        
+        cur.execute("""
+            SELECT id, title, city, latitude, longitude 
+            FROM scanned_events
+        """)
+        existing_events = cur.fetchall()
+        
+        for existing in existing_events:
+            # Comparer les titres
+            title_match = normalize_title(new_title) == normalize_title(existing['title'])
+            title_sim = title_similarity(new_title, existing['title'])
+            
+            if not title_match and title_sim < 80:
+                continue  # Titres trop différents
+            
+            # Comparer la localisation
+            same_city = (new_city or '').lower() == (existing['city'] or '').lower() if new_city and existing['city'] else False
+            distance = haversine_km(new_lat, new_lon, existing['latitude'], existing['longitude'])
+            close_location = distance is not None and distance < 1  # < 1km
+            
+            if same_city or close_location:
+                cur.close()
+                conn.close()
+                return jsonify({
+                    "status": "error", 
+                    "message": f"Un événement similaire existe déjà : '{existing['title']}' (ID={existing['id']})"
+                }), 409
         
         # Parser les dates
         begin_date = None
@@ -2321,9 +2799,9 @@ def add_scanned_event():
                 user_id, uid, title, category, begin_date, end_date,
                 start_time, end_time, location_name, city, address,
                 latitude, longitude, description, organizer, pricing,
-                tags, is_private
+                website, tags, is_private
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING id, uid, created_at
         """, (
             user_id,
@@ -2342,6 +2820,7 @@ def add_scanned_event():
             data.get('description'),
             data.get('organizer'),
             data.get('pricing'),
+            data.get('website'),
             data.get('tags', []),
             data.get('is_private', False)
         ))
@@ -2415,6 +2894,47 @@ def delete_scanned_event(event_id):
         print(f"🗑️ Événement scanné supprimé: {event['title']}")
         
         return jsonify({"status": "success", "message": "Événement supprimé"}), 200
+        
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/scanned/reset', methods=['DELETE'])
+def reset_scanned_events():
+    """
+    Supprime TOUS les événements scannés d'un utilisateur.
+    Permet de repartir à zéro.
+    
+    Params:
+    - user_id: ID de l'utilisateur
+    """
+    try:
+        user_id = request.args.get('user_id', type=int)
+        
+        if not user_id:
+            return jsonify({"status": "error", "message": "user_id requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Compter avant suppression
+        cur.execute("SELECT COUNT(*) as count FROM scanned_events WHERE user_id = %s", (user_id,))
+        count = cur.fetchone()['count']
+        
+        # Supprimer tous les scans de cet utilisateur
+        cur.execute("DELETE FROM scanned_events WHERE user_id = %s", (user_id,))
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        print(f"🗑️ Reset: {count} événements supprimés pour user_id={user_id}")
+        
+        return jsonify({
+            "status": "success", 
+            "message": f"{count} événement(s) supprimé(s)",
+            "deleted_count": count
+        }), 200
         
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
