@@ -584,6 +584,13 @@
         
         // Init
         checkAuth();
+        
+        // Si ?login=1 dans l'URL, afficher le modal de connexion
+        if (new URLSearchParams(window.location.search).get('login') === '1') {
+            if (!currentUser) {
+                showLoginModal();
+            }
+        }
     </script>
 </body>
 </html>
