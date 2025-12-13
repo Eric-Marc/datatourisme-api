@@ -7266,316 +7266,351 @@
     "id": "B0069",
     "name": "Cinéma Jacques-Prévert",
     "address": "av. du Berry 91940 Les Ulis",
-    "dept": "91",
-    "lat": 48.682553,
-    "lon": 2.168512,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "G04DW",
     "name": "Megarama Les Ulis",
     "address": "2 Avenue de l'Aubrac 91940 Les Ulis",
-    "dept": "91",
-    "lat": 48.677394,
-    "lon": 2.173088,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0058",
     "name": "La Rotonde",
     "address": "102, rue Saint-Jacques 91150 Étampes",
-    "dept": "91",
-    "lat": 48.433622,
-    "lon": 2.155776,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0057",
     "name": "Cinetampes, le petit theatre",
     "address": "Rue Léon Marquis 91150 Étampes",
-    "dept": "91",
-    "lat": 48.434102,
-    "lon": 2.158207,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0066",
     "name": "Les Cinoches",
     "address": "3 allee Jean ferrat 91130 Ris-Orangis",
-    "dept": "91",
-    "lat": 48.646622,
-    "lon": 2.402859,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0027",
     "name": "Cinoche 4",
     "address": "15, place Jacques-Brel 91130 Ris-Orangis",
-    "dept": "91",
-    "lat": 48.656032,
-    "lon": 2.408372,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "P9154",
     "name": "Cinéma Confluences Mennecy",
     "address": "5 rue Charles Peguy 91540 Mennecy",
-    "dept": "91",
-    "lat": 48.562333,
-    "lon": 2.448153,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "P9122",
     "name": "Kinepolis Brétigny-sur-Orge",
     "address": "5 rue Michèle Morgan Les Promenades de Brétigny - ZAC de la Maison Neuve 91220 Brétigny-sur-Orge",
-    "dept": "91",
-    "lat": 48.580548,
-    "lon": 2.300792,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0051",
     "name": "Ciné220",
     "address": "rue Anatole-France 91220 Brétigny-sur-Orge",
-    "dept": "91",
-    "lat": 48.608067,
-    "lon": 2.304605,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "P9130",
     "name": "Pathé Massy - Dolby Cinema",
     "address": "21, Place du Grand Ouest 91300 Massy",
-    "dept": "91",
-    "lat": 48.723834,
-    "lon": 2.262995,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0215",
     "name": "Cinémassy",
     "address": "Place de France 91300 Massy",
-    "dept": "91",
-    "lat": 48.732221,
-    "lon": 2.28924,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "G05H3",
     "name": "Ciné Lines",
     "address": "13 Rue du Camp Romain 91490 Milly-la-Forêt",
-    "dept": "91",
-    "lat": 48.397575,
-    "lon": 2.423536,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "W9160",
     "name": "Salle des Fêtes Savigny",
     "address": "48 Av. Charles de Gaulle 91600 Savigny-sur-Orge",
-    "dept": "91",
-    "lat": 48.679191,
-    "lon": 2.34565,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0232",
     "name": "Cinéma Agnès Varda",
     "address": "37-39 Grande-Rue 91260 Juvisy-sur-Orge",
-    "dept": "91",
-    "lat": 48.688977,
-    "lon": 2.376324,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0236",
     "name": "Cinéma Atmosphère",
     "address": "Parc des Célestins (1 Rue Gambetta) 91460 Marcoussis",
-    "dept": "91",
-    "lat": 48.64157,
-    "lon": 2.220428,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0064",
     "name": "Le Cyrano",
     "address": "114, av. de la Republique 91230 Montgeron",
-    "dept": "91",
-    "lat": 48.703763,
-    "lon": 2.46109,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B1540",
     "name": "L'Avant-Scène",
     "address": "78-80 avenue d'Alsace Lorraine 91550 Paray-Vieille-Poste",
-    "dept": "91",
-    "lat": 48.712437,
-    "lon": 2.364053,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0035",
     "name": "Cinéma Lino Ventura",
     "address": "4, rue Samuel-Desbordes 91200 Athis-Mons",
-    "dept": "91",
-    "lat": 48.709656,
-    "lon": 2.387265,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "W9161",
     "name": "Ciné Toile Ballancourt",
     "address": "Espace Daniel Salvi - 2, rue des Colombes - ZAC de l'Aunaie 91610 Ballancourt-sur-Essonne",
-    "dept": "91",
-    "lat": 48.528643,
-    "lon": 2.388787,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "W9185",
     "name": "Cinessonne Bouray-sur-Juine",
     "address": "Maison Valentine, Place de l'Orme St Marc 91850 Bouray-sur-Juine",
-    "dept": "91",
-    "lat": 48.517011,
-    "lon": 2.298455,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0060",
     "name": "Central Cinema",
     "address": "Square de la Mairie 91190 Gif-sur-Yvette",
-    "dept": "91",
-    "lat": 48.701988,
-    "lon": 2.134045,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "W9116",
     "name": "Cinéma du Théâtre Longjumeau",
     "address": "20 av du Général De Gaulle 91160 Longjumeau",
-    "dept": "91",
-    "lat": 48.695518,
-    "lon": 2.298956,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0245",
     "name": "Paradiso",
     "address": "2 rue Marc-Sangnier 91330 Yerres",
-    "dept": "91",
-    "lat": 48.714762,
-    "lon": 2.489653,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0120",
     "name": "Le Parterre",
     "address": "esplanade Jean Moulin 91410 Dourdan",
-    "dept": "91",
-    "lat": 48.529345,
-    "lon": 2.016309,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0071",
     "name": "Espace Bernard Mantienne",
     "address": "3 voie de l'Aulne 91370 Verrières-le-Buisson",
-    "dept": "91",
-    "lat": 48.752721,
-    "lon": 2.27078,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0192",
     "name": "Cinéma François-Truffaut",
     "address": "19, rue François Mouthon 91380 Chilly-Mazarin",
-    "dept": "91",
-    "lat": 48.703098,
-    "lon": 2.315471,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0065",
     "name": "Espace/MJC Jacques-Tati",
     "address": "14, av. Saint-Laurent 91400 Orsay",
-    "dept": "91",
-    "lat": 48.698781,
-    "lon": 2.189727,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0078",
     "name": "EMC - théâtre et cinémas (Cinés Carné)",
     "address": "place Marcel Carne 91240 Saint-Michel-sur-Orge",
-    "dept": "91",
-    "lat": 48.636845,
-    "lon": 2.320783,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0053",
     "name": "Cinéma Arcel",
     "address": "15, place Léon Cassé 91100 Corbeil-Essonnes",
-    "dept": "91",
-    "lat": 48.603813,
-    "lon": 2.469302,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0072",
     "name": "Calypso",
     "address": "38, rue Victor-Basch 91170 Viry-Châtillon",
-    "dept": "91",
-    "lat": 48.681815,
-    "lon": 2.379391,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0181",
     "name": "Cinepal' Palaiseau",
     "address": "10 avenue du 8 mai 1945 91120 Palaiseau",
-    "dept": "91",
-    "lat": 48.711823,
-    "lon": 2.244283,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0173",
     "name": "4 Perray",
     "address": "44-46 av. Gabriel-Peri 91700 Sainte-Geneviève-des-Bois",
-    "dept": "91",
-    "lat": 48.647173,
-    "lon": 2.327732,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0049",
     "name": "Première Cinémas (Stars)",
     "address": "13, av. du General-de-Gaulle 91290 Arpajon",
-    "dept": "91",
-    "lat": 48.590692,
-    "lon": 2.250123,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0050",
     "name": "Buxy",
     "address": "Centre commercial du Val-d'Yerres-2  91800 Boussy-Saint-Antoine",
-    "dept": "91",
-    "lat": 48.682469,
-    "lon": 2.533359,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "B0059",
     "name": "CGR Evry",
     "address": "Centre Commercial Evry2 - Place de l'Agora 91000 Évry",
-    "dept": "91",
-    "lat": 48.629082,
-    "lon": 2.429546,
-    "source": "DataGouv"
+    "dept": "75",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "source": "DataGouv",
+    "city": "Paris"
   },
   {
     "id": "W2726",
