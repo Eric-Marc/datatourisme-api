@@ -2462,6 +2462,57 @@ def user_login():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route('/api/users/verify', methods=['POST'])
+def verify_user():
+    """
+    Vérifie qu'un utilisateur est valide et confirmé.
+    Appelé avant les actions sensibles (ajout de scan, etc.)
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        email = data.get('email', '').strip().lower()
+        
+        if not user_id or not email:
+            return jsonify({"status": "error", "message": "user_id et email requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT id, pseudo, email, email_confirmed FROM users WHERE id = %s AND email = %s",
+            (user_id, email)
+        )
+        user = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if not user:
+            return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 401
+        
+        if not user['email_confirmed']:
+            return jsonify({
+                "status": "error", 
+                "message": "Email non confirmé",
+                "code": "EMAIL_NOT_CONFIRMED"
+            }), 403
+        
+        return jsonify({
+            "status": "success",
+            "user": {
+                "id": user['id'],
+                "pseudo": user['pseudo'],
+                "email": user['email'],
+                "confirmed": True
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur verify: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route('/api/users/forgot-password', methods=['POST'])
 def forgot_password():
     """Demande de réinitialisation du mot de passe"""
