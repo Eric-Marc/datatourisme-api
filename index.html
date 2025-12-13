@@ -1588,28 +1588,46 @@
 
         // 📷 TOGGLE SCANNÉS - Affiche TOUS les événements scannés (monde entier)
         async function toggleScanned() {
-            console.log('toggleScanned() appelé, exclusiveMode:', exclusiveMode, 'scannedEventsData.length:', scannedEventsData.length);
+            console.log('toggleScanned() appelé, exclusiveMode:', exclusiveMode, 'showScanned:', showScanned);
             
-            // Si déjà en mode scannés, revenir au mode normal
+            // Si en mode exclusif scans, désactiver complètement les scans
             if (exclusiveMode === 'scanned') {
                 exclusiveMode = null;
-                showEvents = true;
-                showCinema = true;
-                showSalons = true;
-                showScanned = true;
-                updateToggleVisuals();
+                showScanned = false;
                 
-                // Si on a une position, rafraîchir l'affichage normal
-                if (currentPosition) {
-                    refreshMapDisplay();
-                } else {
-                    // Sinon, garder les scannés affichés
-                    displayScannedEventsGlobal();
+                // Effacer la carte
+                if (currentMarkerCluster) {
+                    map.removeLayer(currentMarkerCluster);
+                    currentMarkerCluster = null;
                 }
+                
+                updateToggleVisuals();
+                updateStatus('📷 Scans désactivés', 'waiting');
+                document.getElementById('scanned-count').textContent = '0';
                 return;
             }
             
-            // Charger les événements scannés depuis le serveur
+            // Si scans désactivés, les réactiver en mode exclusif
+            if (!showScanned) {
+                updateStatus('📷 Chargement...', 'active');
+                await loadScannedEventsFromServer();
+                
+                if (scannedEventsData.length === 0) {
+                    updateStatus('📷 Aucun événement scanné', 'waiting');
+                    return;
+                }
+                
+                displayScannedEventsGlobal();
+                exclusiveMode = 'scanned';
+                showEvents = false;
+                showCinema = false;
+                showSalons = false;
+                showScanned = true;
+                updateToggleVisuals();
+                return;
+            }
+            
+            // Sinon, activer le mode exclusif scans
             updateStatus('📷 Chargement...', 'active');
             await loadScannedEventsFromServer();
             
