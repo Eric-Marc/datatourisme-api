@@ -926,7 +926,7 @@
                 <div class="buttons-group">
                     <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
                     <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
-                    <a href="scanner.html" class="scanner-btn" title="Scanner une affiche">📷</a>
+                    <button onclick="goToScanner()" class="scanner-btn" title="Scanner une affiche">📷</button>
                 </div>
                 <div class="status" id="status">Maintenez appuyé sur la carte</div>
             </div>
@@ -1712,13 +1712,22 @@
                 var stored = localStorage.getItem('gedeon_user');
                 if (stored) {
                     var user = JSON.parse(stored);
-                    // Vérifier que le device_id correspond
-                    if (user.device_id === getDeviceId()) {
-                        return user;
-                    }
+                    return user;
                 }
             } catch (e) {}
             return null;
+        }
+        
+        // 📷 ALLER AU SCANNER (vérifie l'auth)
+        function goToScanner() {
+            var user = getCurrentUser();
+            if (user && user.confirmed) {
+                // Utilisateur connecté et confirmé → aller au scanner
+                window.location.href = 'scanner.html';
+            } else {
+                // Pas connecté → aller au scanner qui demandera la connexion
+                window.location.href = 'scanner.html?login=1';
+            }
         }
         
         // 📷 SUPPRIMER UN ÉVÉNEMENT SCANNÉ
