@@ -752,14 +752,23 @@ def fetch_datatourisme_events(center_lat, center_lon, radius_km, days_ahead):
         
         date_limite = datetime.now().date() + timedelta(days=days_ahead)
         
+        # Requête corrigée : 
+        # - date_fin >= aujourd'hui (événement pas encore terminé)
+        # - date_debut <= date_limite (événement commence dans la période)
+        # - Si date_fin est NULL, on utilise date_debut >= aujourd'hui
         query = """
             WITH nearby_events AS (
                 SELECT uri, nom, description, date_debut, date_fin,
                        latitude, longitude, adresse, commune, code_postal, contacts, geom
                 FROM evenements
-                WHERE (date_fin IS NULL OR date_fin >= CURRENT_DATE)
-                  AND (date_debut IS NULL OR date_debut <= %s)
-                  AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, %s)
+                WHERE ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, %s)
+                  AND (
+                      -- Événement avec date de fin : doit être >= aujourd'hui
+                      (date_fin IS NOT NULL AND date_fin >= CURRENT_DATE AND date_debut <= %s)
+                      OR
+                      -- Événement sans date de fin : date_debut doit être >= aujourd'hui et <= limite
+                      (date_fin IS NULL AND date_debut >= CURRENT_DATE AND date_debut <= %s)
+                  )
                 LIMIT 500
             )
             SELECT uri as uid, nom as title, description,
@@ -771,7 +780,7 @@ def fetch_datatourisme_events(center_lat, center_lon, radius_km, days_ahead):
             ORDER BY "distanceKm", date_debut
         """
         
-        cur.execute(query, (date_limite, center_lon, center_lat, radius_km * 1000, center_lon, center_lat))
+        cur.execute(query, (center_lon, center_lat, radius_km * 1000, date_limite, date_limite, center_lon, center_lat))
         rows = cur.fetchall()
         
         events = []
@@ -875,8 +884,27 @@ def process_agenda_events(agenda, center_lat, center_lon, radius_km, days_ahead)
         agenda_events = []
         for ev in events:
             timings = ev.get('timings') or []
-            begin_str = timings[0].get('begin') if timings else None
-            end_str = timings[0].get('end') if timings else None
+            
+            # Trouver le premier timing futur
+            begin_str = None
+            end_str = None
+            today = datetime.now().date()
+            
+            for timing in timings:
+                timing_begin = timing.get('begin')
+                if timing_begin:
+                    try:
+                        timing_date = datetime.fromisoformat(timing_begin.replace('Z', '+00:00')).date()
+                        if timing_date >= today:
+                            begin_str = timing_begin
+                            end_str = timing.get('end')
+                            break
+                    except:
+                        pass
+            
+            # Si aucun timing futur, ignorer cet événement
+            if not begin_str:
+                continue
             
             loc = ev.get('location') or {}
             ev_lat, ev_lon = loc.get('latitude'), loc.get('longitude')
@@ -2459,6 +2487,57 @@ def user_login():
         print(f"❌ Erreur login: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/users/verify', methods=['POST'])
+def verify_user():
+    """
+    Vérifie qu'un utilisateur est valide et confirmé.
+    Appelé avant les actions sensibles (ajout de scan, etc.)
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        email = data.get('email', '').strip().lower()
+        
+        if not user_id or not email:
+            return jsonify({"status": "error", "message": "user_id et email requis"}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT id, pseudo, email, email_confirmed FROM users WHERE id = %s AND email = %s",
+            (user_id, email)
+        )
+        user = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if not user:
+            return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 401
+        
+        if not user['email_confirmed']:
+            return jsonify({
+                "status": "error", 
+                "message": "Email non confirmé",
+                "code": "EMAIL_NOT_CONFIRMED"
+            }), 403
+        
+        return jsonify({
+            "status": "success",
+            "user": {
+                "id": user['id'],
+                "pseudo": user['pseudo'],
+                "email": user['email'],
+                "confirmed": True
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur verify: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
