@@ -449,10 +449,10 @@
     "venue": "Maison de la Radio et de la Musique",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.857,
+    "lon": 2.28,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON DU LYCÉEN ET DE L'ETUDIANT DE LILLE",
@@ -578,10 +578,10 @@
     "venue": "Palais des Congrès de Paris Porte Maillot",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8785,
+    "lon": 2.284,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "LE SALON DES FORMATIONS ET METIERS DÉFENSE ET CYBERSÉCURITÉ DE PARIS",
@@ -1922,10 +1922,10 @@
     "venue": "Pavillon Dauphine",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8708,
+    "lon": 2.2743,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "EROSEXPO ORLÉANS",
@@ -2236,10 +2236,10 @@
     "venue": "Bastille Design Center",
     "frequency": "bi-annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8527,
+    "lon": 2.3701,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "IT-PARTNERS",
@@ -2408,10 +2408,10 @@
     "venue": "Paris Marriott Rive Gauche Hotel & Conference Center",
     "frequency": "bi-annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8302,
+    "lon": 2.3724,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "ART3F NORD",
@@ -2535,10 +2535,10 @@
     "venue": "Meliá La Défense",
     "frequency": "bi-annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.892,
+    "lon": 2.238,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "EROSEXPO RENNES",
@@ -2846,10 +2846,10 @@
     "venue": "Réfectoire des Cordeliers",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8504,
+    "lon": 2.3442,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "WAICF - CANNES",
@@ -3044,10 +3044,10 @@
     "venue": "Cité internationale universitaire de Paris",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8202,
+    "lon": 2.3375,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON DU MARIAGE D'AIX-EN-PROVENCE",
@@ -3072,10 +3072,10 @@
     "venue": "Espace Charenton",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8216,
+    "lon": 2.406,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON DES VINS ET DE LA GASTRONOMIE - LE HAVRE",
@@ -3542,10 +3542,10 @@
     "venue": "Paris Event Center - La Villette",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8938,
+    "lon": 2.39,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "PARIS MANGA & SCI-FI SHOW",
@@ -3810,10 +3810,10 @@
     "venue": "Institut du Judo",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8275,
+    "lon": 2.3756,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "MATTER AND SHAPEMATTER",
@@ -3824,10 +3824,10 @@
     "venue": "Jardin des Tuileries - Esplanade des Feuillants",
     "frequency": "nc",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8633,
+    "lon": 2.3267,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "PREMIÈRE CLASSE",
@@ -3838,10 +3838,10 @@
     "venue": "Jardin des Tuileries - Esplanade des Feuillants",
     "frequency": "bi-annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8633,
+    "lon": 2.3267,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "DE L'ALTERNANCE ET DES MÉTIERS DE MARSEILLE",
@@ -5132,10 +5132,10 @@
     "venue": "Carreau du Temple",
     "frequency": "bi-annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8639,
+    "lon": 2.3619,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON VINIFRANCE - AUXERRE",
@@ -5603,10 +5603,10 @@
     "venue": "Pavillon Chesnaie du Roy",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "EUROCOAT",
@@ -5691,10 +5691,10 @@
     "venue": "Palais des Congrès de Paris Porte Maillot",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8785,
+    "lon": 2.284,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SASE FORUM",
@@ -5705,10 +5705,10 @@
     "venue": "Palais des Congrès de Paris Porte Maillot",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8785,
+    "lon": 2.284,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SOLUTIONS CSE LILLE",
@@ -5834,10 +5834,10 @@
     "venue": "Palais Brongniart",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8691,
+    "lon": 2.3404,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON INFIRMIER",
@@ -5906,10 +5906,10 @@
     "venue": "Carreau du Temple",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8639,
+    "lon": 2.3619,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "JOURNEES FRANÇAISES DE RADIOLOGIE",
@@ -6420,10 +6420,10 @@
     "venue": "Maison de la Mécanique",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8728,
+    "lon": 2.3089,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "CONGRÈS HANDI 4 - AVIGNON",
@@ -6448,10 +6448,10 @@
     "venue": "Le Pré Catelan",
     "frequency": "bi-annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8621,
+    "lon": 2.255,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "DESTINATION HABITAT - VALDAHON",
@@ -6617,10 +6617,10 @@
     "venue": "Carreau du Temple",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8639,
+    "lon": 2.3619,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "MINÉRALEXPO - MÂCON",
@@ -6760,10 +6760,10 @@
     "venue": "Carreau du Temple",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8639,
+    "lon": 2.3619,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SANDWICH & SNACK SHOW",
@@ -6947,10 +6947,10 @@
     "venue": "Jardin des Tuileries - Esplanade des Feuillants",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8633,
+    "lon": 2.3267,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SERIOUS GAMES",
@@ -7019,10 +7019,10 @@
     "venue": "Le Grand Palais",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8661,
+    "lon": 2.3122,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "BARBECUE EXPO",
@@ -7090,10 +7090,10 @@
     "venue": "Hyatt Regency Paris Etoile",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8783,
+    "lon": 2.2825,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "ANTIBES ART FAIR (SALON D'ANTIBES)Salon des antiquités et de l'art moderne. Le Salon d'Antibes est le rendez-vous international du printemps pour tous les amateurs, passionnés et collectionneurs d’antiquités, de design, d’art moderne et d'art contemporain",
@@ -7277,10 +7277,10 @@
     "venue": "Les Salons Hoche",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8734,
+    "lon": 2.2995,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "FESTIVAL DU LIVRE DE PARIS",
@@ -7291,10 +7291,10 @@
     "venue": "Le Grand Palais",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8661,
+    "lon": 2.3122,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "FESTIVAL INTERNATIONAL DE LA PÊCHE",
@@ -7760,10 +7760,10 @@
     "venue": "The Westin Paris - Vendôme",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8682,
+    "lon": 2.3283,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "FESTA DI A NATURA",
@@ -8122,10 +8122,10 @@
     "venue": "The Westin Paris - Vendôme",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8682,
+    "lon": 2.3283,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "MARCHÉ DU FILM",
@@ -8237,10 +8237,10 @@
     "venue": "Palais des Congrès de Paris Porte Maillot",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8785,
+    "lon": 2.284,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "HOPITAL EXPO & GERONT HANDICAP EXPO",
@@ -8409,10 +8409,10 @@
     "venue": "Le Grand Palais",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8661,
+    "lon": 2.3122,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "ETONNANTS VOYAGEURS",
@@ -8609,10 +8609,10 @@
     "venue": "",
     "frequency": "ts les deux ans",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "paris_center_fallback"
   },
   {
     "name": "BOURSE AUX MÉTÉORITES",
@@ -8777,10 +8777,10 @@
     "venue": "",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "paris_center_fallback"
   },
   {
     "name": "INTELLIGENCE MARKETING DAY",
@@ -8861,10 +8861,10 @@
     "venue": "Pôle Universitaire Léonard-de-Vinci",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8924,
+    "lon": 2.2372,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "RAIL INDUSTRY MEETINGS FRANCE",
@@ -8903,10 +8903,10 @@
     "venue": "Disneyland Resort Paris",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8675,
+    "lon": 2.7836,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "TOP DRH - ANNECY",
@@ -8945,10 +8945,10 @@
     "venue": "Station F",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8336,
+    "lon": 2.3714,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "3D PRINT CONGRESS & EXHIBITION - LYONL'événement référent de la fabrication additive en France. Toute la filière rassemblée durant 3 jours de business pour présenter leurs dernières innovations et solutions industrielles en fabrication additive",
@@ -9061,10 +9061,10 @@
     "venue": "",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "paris_center_fallback"
   },
   {
     "name": "SOLARPLAZA SUMMIT FRANCE",
@@ -9075,10 +9075,10 @@
     "venue": "Les Salons Hoche",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8734,
+    "lon": 2.2995,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SOLUTIONS CSE PARC ASTÉRIX",
@@ -9472,10 +9472,10 @@
     "venue": "Pôle Universitaire Léonard-de-Vinci",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8924,
+    "lon": 2.2372,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "NANOTECH FRANCE CONFERENCE & EXPO",
@@ -9486,10 +9486,10 @@
     "venue": "Novotel Paris Tour Eiffel",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8563,
+    "lon": 2.2969,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "THE IFODS",
@@ -9500,10 +9500,10 @@
     "venue": "Novotel Paris Tour Eiffel",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8563,
+    "lon": 2.2969,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "VIVA TECHNOLOGY",
@@ -9557,10 +9557,10 @@
     "venue": "",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "paris_center_fallback"
   },
   {
     "name": "KOREA EXPO",
@@ -9601,10 +9601,10 @@
     "venue": "Paris Event Center - La Villette",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8938,
+    "lon": 2.39,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "FESTIVAL INTERNATIONAL DU FILM D'ANIMATION D'ANNECY",
@@ -9906,10 +9906,10 @@
     "venue": "Mairie du 15e arrondissement",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.842,
+    "lon": 2.3005,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "PRO-DAYS",
@@ -10090,10 +10090,10 @@
     "venue": "",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "paris_center_fallback"
   },
   {
     "name": "FIERA D'AUDDÈ",
@@ -10314,10 +10314,10 @@
     "venue": "Domaine National de Saint-Cloud",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8415,
+    "lon": 2.2088,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "FOIRE DE CHÂLONS-EN-CHAMPAGNE",
@@ -10455,10 +10455,10 @@
     "venue": "",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "paris_center_fallback"
   },
   {
     "name": "EQUIP'BAIE",
@@ -10779,10 +10779,10 @@
     "venue": "",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "paris_center_fallback"
   },
   {
     "name": "SALON AUTO MOTO RÉTRO",
@@ -10835,10 +10835,10 @@
     "venue": "New Cap Event Center",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8566,
+    "lon": 2.3522,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON DE L'ÉROTISME - CAHORS",
@@ -10989,10 +10989,10 @@
     "venue": "Paris Event Center - La Villette",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8938,
+    "lon": 2.39,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON DES PARENTS DE PARIS",
@@ -11003,10 +11003,10 @@
     "venue": "Paris Event Center - La Villette",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8938,
+    "lon": 2.39,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON DU BIEN-ÊTRE - GUÉRET",
@@ -11101,10 +11101,10 @@
     "venue": "Paris Event Center - La Villette",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8938,
+    "lon": 2.39,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "DE LA MODE ET DU DESIGN DE NANTES",
@@ -11516,10 +11516,10 @@
     "venue": "Le Grand Palais",
     "frequency": "ts les deux ans",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8661,
+    "lon": 2.3122,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "JADH",
@@ -11658,10 +11658,10 @@
     "venue": "Palais des Congrès de Paris Porte Maillot",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8785,
+    "lon": 2.284,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON ZEN",
@@ -11829,10 +11829,10 @@
     "venue": "Parc des expositions du Bourget",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.9493,
+    "lon": 2.4387,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SALON DU LIVRE DE VEIGNÉ",
@@ -12256,10 +12256,10 @@
     "venue": "Quartier de Montmartre",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8867,
+    "lon": 2.3431,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "FÊTE DES VINS ET BAPTÈME DU MILLÉSIME CHABLIS",
@@ -12354,10 +12354,10 @@
     "venue": "Maison de la Chimie",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8608,
+    "lon": 2.3183,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "HABITAT DÉCO ROUEN",
@@ -12640,10 +12640,10 @@
     "venue": "Espace Charenton",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8216,
+    "lon": 2.406,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "LES RENDEZ-VOUS CARNOT",
@@ -12725,10 +12725,10 @@
     "venue": "Palais des Congrès de Paris Porte Maillot",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8785,
+    "lon": 2.284,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "PARIS GAME WEEK",
@@ -13799,10 +13799,10 @@
     "venue": "Espace Charenton",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8216,
+    "lon": 2.406,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "SOLUCOP - LILLESOLUCOP est le rendez-vous incontournable des Copropriétaires et Syndics. Quelles sont les solutions les mieux adaptées à votre copropriété ? Maîtrise des charges, Entretien et Rénovation, Innovation et Confort, Habitat durable...",
@@ -14224,10 +14224,10 @@
     "venue": "Palais des Congrès de Paris Porte Maillot",
     "frequency": "annuel",
     "country": "France",
-    "lat": 43.7968,
-    "lon": 1.8296,
+    "lat": 48.8785,
+    "lon": 2.284,
     "address": "Parisot, France",
-    "geocode_source": "geo.api.gouv.fr"
+    "geocode_source": "fixed_geocoding"
   },
   {
     "name": "MIPCOM CANNES",
