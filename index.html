@@ -1465,6 +1465,42 @@
             document.getElementById('events-count').textContent = eventsRealCount;
             document.getElementById('cinema-count').textContent = cinemaRealCount;
         }
+
+        // 🎬 METTRE À JOUR LE COMPTEUR DE CINÉMA (selon rayon si location sélectionnée)
+        function updateCinemaCount() {
+            if (currentPosition && cinemaRawData.length > 0) {
+                // Location sélectionnée: compter seulement dans le rayon
+                var lat = currentPosition.coords.latitude;
+                var lon = currentPosition.coords.longitude;
+                var cinemasInRadius = cinemaRawData.filter(function(event) {
+                    if (!event.latitude || !event.longitude) return false;
+                    var dist = haversine_km(lat, lon, event.latitude, event.longitude);
+                    return dist <= currentRadiusKm;
+                }).length;
+                document.getElementById('cinema-count').textContent = cinemasInRadius;
+            } else {
+                // Utiliser le compteur réel
+                document.getElementById('cinema-count').textContent = cinemaRealCount;
+            }
+        }
+
+        // 🏢 METTRE À JOUR LE COMPTEUR DE SALONS (selon rayon si location sélectionnée)
+        function updateSalonsCount() {
+            if (currentPosition && salonsEventsData.length > 0) {
+                // Location sélectionnée: compter seulement dans le rayon
+                var lat = currentPosition.coords.latitude;
+                var lon = currentPosition.coords.longitude;
+                var salonsInRadius = salonsEventsData.filter(function(event) {
+                    if (!event.latitude || !event.longitude) return false;
+                    var dist = haversine_km(lat, lon, event.latitude, event.longitude);
+                    return dist <= currentRadiusKm;
+                }).length;
+                document.getElementById('salons-count').textContent = salonsInRadius;
+            } else {
+                // Utiliser les données actuelles
+                document.getElementById('salons-count').textContent = salonsEventsData.length;
+            }
+        }
         
         // Met à jour l'état visuel des toggles
         function updateToggleVisuals() {
@@ -1834,11 +1870,11 @@
                 .then(function(response) { return response.json(); })
                 .then(function(data) {
                     toggleSalonsEl.classList.remove('loading');
-                    
+
                     if (data.status === 'success') {
                         salonsEventsData = data.events || [];
-                        document.getElementById('salons-count').textContent = salonsEventsData.length;
-                        
+                        updateSalonsCount();
+
                         if (showSalons) {
                             refreshMapDisplay();
                         }
@@ -1901,13 +1937,15 @@
                         cinemaRealCount = cinemaRawData.length;
                         cinemaHasMore = data.hasMore;
                         cinemaCurrentBatch = batch;
-                        
-                        // Mettre à jour le compteur (avec indicateur si plus à charger)
-                        var countText = cinemaRealCount.toString();
+
+                        // Mettre à jour le compteur (filtré par rayon si location active)
+                        updateCinemaCount();
+
+                        // Ajouter l'indicateur "+" si plus de données à charger
                         if (cinemaHasMore) {
-                            countText += '+';
+                            var currentCount = document.getElementById('cinema-count').textContent;
+                            document.getElementById('cinema-count').textContent = currentCount + '+';
                         }
-                        document.getElementById('cinema-count').textContent = countText;
                         
                         // Rafraîchir la carte immédiatement
                         if (showCinema) {
@@ -2315,9 +2353,15 @@
                 if (currentRadiusCircle) {
                     currentRadiusCircle.setRadius(currentRadiusKm * 1000);
                 }
-                // Mettre à jour le compteur de scans en temps réel
+                // Mettre à jour tous les compteurs en temps réel
                 if (scannedEventsData.length > 0) {
                     updateScannedCount();
+                }
+                if (cinemaRawData.length > 0) {
+                    updateCinemaCount();
+                }
+                if (salonsEventsData.length > 0) {
+                    updateSalonsCount();
                 }
             });
 
