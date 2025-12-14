@@ -1585,9 +1585,23 @@
                 showSalons = (source === 'salons');
                 showScanned = (source === 'scanned');
             }
-            
+
             updateToggleVisuals();
-            refreshMapDisplay();
+
+            // Gestion de l'affichage selon la source et la position
+            if (currentPosition) {
+                // Location sélectionnée: utiliser le système de filtrage par rayon
+                refreshMapDisplay();
+            } else if (showScanned && scannedEventsData.length > 0) {
+                // Pas de location mais scans actifs: afficher tous les scans (monde entier)
+                displayScannedEventsGlobal();
+            } else if (!currentPosition) {
+                // Pas de location, scans désactivés: effacer la carte
+                if (currentMarkerCluster) {
+                    map.removeLayer(currentMarkerCluster);
+                    currentMarkerCluster = null;
+                }
+            }
         }
         
         // Toggle Événements
@@ -1641,64 +1655,36 @@
             }
         }
 
-        // 📷 TOGGLE SCANNÉS - Affiche événements scannés (avec rayon si location sélectionnée)
+        // 📷 TOGGLE SCANNÉS - Comportement identique aux autres toggles
         async function toggleScanned() {
             console.log('toggleScanned() appelé, exclusiveMode:', exclusiveMode, 'showScanned:', showScanned);
 
-            // Si en mode exclusif scans, désactiver complètement les scans
-            if (exclusiveMode === 'scanned') {
-                exclusiveMode = null;
-                showScanned = false;
+            // Si on n'a pas encore chargé les données scannées, les charger d'abord
+            if (scannedEventsData.length === 0) {
+                await loadScannedEventsFromServer();
 
-                // Effacer la carte
-                if (currentMarkerCluster) {
-                    map.removeLayer(currentMarkerCluster);
-                    currentMarkerCluster = null;
+                if (scannedEventsData.length === 0) {
+                    updateStatus('📷 Aucun événement scanné', 'waiting');
+                    return;
                 }
 
+                // Passer en mode exclusif après le premier chargement
+                showScanned = true;
+                exclusiveMode = 'scanned';
+                showEvents = false;
+                showCinema = false;
+                showSalons = false;
                 updateToggleVisuals();
-                updateStatus('📷 Scans désactivés', 'waiting');
-                document.getElementById('scanned-count').textContent = '0';
-                return;
-            }
 
-            // Charger les données si pas déjà fait
-            updateStatus('📷 Chargement...', 'active');
-            await loadScannedEventsFromServer();
-
-            if (scannedEventsData.length === 0) {
-                updateStatus('📷 Aucun événement scanné', 'waiting');
-                return;
-            }
-
-            // Activer le mode exclusif scans
-            exclusiveMode = 'scanned';
-            showEvents = false;
-            showCinema = false;
-            showSalons = false;
-            showScanned = true;
-            updateToggleVisuals();
-
-            // Afficher selon la situation:
-            // - Si location sélectionnée: filtrer par rayon
-            // - Sinon: afficher tous les scans (monde entier)
-            if (currentPosition) {
-                // Location sélectionnée: appliquer le filtre de rayon
-                refreshMapDisplay();
-
-                // Compter les scans dans le rayon
-                var lat = currentPosition.coords.latitude;
-                var lon = currentPosition.coords.longitude;
-                var scansInRadius = scannedEventsData.filter(function(event) {
-                    if (!event.latitude || !event.longitude) return false;
-                    var dist = haversine_km(lat, lon, event.latitude, event.longitude);
-                    return dist <= currentRadiusKm;
-                }).length;
-
-                updateStatus('📷 ' + scansInRadius + ' scan(s) dans le rayon de ' + currentRadiusKm + 'km', 'active');
+                // Afficher selon la situation
+                if (currentPosition) {
+                    refreshMapDisplay();
+                } else {
+                    displayScannedEventsGlobal();
+                }
             } else {
-                // Pas de location: afficher tous les scans (monde entier)
-                displayScannedEventsGlobal();
+                // Données déjà chargées: comportement toggle standard
+                setExclusiveMode('scanned');
             }
         }
 
