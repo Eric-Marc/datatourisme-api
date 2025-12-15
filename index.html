@@ -2198,6 +2198,12 @@
 
                     popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
 
+                    // Get today and tomorrow dates for comparison
+                    var todayDate = new Date();
+                    todayDate.setHours(0, 0, 0, 0);
+                    var tomorrowDate = new Date(todayDate);
+                    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+
                     for (var j = 0; j < eventsAtLocation.length; j++) {
                         var film = eventsAtLocation[j];
                         var filmTitle = decodeHTML(film.title.replace('🎬 ', ''));
@@ -2206,6 +2212,22 @@
                         if (film.description) {
                             // Extraire juste les horaires (VF: xx:xx ou VO: xx:xx)
                             var desc = decodeHTML(film.description);
+
+                            // Check if "Dem:" is actually for tomorrow
+                            if (desc.includes('Dem:') && film.begin) {
+                                var filmDate = new Date(film.begin);
+                                filmDate.setHours(0, 0, 0, 0);
+
+                                // If film date is today, replace "Dem:" with "Auj:"
+                                if (filmDate.getTime() === todayDate.getTime()) {
+                                    desc = desc.replace(/Dem:/g, 'Auj:');
+                                }
+                                // If film date is neither today nor tomorrow, remove the label
+                                else if (filmDate.getTime() !== tomorrowDate.getTime()) {
+                                    desc = desc.replace(/Dem:\s*/g, '');
+                                }
+                            }
+
                             popupHtml += '<div class="film-showtimes">' + desc + '</div>';
                         }
                         popupHtml += '</div>';
