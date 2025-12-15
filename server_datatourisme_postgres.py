@@ -1205,11 +1205,32 @@ CINEMAS_ALLOCINE_DATA = []
 def load_cinemas_allocine():
     """Charge la base complète des cinémas Allociné avec GPS."""
     global CINEMAS_ALLOCINE_DATA
+
+    def fix_encoding(text):
+        """Fix UTF-8 encoding issues (é displayed as Ã©)"""
+        if not isinstance(text, str):
+            return text
+        try:
+            # If text contains Ã©, Ã¨, etc., it's UTF-8 bytes interpreted as Latin-1
+            # Re-encode as Latin-1 then decode as UTF-8
+            return text.encode('latin-1').decode('utf-8')
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            return text
+
     try:
         allocine_file = os.path.join(os.path.dirname(__file__), 'cinemas_france_data.json')
         if os.path.exists(allocine_file):
             with open(allocine_file, 'r', encoding='utf-8') as f:
-                CINEMAS_ALLOCINE_DATA = json.load(f)
+                data = json.load(f)
+
+            # Fix encoding issues in cinema names and addresses
+            for cinema in data:
+                if 'name' in cinema:
+                    cinema['name'] = fix_encoding(cinema['name'])
+                if 'address' in cinema:
+                    cinema['address'] = fix_encoding(cinema['address'])
+
+            CINEMAS_ALLOCINE_DATA = data
             print(f"✅ Cinémas Allociné chargés: {len(CINEMAS_ALLOCINE_DATA)}")
         else:
             print(f"⚠️ Fichier cinemas_france_data.json non trouvé")
