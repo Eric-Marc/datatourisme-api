@@ -2305,10 +2305,19 @@
                     // Mettre à jour les compteurs
                     updateCounters();
                     
+                    // Format location display
+                    var locationDisplay = '';
+                    if (currentContextLabel && currentContextLabel.startsWith('à ')) {
+                        var cityName = currentContextLabel.substring(2); // Remove 'à '
+                        locationDisplay = cityName + ' (' + lat.toFixed(4) + ', ' + lon.toFixed(4) + ')';
+                    } else {
+                        locationDisplay = placeText;
+                    }
+
                     if (eventsRealCount === 0) {
                         updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
                     } else {
-                        updateStatus('✅ ' + eventsRealCount + ' événement(s) ' + placeText, 'active');
+                        updateStatus('✅ ' + locationDisplay, 'active');
                     }
                     
                     // Afficher sur la carte
