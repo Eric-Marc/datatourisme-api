@@ -1654,7 +1654,8 @@ def get_nearby_cinema():
                 "hasMore": False
             }), 200
         
-        print(f"🎬 Cinéma batch {batch}: cinémas {start_idx+1}-{end_idx} sur {total_cinemas}")
+        actual_end = min(end_idx, total_cinemas)
+        print(f"🎬 Cinéma batch {batch}: cinémas {start_idx+1}-{actual_end} sur {total_cinemas}")
         
         # Récupérer les films pour ce batch
         today_str = date.today().strftime("%Y-%m-%d")
@@ -1681,7 +1682,7 @@ def get_nearby_cinema():
                     cinema_info, movies = fetch_movies_for_cinema(cinema, today_str, tomorrow_str)
                     FILMS_CACHE[cinema_id] = {'films': movies, 'timestamp': now}
                     if i < len(cinemas_batch) - 1:
-                        time.sleep(0.15)
+                        time.sleep(0.5)  # Increased delay to avoid rate limiting
                 
                 if movies:
                     for movie in movies:
