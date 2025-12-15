@@ -2686,44 +2686,47 @@ def get_scanned_events():
         if user_id and mine_only:
             # L'utilisateur veut voir TOUS les publics + SES privés
             cur.execute("""
-                WITH numbered_scans AS (
-                    SELECT s.*, u.pseudo as user_pseudo,
-                           ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.created_at ASC) as scan_number,
-                           COUNT(*) OVER (PARTITION BY s.user_id) as total_scans
+                WITH filtered_scans AS (
+                    SELECT s.*, u.pseudo as user_pseudo
                     FROM scanned_events s
                     JOIN users u ON s.user_id = u.id
+                    WHERE s.is_private = FALSE
+                       OR (s.is_private = TRUE AND s.user_id = %s)
                 )
-                SELECT * FROM numbered_scans
-                WHERE is_private = FALSE
-                   OR (is_private = TRUE AND user_id = %s)
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at ASC) as scan_number,
+                       COUNT(*) OVER (PARTITION BY user_id) as total_scans
+                FROM filtered_scans
                 ORDER BY created_at DESC
             """, (user_id,))
         elif user_id:
             # Voir les événements d'un utilisateur spécifique (publics uniquement)
             cur.execute("""
-                WITH numbered_scans AS (
-                    SELECT s.*, u.pseudo as user_pseudo,
-                           ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.created_at ASC) as scan_number,
-                           COUNT(*) OVER (PARTITION BY s.user_id) as total_scans
+                WITH filtered_scans AS (
+                    SELECT s.*, u.pseudo as user_pseudo
                     FROM scanned_events s
                     JOIN users u ON s.user_id = u.id
+                    WHERE s.user_id = %s AND s.is_private = FALSE
                 )
-                SELECT * FROM numbered_scans
-                WHERE user_id = %s AND is_private = FALSE
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at ASC) as scan_number,
+                       COUNT(*) OVER (PARTITION BY user_id) as total_scans
+                FROM filtered_scans
                 ORDER BY created_at DESC
             """, (user_id,))
         else:
             # Tous les événements publics
             cur.execute("""
-                WITH numbered_scans AS (
-                    SELECT s.*, u.pseudo as user_pseudo,
-                           ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.created_at ASC) as scan_number,
-                           COUNT(*) OVER (PARTITION BY s.user_id) as total_scans
+                WITH filtered_scans AS (
+                    SELECT s.*, u.pseudo as user_pseudo
                     FROM scanned_events s
                     JOIN users u ON s.user_id = u.id
+                    WHERE s.is_private = FALSE
                 )
-                SELECT * FROM numbered_scans
-                WHERE is_private = FALSE
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at ASC) as scan_number,
+                       COUNT(*) OVER (PARTITION BY user_id) as total_scans
+                FROM filtered_scans
                 ORDER BY created_at DESC
             """)
         
