@@ -2777,7 +2777,19 @@ def add_scanned_event():
         user_id = data.get('user_id')
         if not user_id:
             return jsonify({"status": "error", "message": "user_id requis"}), 400
-        
+
+        # Validation de la localisation (latitude/longitude requis)
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        if latitude is None or longitude is None:
+            return jsonify({"status": "error", "message": "Localisation requise (latitude et longitude)"}), 400
+
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "Latitude et longitude doivent être des nombres"}), 400
+
         # Fonction de similarité de titre
         def normalize_title(title):
             if not title:
