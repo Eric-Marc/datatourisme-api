@@ -2174,20 +2174,27 @@
                     
                 } else if (isCinema) {
                     // 🎬 POPUP CINÉMA - SIMPLIFIÉ
+                    // Helper to decode HTML entities
+                    var decodeHTML = function(html) {
+                        var txt = document.createElement('textarea');
+                        txt.innerHTML = html;
+                        return txt.value;
+                    };
+
                     popupHtml = '<div class="cinema-popup">';
-                    popupHtml += '<h3>' + firstEvent.locationName + '</h3>';
-                    if (firstEvent.address) popupHtml += '<div style="font-size:11px;color:#666;margin-bottom:8px;">' + firstEvent.address + '</div>';
-                    
+                    popupHtml += '<h3>' + decodeHTML(firstEvent.locationName) + '</h3>';
+                    if (firstEvent.address) popupHtml += '<div style="font-size:11px;color:#666;margin-bottom:8px;">' + decodeHTML(firstEvent.address) + '</div>';
+
                     popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
-                    
+
                     for (var j = 0; j < eventsAtLocation.length; j++) {
                         var film = eventsAtLocation[j];
-                        var filmTitle = film.title.replace('🎬 ', '');
+                        var filmTitle = decodeHTML(film.title.replace('🎬 ', ''));
                         popupHtml += '<div class="film-item">';
                         popupHtml += '<div class="film-title">' + filmTitle + '</div>';
                         if (film.description) {
                             // Extraire juste les horaires (VF: xx:xx ou VO: xx:xx)
-                            var desc = film.description;
+                            var desc = decodeHTML(film.description);
                             popupHtml += '<div class="film-showtimes">' + desc + '</div>';
                         }
                         popupHtml += '</div>';
