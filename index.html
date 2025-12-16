@@ -2228,6 +2228,9 @@
                                 }
                             }
 
+                            // Add line breaks between Auj: and Dem: for better separation
+                            desc = desc.replace(/(\s+)(Dem:|Auj:)/g, '<br>$2');
+
                             popupHtml += '<div class="film-showtimes">' + desc + '</div>';
                         }
                         popupHtml += '</div>';
