@@ -2198,10 +2198,13 @@
 
                     popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
 
-                    // Get current time and 24/48 hour windows
+                    // Get current time and boundaries
                     var now = new Date();
                     var in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-                    var in48Hours = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+                    // Get midnight tonight (end of today)
+                    var midnightTonight = new Date(now);
+                    midnightTonight.setHours(23, 59, 59, 999);
 
                     for (var j = 0; j < eventsAtLocation.length; j++) {
                         var film = eventsAtLocation[j];
@@ -2212,25 +2215,28 @@
                             // Extraire juste les horaires (VF: xx:xx ou VO: xx:xx)
                             var desc = decodeHTML(film.description);
 
-                            // Apply Auj:/Dem: based on 24-hour rolling window
+                            // Apply labels based on calendar day within 24-hour rolling window
                             if (film.begin) {
                                 var filmTime = new Date(film.begin);
 
-                                // Within next 24 hours: "Auj:"
+                                // Only show films within next 24 hours from now
                                 if (filmTime >= now && filmTime < in24Hours) {
-                                    desc = desc.replace(/Dem:/g, 'Auj:');
-                                    if (!desc.includes('Auj:')) {
-                                        desc = 'Auj: ' + desc;
+                                    // If film is today (before midnight tonight): "Auj:"
+                                    if (filmTime <= midnightTonight) {
+                                        desc = desc.replace(/Dem:/g, 'Auj:');
+                                        if (!desc.includes('Auj:')) {
+                                            desc = 'Auj: ' + desc;
+                                        }
+                                    }
+                                    // If film is tomorrow (after midnight tonight): "Dem:"
+                                    else {
+                                        desc = desc.replace(/Auj:/g, 'Dem:');
+                                        if (!desc.includes('Dem:')) {
+                                            desc = 'Dem: ' + desc;
+                                        }
                                     }
                                 }
-                                // Between 24-48 hours: "Dem:"
-                                else if (filmTime >= in24Hours && filmTime < in48Hours) {
-                                    desc = desc.replace(/Auj:/g, 'Dem:');
-                                    if (!desc.includes('Dem:')) {
-                                        desc = 'Dem: ' + desc;
-                                    }
-                                }
-                                // Outside 48-hour window: remove labels
+                                // Outside 24-hour window: remove labels
                                 else {
                                     desc = desc.replace(/Auj:\s*/g, '').replace(/Dem:\s*/g, '');
                                 }
