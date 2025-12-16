@@ -580,7 +580,10 @@
             }
             
             btn.textContent = '⏳ Enregistrement...';
-            
+
+            // Récupérer l'image depuis l'aperçu
+            const imageData = document.getElementById('preview-img').src;
+
             try {
                 const res = await fetch(`${SERVER_URL}/api/scanned`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -601,7 +604,8 @@
                         pricing: currentEventData.pricing?.isFree ? 'Gratuit' : currentEventData.pricing?.priceRange,
                         website: currentEventData.website,
                         tags: currentEventData.tags || [],
-                        is_private: isPrivate
+                        is_private: isPrivate,
+                        image: imageData  // Inclure l'image en base64
                     })
                 });
                 const result = await res.json();

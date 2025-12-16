@@ -299,10 +299,20 @@ def init_user_tables():
         
         # Ajouter colonne website si elle n'existe pas (migration)
         cur.execute("""
-            DO $$ 
-            BEGIN 
+            DO $$
+            BEGIN
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='scanned_events' AND column_name='website') THEN
                     ALTER TABLE scanned_events ADD COLUMN website VARCHAR(500);
+                END IF;
+            END $$;
+        """)
+
+        # Ajouter colonne image_path si elle n'existe pas (migration)
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='scanned_events' AND column_name='image_path') THEN
+                    ALTER TABLE scanned_events ADD COLUMN image_path VARCHAR(500);
                 END IF;
             END $$;
         """)
@@ -2920,16 +2930,59 @@ def add_scanned_event():
                 end_date = datetime.strptime(data['end'][:10], '%Y-%m-%d').date()
             except:
                 pass
-        
+
+        # Gérer l'image si fournie
+        image_path = None
+        if data.get('image'):
+            try:
+                import base64
+                import os
+
+                # Extraire les données base64
+                image_data = data['image']
+                if ',' in image_data:
+                    # Format: "data:image/jpeg;base64,/9j/4AAQ..."
+                    image_data = image_data.split(',', 1)[1]
+
+                # Décoder le base64
+                image_bytes = base64.b64decode(image_data)
+
+                # Créer le nom de fichier avec l'uid
+                uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'scans')
+                os.makedirs(uploads_dir, exist_ok=True)
+
+                # Déterminer l'extension (jpeg par défaut)
+                extension = 'jpg'
+                if data['image'].startswith('data:image/png'):
+                    extension = 'png'
+                elif data['image'].startswith('data:image/webp'):
+                    extension = 'webp'
+
+                filename = f"{uid}.{extension}"
+                filepath = os.path.join(uploads_dir, filename)
+
+                # Sauvegarder l'image
+                with open(filepath, 'wb') as f:
+                    f.write(image_bytes)
+
+                # Stocker le chemin relatif
+                image_path = f"uploads/scans/{filename}"
+
+                print(f"💾 Image sauvegardée: {image_path}")
+
+            except Exception as e:
+                print(f"⚠️  Erreur sauvegarde image: {e}")
+                # Continue sans l'image si erreur
+
         # Insérer l'événement
         cur.execute("""
             INSERT INTO scanned_events (
                 user_id, uid, title, category, begin_date, end_date,
                 start_time, end_time, location_name, city, address,
                 latitude, longitude, description, organizer, pricing,
-                website, tags, is_private
+                website, tags, is_private, image_path
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING id, uid, created_at
         """, (
             user_id,
@@ -2950,7 +3003,8 @@ def add_scanned_event():
             data.get('pricing'),
             data.get('website'),
             data.get('tags', []),
-            data.get('is_private', False)
+            data.get('is_private', False),
+            image_path
         ))
         
         result = cur.fetchone()
@@ -3066,6 +3120,17 @@ def reset_scanned_events():
         
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ============================================================================
+# STATIC FILE SERVING - UPLOADS
+# ============================================================================
+
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    """Sert les fichiers uploadés (images de scans)"""
+    uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
+    return send_from_directory(uploads_dir, filename)
 
 
 # ============================================================================
