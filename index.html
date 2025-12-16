@@ -2213,22 +2213,20 @@
                         if (film.description) {
                             var desc = decodeHTML(film.description);
 
-                            // Apply labels based on calendar day
+                            // Apply labels: no label for today, "Dem:" for tomorrow
                             if (film.begin) {
                                 var filmDate = new Date(film.begin);
                                 filmDate.setHours(0, 0, 0, 0);
 
-                                // If film date is today: "Auj:"
+                                // If film date is today: remove all labels
                                 if (filmDate.getTime() === todayDate.getTime()) {
-                                    // Replace any existing Dem: with Auj:
-                                    desc = desc.replace(/Dem:/g, 'Auj:');
+                                    desc = desc.replace(/Auj:\s*/g, '').replace(/Dem:\s*/g, '');
                                 }
-                                // If film date is tomorrow: "Dem:"
+                                // If film date is tomorrow: keep "Dem:" (remove Auj: if present)
                                 else if (filmDate.getTime() === tomorrowDate.getTime()) {
-                                    // Replace any existing Auj: with Dem:
-                                    desc = desc.replace(/Auj:/g, 'Dem:');
+                                    desc = desc.replace(/Auj:\s*/g, '');
                                 }
-                                // Otherwise remove labels
+                                // Otherwise remove all labels
                                 else {
                                     desc = desc.replace(/Auj:\s*/g, '').replace(/Dem:\s*/g, '');
                                 }
