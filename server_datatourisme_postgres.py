@@ -1253,26 +1253,26 @@ FILMS_CACHE = {}  # {cinema_id: {'films': [...], 'timestamp': datetime}}
 FILMS_CACHE_TTL = 3600  # 1 heure
 
 
-def get_films_cached(cinema, today_str):
+def get_films_cached(cinema, today_str, tomorrow_str=None):
     """Récupère les films avec cache."""
     cinema_id = cinema['id']
     now = time.time()
-    
+
     # Vérifier le cache
     if cinema_id in FILMS_CACHE:
         cached = FILMS_CACHE[cinema_id]
         if now - cached['timestamp'] < FILMS_CACHE_TTL:
             return cached['films']
-    
+
     # Pas en cache ou expiré -> requête API
-    cinema_info, films = fetch_movies_for_cinema(cinema, today_str)
-    
+    cinema_info, films = fetch_movies_for_cinema(cinema, today_str, tomorrow_str)
+
     # Stocker en cache
     FILMS_CACHE[cinema_id] = {
         'films': films,
         'timestamp': now
     }
-    
+
     return films
 
 
@@ -1710,7 +1710,7 @@ def get_nearby_cinema():
                         showtimes_str = movie.get('showtimes_str', '')
                         genres = movie.get('genres', [])
                         genres_str = ", ".join(genres[:3]) if genres else ""
-                        
+
                         desc_parts = []
                         if duration:
                             desc_parts.append(duration)
@@ -1718,12 +1718,19 @@ def get_nearby_cinema():
                             desc_parts.append(genres_str)
                         if showtimes_str:
                             desc_parts.append(showtimes_str)
-                        
+
+                        # Determine movie date based on showtimes
+                        movie_date = today_str  # Default
+                        if showtimes_str:
+                            # If only "Dem:" and no "Auj:", it's tomorrow
+                            if 'Dem:' in showtimes_str and 'Auj:' not in showtimes_str:
+                                movie_date = tomorrow_str
+
                         event = {
                             "uid": f"allocine-{cinema['id']}-{movie.get('title', '')[:20]}",
                             "title": f"🎬 {movie.get('title', 'Film')}",
-                            "begin": today_str,
-                            "end": today_str,
+                            "begin": movie_date,
+                            "end": movie_date,
                             "locationName": cinema['name'],
                             "city": "",
                             "address": cinema['address'],
