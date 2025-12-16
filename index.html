@@ -2222,9 +2222,13 @@
                                 if (filmDate.getTime() === todayDate.getTime()) {
                                     desc = desc.replace(/Auj:\s*/g, '').replace(/Dem:\s*/g, '');
                                 }
-                                // If film date is tomorrow: keep "Dem:" (remove Auj: if present)
+                                // If film date is tomorrow: ensure "Dem:" label
                                 else if (filmDate.getTime() === tomorrowDate.getTime()) {
                                     desc = desc.replace(/Auj:\s*/g, '');
+                                    // Add "Dem:" if not already present
+                                    if (!desc.includes('Dem:')) {
+                                        desc = 'Dem: ' + desc;
+                                    }
                                 }
                                 // Otherwise remove all labels
                                 else {
