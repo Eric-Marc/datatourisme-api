@@ -2198,11 +2198,10 @@
 
                     popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
 
-                    // Get today and tomorrow dates for comparison
-                    var todayDate = new Date();
-                    todayDate.setHours(0, 0, 0, 0);
-                    var tomorrowDate = new Date(todayDate);
-                    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+                    // Get current time and 24/48 hour windows
+                    var now = new Date();
+                    var in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                    var in48Hours = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
                     for (var j = 0; j < eventsAtLocation.length; j++) {
                         var film = eventsAtLocation[j];
@@ -2213,18 +2212,27 @@
                             // Extraire juste les horaires (VF: xx:xx ou VO: xx:xx)
                             var desc = decodeHTML(film.description);
 
-                            // Check if "Dem:" is actually for tomorrow
-                            if (desc.includes('Dem:') && film.begin) {
-                                var filmDate = new Date(film.begin);
-                                filmDate.setHours(0, 0, 0, 0);
+                            // Apply Auj:/Dem: based on 24-hour rolling window
+                            if (film.begin) {
+                                var filmTime = new Date(film.begin);
 
-                                // If film date is today, replace "Dem:" with "Auj:"
-                                if (filmDate.getTime() === todayDate.getTime()) {
+                                // Within next 24 hours: "Auj:"
+                                if (filmTime >= now && filmTime < in24Hours) {
                                     desc = desc.replace(/Dem:/g, 'Auj:');
+                                    if (!desc.includes('Auj:')) {
+                                        desc = 'Auj: ' + desc;
+                                    }
                                 }
-                                // If film date is neither today nor tomorrow, remove the label
-                                else if (filmDate.getTime() !== tomorrowDate.getTime()) {
-                                    desc = desc.replace(/Dem:\s*/g, '');
+                                // Between 24-48 hours: "Dem:"
+                                else if (filmTime >= in24Hours && filmTime < in48Hours) {
+                                    desc = desc.replace(/Auj:/g, 'Dem:');
+                                    if (!desc.includes('Dem:')) {
+                                        desc = 'Dem: ' + desc;
+                                    }
+                                }
+                                // Outside 48-hour window: remove labels
+                                else {
+                                    desc = desc.replace(/Auj:\s*/g, '').replace(/Dem:\s*/g, '');
                                 }
                             }
 
