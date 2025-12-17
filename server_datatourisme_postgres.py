@@ -68,6 +68,22 @@ except ImportError:
     print("⚠️ Allociné API non disponible")
 
 # ============================================================================
+# PERSISTENT STORAGE CONFIGURATION
+# ============================================================================
+
+# Use Render Persistent Disk if available, fallback to relative path
+PERSISTENT_DISK_PATH = os.environ.get('PERSISTENT_DISK_PATH', '/mnt/data')
+
+# Determine uploads base directory
+if os.path.exists(PERSISTENT_DISK_PATH):
+    UPLOADS_BASE_DIR = PERSISTENT_DISK_PATH
+    print(f"✅ Using persistent disk: {UPLOADS_BASE_DIR}")
+else:
+    UPLOADS_BASE_DIR = os.path.join(os.path.dirname(__file__), 'uploads')
+    print(f"⚠️  Using relative path (ephemeral): {UPLOADS_BASE_DIR}")
+    print(f"   💡 Set PERSISTENT_DISK_PATH env var to use persistent storage")
+
+# ============================================================================
 # MAPPING DYNAMIQUE ALLOCINÉ (chargé au démarrage)
 # ============================================================================
 
@@ -2955,7 +2971,7 @@ def add_scanned_event():
                 image_bytes = base64.b64decode(image_data)
 
                 # Créer le nom de fichier avec l'uid
-                uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'scans')
+                uploads_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
 
                 # Debug: show actual path
                 print(f"🔍 DEBUG: uploads_dir = {uploads_dir}")
@@ -3156,7 +3172,7 @@ def test_route():
 def serve_upload(filename):
     """Sert les fichiers uploadés (images de scans)"""
     import sys
-    uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
+    uploads_dir = UPLOADS_BASE_DIR
     filepath = os.path.join(uploads_dir, filename)
 
     print(f"🔍 ROUTE DEBUG: Requested /api/uploads/{filename}")
