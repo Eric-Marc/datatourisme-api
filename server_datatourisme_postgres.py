@@ -3147,9 +3147,15 @@ def reset_scanned_events():
 # STATIC FILE SERVING - UPLOADS
 # ============================================================================
 
+@app.route('/api/test-route')
+def test_route():
+    """Test route to verify routing works"""
+    return jsonify({"status": "ok", "message": "Route works!"})
+
 @app.route('/api/uploads/<path:filename>')
 def serve_upload(filename):
     """Sert les fichiers uploadés (images de scans)"""
+    import sys
     uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
     filepath = os.path.join(uploads_dir, filename)
 
@@ -3157,12 +3163,14 @@ def serve_upload(filename):
     print(f"🔍 ROUTE DEBUG: uploads_dir = {uploads_dir}")
     print(f"🔍 ROUTE DEBUG: filepath = {filepath}")
     print(f"🔍 ROUTE DEBUG: File exists? {os.path.exists(filepath)}")
+    sys.stdout.flush()
 
     if os.path.exists(filepath):
         print(f"✅ ROUTE: Serving file {filepath}")
     else:
         print(f"❌ ROUTE: File not found {filepath}")
 
+    sys.stdout.flush()
     return send_from_directory(uploads_dir, filename)
 
 
@@ -3171,12 +3179,16 @@ def serve_upload(filename):
 # ============================================================================
 
 if __name__ == '__main__':
+    import sys
     port = int(os.environ.get("PORT", 5000))
-    
+
     print("=" * 70)
     print("🚀 GEDEON API - VERSION AVEC SCANNER")
     print("=" * 70)
     print(f"Port: {port}")
+    print("📁 Upload route registered: /api/uploads/<path:filename>")
+    print("🧪 Test route registered: /api/test-route")
+    sys.stdout.flush()
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
     
     # Initialiser les tables users et scanned_events
