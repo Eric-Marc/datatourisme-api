@@ -2956,6 +2956,11 @@ def add_scanned_event():
 
                 # Créer le nom de fichier avec l'uid
                 uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'scans')
+
+                # Debug: show actual path
+                print(f"🔍 DEBUG: uploads_dir = {uploads_dir}")
+                print(f"🔍 DEBUG: __file__ = {__file__}")
+
                 os.makedirs(uploads_dir, exist_ok=True)
 
                 # Déterminer l'extension (jpeg par défaut)
@@ -2968,9 +2973,18 @@ def add_scanned_event():
                 filename = f"{uid}.{extension}"
                 filepath = os.path.join(uploads_dir, filename)
 
+                print(f"🔍 DEBUG: filepath = {filepath}")
+
                 # Sauvegarder l'image
                 with open(filepath, 'wb') as f:
                     f.write(image_bytes)
+
+                # Verify file was written
+                if os.path.exists(filepath):
+                    file_size = os.path.getsize(filepath)
+                    print(f"✅ File written: {filepath} ({file_size} bytes)")
+                else:
+                    print(f"❌ File NOT found after write: {filepath}")
 
                 # Stocker le chemin relatif
                 image_path = f"uploads/scans/{filename}"
