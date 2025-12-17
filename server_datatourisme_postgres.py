@@ -3168,14 +3168,14 @@ def test_route():
     """Test route to verify routing works"""
     return jsonify({"status": "ok", "message": "Route works!"})
 
-@app.route('/api/uploads/<path:filename>')
+@app.route('/api/files/<path:filename>')
 def serve_upload(filename):
     """Sert les fichiers uploadés (images de scans)"""
     import sys
     uploads_dir = UPLOADS_BASE_DIR
     filepath = os.path.join(uploads_dir, filename)
 
-    print(f"🔍 ROUTE DEBUG: Requested /api/uploads/{filename}")
+    print(f"🔍 ROUTE DEBUG: Requested /api/files/{filename}")
     print(f"🔍 ROUTE DEBUG: uploads_dir = {uploads_dir}")
     print(f"🔍 ROUTE DEBUG: filepath = {filepath}")
     print(f"🔍 ROUTE DEBUG: File exists? {os.path.exists(filepath)}")
@@ -3202,7 +3202,7 @@ if __name__ == '__main__':
     print("🚀 GEDEON API - VERSION AVEC SCANNER")
     print("=" * 70)
     print(f"Port: {port}")
-    print("📁 Upload route registered: /api/uploads/<path:filename>")
+    print("📁 File serving route: /api/files/<path:filename>")
     print("🧪 Test route registered: /api/test-route")
     sys.stdout.flush()
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
