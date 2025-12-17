@@ -3147,13 +3147,13 @@ def reset_scanned_events():
 # STATIC FILE SERVING - UPLOADS
 # ============================================================================
 
-@app.route('/uploads/<path:filename>')
+@app.route('/api/uploads/<path:filename>')
 def serve_upload(filename):
     """Sert les fichiers uploadés (images de scans)"""
     uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads')
     filepath = os.path.join(uploads_dir, filename)
 
-    print(f"🔍 ROUTE DEBUG: Requested /uploads/{filename}")
+    print(f"🔍 ROUTE DEBUG: Requested /api/uploads/{filename}")
     print(f"🔍 ROUTE DEBUG: uploads_dir = {uploads_dir}")
     print(f"🔍 ROUTE DEBUG: filepath = {filepath}")
     print(f"🔍 ROUTE DEBUG: File exists? {os.path.exists(filepath)}")
