@@ -3178,6 +3178,10 @@ def serve_upload():
     if not filename:
         return jsonify({"error": "Missing file parameter"}), 400
 
+    # Remove 'uploads/' prefix if present (disk is already mounted at /uploads)
+    if filename.startswith('uploads/'):
+        filename = filename[8:]  # Remove 'uploads/' prefix
+
     uploads_dir = UPLOADS_BASE_DIR
     filepath = os.path.join(uploads_dir, filename)
 
