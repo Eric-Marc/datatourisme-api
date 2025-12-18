@@ -177,13 +177,14 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
 # Configure WhiteNoise to serve static files from persistent disk
+# Use 'media/' prefix instead of 'uploads/' to avoid Render interception
 app.wsgi_app = WhiteNoise(
     app.wsgi_app,
     root=UPLOADS_BASE_DIR,
-    prefix='uploads/',
+    prefix='media/',
     max_age=31536000  # Cache for 1 year
 )
-print(f"✅ WhiteNoise configured to serve from: {UPLOADS_BASE_DIR}")
+print(f"✅ WhiteNoise configured to serve from: {UPLOADS_BASE_DIR} at /media/")
 
 # PostgreSQL
 database_url = os.environ.get('DATABASE_URL_RENDER') or os.environ.get('DATABASE_URL')
