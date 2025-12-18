@@ -206,7 +206,7 @@ BASE_URL = os.environ.get("OPENAGENDA_BASE_URL", "https://api.openagenda.com/v2"
 
 # Valeurs par défaut
 RADIUS_KM_DEFAULT = 30
-DAYS_AHEAD_DEFAULT = 30
+DAYS_AHEAD_DEFAULT = 180  # 6 months ahead
 
 # Caches
 GEOCODE_CACHE = {}
