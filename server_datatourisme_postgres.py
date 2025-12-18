@@ -26,6 +26,7 @@ import time
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from werkzeug.security import generate_password_hash, check_password_hash
+from whitenoise import WhiteNoise
 
 # Module d'authentification email
 try:
@@ -174,6 +175,15 @@ def get_allocine_dept_id_dynamic(dept_name):
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
+
+# Configure WhiteNoise to serve static files from persistent disk
+app.wsgi_app = WhiteNoise(
+    app.wsgi_app,
+    root=UPLOADS_BASE_DIR,
+    prefix='uploads/',
+    max_age=31536000  # Cache for 1 year
+)
+print(f"✅ WhiteNoise configured to serve from: {UPLOADS_BASE_DIR}")
 
 # PostgreSQL
 database_url = os.environ.get('DATABASE_URL_RENDER') or os.environ.get('DATABASE_URL')
@@ -3167,61 +3177,6 @@ def reset_scanned_events():
 def test_route():
     """Test route to verify routing works"""
     return jsonify({"status": "ok", "message": "Route works!"})
-
-@app.route('/api/get-scan')
-def serve_upload():
-    """Sert les fichiers uploadés (images de scans)"""
-    import sys
-    from flask import request
-
-    filename = request.args.get('file', '')
-    if not filename:
-        return jsonify({"error": "Missing file parameter"}), 400
-
-    # Remove 'uploads/' prefix if present (disk is already mounted at /uploads)
-    if filename.startswith('uploads/'):
-        filename = filename[8:]  # Remove 'uploads/' prefix
-
-    uploads_dir = UPLOADS_BASE_DIR
-    filepath = os.path.join(uploads_dir, filename)
-
-    print(f"🔍 ROUTE DEBUG: Requested /api/get-scan?file={filename}")
-    print(f"🔍 ROUTE DEBUG: uploads_dir = {uploads_dir}")
-    print(f"🔍 ROUTE DEBUG: filepath = {filepath}")
-    print(f"🔍 ROUTE DEBUG: File exists? {os.path.exists(filepath)}")
-    sys.stdout.flush()
-
-    if not os.path.exists(filepath):
-        print(f"❌ ROUTE: File not found {filepath}")
-        sys.stdout.flush()
-        return jsonify({"error": "File not found"}), 404
-
-    print(f"✅ ROUTE: Serving file {filepath}")
-    sys.stdout.flush()
-
-    # Read file and return as response (bypass send_from_directory)
-    try:
-        with open(filepath, 'rb') as f:
-            file_data = f.read()
-
-        from flask import Response
-        import mimetypes
-
-        mimetype = mimetypes.guess_type(filepath)[0] or 'application/octet-stream'
-
-        return Response(
-            file_data,
-            mimetype=mimetype,
-            headers={
-                'Content-Disposition': f'inline; filename="{os.path.basename(filepath)}"',
-                'Cache-Control': 'public, max-age=31536000'
-            }
-        )
-    except Exception as e:
-        print(f"❌ Error reading file: {e}")
-        sys.stdout.flush()
-        return jsonify({"error": "Error reading file"}), 500
-
 
 # ============================================================================
 # MAIN
