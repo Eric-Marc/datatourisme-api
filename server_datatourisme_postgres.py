@@ -3197,6 +3197,84 @@ def serve_media(filepath):
         max_age=31536000  # Cache for 1 year
     )
 
+@app.route('/api/diagnostic/disk-files')
+def check_disk_files():
+    """
+    Diagnostic: Check which scan files exist on disk vs database
+    """
+    from collections import defaultdict
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute("""
+            SELECT s.image_path, s.title, u.pseudo
+            FROM scanned_events s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.image_path IS NOT NULL
+        """)
+
+        scans = cur.fetchall()
+        on_disk = []
+        missing = []
+
+        for scan in scans:
+            relative_path = scan['image_path']
+            if relative_path.startswith('uploads/'):
+                relative_path = relative_path[8:]
+
+            full_path = os.path.join(UPLOADS_BASE_DIR, relative_path)
+
+            if os.path.exists(full_path):
+                on_disk.append({
+                    'title': scan['title'][:50],
+                    'user': scan['pseudo'],
+                    'size': os.path.getsize(full_path)
+                })
+            else:
+                missing.append({
+                    'title': scan['title'][:50],
+                    'user': scan['pseudo'],
+                    'path': full_path
+                })
+
+        # Count by user
+        disk_by_user = defaultdict(int)
+        missing_by_user = defaultdict(int)
+
+        for item in on_disk:
+            disk_by_user[item['user']] += 1
+        for item in missing:
+            missing_by_user[item['user']] += 1
+
+        # Check actual directory
+        scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+        actual_count = len(os.listdir(scans_dir)) if os.path.exists(scans_dir) else 0
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "summary": {
+                "total_in_db": len(scans),
+                "on_disk": len(on_disk),
+                "missing_from_disk": len(missing),
+                "actual_files_in_scans_dir": actual_count
+            },
+            "by_user": {
+                "on_disk": dict(disk_by_user),
+                "missing": dict(missing_by_user)
+            },
+            "samples": {
+                "on_disk": on_disk[:5],
+                "missing": missing[:5]
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ============================================================================
 # MAIN
 # ============================================================================
