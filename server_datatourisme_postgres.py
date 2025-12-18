@@ -3168,14 +3168,20 @@ def test_route():
     """Test route to verify routing works"""
     return jsonify({"status": "ok", "message": "Route works!"})
 
-@app.route('/scans/<path:filename>')
-def serve_upload(filename):
+@app.route('/api/get-scan')
+def serve_upload():
     """Sert les fichiers uploadés (images de scans)"""
     import sys
+    from flask import request
+
+    filename = request.args.get('file', '')
+    if not filename:
+        return jsonify({"error": "Missing file parameter"}), 400
+
     uploads_dir = UPLOADS_BASE_DIR
     filepath = os.path.join(uploads_dir, filename)
 
-    print(f"🔍 ROUTE DEBUG: Requested /scans/{filename}")
+    print(f"🔍 ROUTE DEBUG: Requested /api/get-scan?file={filename}")
     print(f"🔍 ROUTE DEBUG: uploads_dir = {uploads_dir}")
     print(f"🔍 ROUTE DEBUG: filepath = {filepath}")
     print(f"🔍 ROUTE DEBUG: File exists? {os.path.exists(filepath)}")
@@ -3202,7 +3208,7 @@ if __name__ == '__main__':
     print("🚀 GEDEON API - VERSION AVEC SCANNER")
     print("=" * 70)
     print(f"Port: {port}")
-    print("📁 Scan images route: /scans/<path:filename>")
+    print("📁 Scan images route: /api/get-scan?file=<path>")
     print("🧪 Test route registered: /api/test-route")
     sys.stdout.flush()
     print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
