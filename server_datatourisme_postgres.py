@@ -26,7 +26,6 @@ import time
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from werkzeug.security import generate_password_hash, check_password_hash
-from whitenoise import WhiteNoise
 
 # Module d'authentification email
 try:
@@ -176,15 +175,8 @@ def get_allocine_dept_id_dynamic(dept_name):
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
-# Configure WhiteNoise to serve static files from persistent disk
-# Use 'media/' prefix instead of 'uploads/' to avoid Render interception
-app.wsgi_app = WhiteNoise(
-    app.wsgi_app,
-    root=UPLOADS_BASE_DIR,
-    prefix='media/',
-    max_age=31536000  # Cache for 1 year
-)
-print(f"✅ WhiteNoise configured to serve from: {UPLOADS_BASE_DIR} at /media/")
+# Note: /media/ prefix is used instead of /uploads/ to avoid Render route interception
+print(f"✅ Media files will be served from: {UPLOADS_BASE_DIR} at /media/")
 
 # PostgreSQL
 database_url = os.environ.get('DATABASE_URL_RENDER') or os.environ.get('DATABASE_URL')
@@ -3178,6 +3170,32 @@ def reset_scanned_events():
 def test_route():
     """Test route to verify routing works"""
     return jsonify({"status": "ok", "message": "Route works!"})
+
+@app.route('/media/<path:filepath>')
+def serve_media(filepath):
+    """
+    Serve uploaded files (scans) from persistent disk
+    Using /media/ prefix to avoid Render route interception
+    """
+    import os
+    from flask import send_from_directory
+
+    # filepath will be like: scans/scanned-xxx.jpg
+    # UPLOADS_BASE_DIR is: /opt/render/project/src/uploads
+    full_path = os.path.join(UPLOADS_BASE_DIR, filepath)
+
+    if not os.path.exists(full_path):
+        return jsonify({"error": "File not found"}), 404
+
+    directory = os.path.dirname(full_path)
+    filename = os.path.basename(full_path)
+
+    return send_from_directory(
+        directory,
+        filename,
+        mimetype='image/jpeg',
+        max_age=31536000  # Cache for 1 year
+    )
 
 # ============================================================================
 # MAIN

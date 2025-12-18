@@ -5,4 +5,3 @@ gunicorn==21.2.0
 requests==2.31.0
 sendgrid==6.11.0
 allocine-seances==0.0.13
-whitenoise==6.7.0
