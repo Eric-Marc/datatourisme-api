@@ -1352,12 +1352,7 @@
         }
 
         function onLocationSelected(lat, lon) {
-            var isInFrance = (lat >= 41 && lat <= 51) && (lon >= -5 && lon <= 10);
-            if (!isInFrance) {
-                updateStatus('⚠️ Position hors France métropolitaine', 'error');
-                return;
-            }
-
+            // Location restriction removed - worldwide events allowed
             updateStatus('🔍 Recherche de la localisation...', 'active');
             
             getCityFromCoordinates(lat, lon).then(function(locationInfo) {
