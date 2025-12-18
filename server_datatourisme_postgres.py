@@ -3187,13 +3187,36 @@ def serve_upload():
     print(f"🔍 ROUTE DEBUG: File exists? {os.path.exists(filepath)}")
     sys.stdout.flush()
 
-    if os.path.exists(filepath):
-        print(f"✅ ROUTE: Serving file {filepath}")
-    else:
+    if not os.path.exists(filepath):
         print(f"❌ ROUTE: File not found {filepath}")
+        sys.stdout.flush()
+        return jsonify({"error": "File not found"}), 404
 
+    print(f"✅ ROUTE: Serving file {filepath}")
     sys.stdout.flush()
-    return send_from_directory(uploads_dir, filename)
+
+    # Read file and return as response (bypass send_from_directory)
+    try:
+        with open(filepath, 'rb') as f:
+            file_data = f.read()
+
+        from flask import Response
+        import mimetypes
+
+        mimetype = mimetypes.guess_type(filepath)[0] or 'application/octet-stream'
+
+        return Response(
+            file_data,
+            mimetype=mimetype,
+            headers={
+                'Content-Disposition': f'inline; filename="{os.path.basename(filepath)}"',
+                'Cache-Control': 'public, max-age=31536000'
+            }
+        )
+    except Exception as e:
+        print(f"❌ Error reading file: {e}")
+        sys.stdout.flush()
+        return jsonify({"error": "Error reading file"}), 500
 
 
 # ============================================================================
