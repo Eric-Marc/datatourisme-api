@@ -1067,6 +1067,7 @@
         var showScanned = true;  // 📷 Par défaut, afficher seulement les scans
         var salonsEventsData = [];
         var scannedEventsData = [];  // 📷 Stockage des événements scannés
+        var restoredFromScanner = false;  // 📷 Flag pour savoir si on revient du scanner
 
         // État du long-press
         var longPressTimer = null;
@@ -1135,6 +1136,12 @@
                     var state = JSON.parse(savedState);
                     initialCenter = [state.lat, state.lng];
                     initialZoom = state.zoom;
+                    // Restore toggle states
+                    if (state.showEvents !== undefined) showEvents = state.showEvents;
+                    if (state.showCinema !== undefined) showCinema = state.showCinema;
+                    if (state.showSalons !== undefined) showSalons = state.showSalons;
+                    if (state.showScanned !== undefined) showScanned = state.showScanned;
+                    restoredFromScanner = true;
                     // Clear saved state after using it
                     localStorage.removeItem('gedeon_map_state');
                 } catch (e) {
@@ -1810,14 +1817,18 @@
         
         // 📷 ALLER AU SCANNER (vérifie l'auth)
         function goToScanner() {
-            // Save current map position before leaving
+            // Save current map position and toggle states before leaving
             if (map) {
                 var center = map.getCenter();
                 var zoom = map.getZoom();
                 localStorage.setItem('gedeon_map_state', JSON.stringify({
                     lat: center.lat,
                     lng: center.lng,
-                    zoom: zoom
+                    zoom: zoom,
+                    showEvents: showEvents,
+                    showCinema: showCinema,
+                    showSalons: showSalons,
+                    showScanned: showScanned
                 }));
             }
 
@@ -2454,14 +2465,32 @@
             
             // 📷 Charger les événements scannés depuis le serveur
             await loadScannedEventsFromServer();
-            
-            // 📷 Par défaut, mode scannés uniquement
-            exclusiveMode = 'scanned';
-            updateToggleVisuals();
-            
-            // 📷 Si on a des événements scannés, les afficher et centrer dessus
-            if (scannedEventsData.length > 0) {
-                displayScannedEventsGlobal();
+
+            // 📷 Si on revient du scanner, restaurer l'état précédent
+            if (restoredFromScanner) {
+                // Déterminer le mode exclusif basé sur les toggles restaurés
+                if (showScanned && !showEvents && !showCinema && !showSalons) {
+                    exclusiveMode = 'scanned';
+                } else if (showSalons && !showEvents && !showCinema && !showScanned) {
+                    exclusiveMode = 'salons';
+                } else {
+                    exclusiveMode = null;
+                }
+                updateToggleVisuals();
+                // Afficher les événements selon l'état restauré
+                if (showScanned && scannedEventsData.length > 0) {
+                    displayScannedEventsGlobal();
+                }
+                restoredFromScanner = false;
+            } else {
+                // 📷 Par défaut, mode scannés uniquement
+                exclusiveMode = 'scanned';
+                updateToggleVisuals();
+
+                // 📷 Si on a des événements scannés, les afficher et centrer dessus
+                if (scannedEventsData.length > 0) {
+                    displayScannedEventsGlobal();
+                }
             }
             
             var instructionText = DEVICE_INFO.isMobile 
