@@ -554,9 +554,23 @@
         // === AJOUTER À GEDEON ===
         async function addToGedeon() {
             if (!currentEventData) return;
-            if (!currentUser) { 
-                showLoginModal(); 
-                return; 
+
+            // Validation: require at least title, date and location
+            const missingFields = [];
+            if (!currentEventData.title) missingFields.push('titre');
+            if (!currentEventData.startDate) missingFields.push('date');
+            if (!currentEventData.location?.city && !currentEventData.location?.venueName && !currentEventData.location?.address) {
+                missingFields.push('lieu');
+            }
+
+            if (missingFields.length > 0) {
+                alert('❌ Informations manquantes: ' + missingFields.join(', ') + '\n\nVeuillez scanner une affiche avec plus de détails.');
+                return;
+            }
+
+            if (!currentUser) {
+                showLoginModal();
+                return;
             }
             
             const btn = document.getElementById('add-to-gedeon-btn');
