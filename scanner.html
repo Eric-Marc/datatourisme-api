@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEDEON - Scanner d'Affiches</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Mobile debug console - remove after debugging -->
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
     <style>
         body { background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         .animate-fade-in { animation: fadeIn 0.5s ease-out; }
@@ -138,13 +135,13 @@
                             <div class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold">
                                 📸 Prendre une photo
                             </div>
-                            <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="console.log('CAMERA CHANGE'); handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                            <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
                         </div>
                         <div class="relative">
                             <div class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold">
                                 📁 Choisir un fichier
                             </div>
-                            <input type="file" id="file-input" onchange="console.log('FILE CHANGE'); handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                            <input type="file" id="file-input" onchange="handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
                         </div>
                     </div>
                 </div>
@@ -214,28 +211,21 @@
         let currentEventData = null;
         let currentUser = null;
 
-        // Global file handler for inline onchange
+        // Global file handler for inline onchange (Android compatible)
         function handleFileSelect(input) {
-            console.log('handleFileSelect called');
-            alert('File selected: ' + (input.files ? input.files.length : 0) + ' files');
             if (input.files && input.files[0]) {
                 var file = input.files[0];
-                console.log('File:', file.name, file.size, file.type);
                 if (file.size > 10*1024*1024) {
-                    alert('Max 10 MB');
+                    document.getElementById('error-text').textContent = 'Max 10 MB';
+                    document.getElementById('error-message').classList.remove('hidden');
                     return;
                 }
                 var reader = new FileReader();
                 reader.onload = function(e) {
-                    console.log('FileReader loaded');
                     document.getElementById('preview-img').src = e.target.result;
                     document.getElementById('image-preview').classList.remove('hidden');
                     document.getElementById('drop-zone').classList.add('hidden');
                     analyzeImage(e.target.result, file.type);
-                };
-                reader.onerror = function(e) {
-                    console.log('FileReader error', e);
-                    alert('Error reading file');
                 };
                 reader.readAsDataURL(file);
             }
