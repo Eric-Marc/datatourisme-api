@@ -134,16 +134,19 @@
                     <p class="text-gray-600 font-medium mb-4">Choisissez une source</p>
                     
                     <div class="flex flex-col gap-3 justify-center">
-                        <button type="button" id="camera-btn" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition cursor-pointer">
-                            📸 Prendre une photo
-                        </button>
-                        <button type="button" id="file-btn" class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-300 transition cursor-pointer">
-                            📁 Choisir un fichier
-                        </button>
+                        <div class="relative">
+                            <div class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold">
+                                📸 Prendre une photo
+                            </div>
+                            <input type="file" id="camera-input" accept="image/*" capture="environment" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                        </div>
+                        <div class="relative">
+                            <div class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold">
+                                📁 Choisir un fichier
+                            </div>
+                            <input type="file" id="file-input" accept="image/*" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                        </div>
                     </div>
-
-                    <input type="file" id="camera-input" accept="image/*" capture="environment" style="position:fixed;top:-100px;left:-100px;">
-                    <input type="file" id="file-input" accept="image/*" style="position:fixed;top:-100px;left:-100px;">
                 </div>
                 <div id="image-preview" class="hidden bg-white rounded-2xl overflow-hidden shadow-lg relative">
                     <img id="preview-img" class="w-full max-h-96 object-contain bg-gray-100">
@@ -465,30 +468,16 @@
         
         // === DRAG & DROP ===
         const cameraInput = document.getElementById('camera-input');
-        const cameraBtn = document.getElementById('camera-btn');
-        const fileBtn = document.getElementById('file-btn');
 
         dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
         dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-active'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) handleImageFile(f); });
 
-        // Button click handlers for Android
-        cameraBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            console.log('Camera button clicked');
-            cameraInput.click();
-        });
-        fileBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            console.log('File button clicked');
-            fileInput.click();
-        });
-
-        // File input handlers - robust for Android
+        // File input handlers - direct overlay approach for Android
         function onFileSelected(input) {
             console.log('File input changed, files:', input.files ? input.files.length : 0);
             if (input.files && input.files[0]) {
-                console.log('Processing file:', input.files[0].name);
+                console.log('Processing file:', input.files[0].name, 'size:', input.files[0].size);
                 handleImageFile(input.files[0]);
             }
         }
