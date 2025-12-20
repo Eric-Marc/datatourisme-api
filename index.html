@@ -2248,6 +2248,9 @@
                             // Result: today's times have no label, tomorrow's have "Dem:"
                             desc = desc.replace(/Auj:\s*/g, '');
 
+                            // Reorder "VO Dem:" or "VF Dem:" to "Dem: VO" or "Dem: VF"
+                            desc = desc.replace(/(VO|VF)\s+(Dem:)/g, '$2 $1');
+
                             popupHtml += '<div class="film-showtimes">' + desc + '</div>';
                         }
                         popupHtml += '</div>';
