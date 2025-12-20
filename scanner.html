@@ -131,16 +131,16 @@
                     <p class="text-gray-600 font-medium mb-4">Choisissez une source</p>
                     
                     <div class="flex flex-col gap-3 justify-center">
-                        <button onclick="document.getElementById('camera-input').click()" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition">
+                        <label for="camera-input" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition cursor-pointer">
                             📸 Prendre une photo
-                        </button>
-                        <button onclick="document.getElementById('file-input').click()" class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-300 transition">
+                        </label>
+                        <label for="file-input" class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-300 transition cursor-pointer">
                             📁 Choisir un fichier
-                        </button>
+                        </label>
                     </div>
-                    
-                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
-                    <input type="file" id="file-input" accept="image/*" class="hidden">
+
+                    <input type="file" id="camera-input" accept="image/*" capture="environment" style="position:absolute;left:-9999px;opacity:0;">
+                    <input type="file" id="file-input" accept="image/*" style="position:absolute;left:-9999px;opacity:0;">
                 </div>
                 <div id="image-preview" class="hidden bg-white rounded-2xl overflow-hidden shadow-lg relative">
                     <img id="preview-img" class="w-full max-h-96 object-contain bg-gray-100">
