@@ -138,13 +138,13 @@
                             <div class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold">
                                 📸 Prendre une photo
                             </div>
-                            <input type="file" id="camera-input" accept="image/*" capture="environment" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                            <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="console.log('CAMERA CHANGE'); handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
                         </div>
                         <div class="relative">
                             <div class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold">
                                 📁 Choisir un fichier
                             </div>
-                            <input type="file" id="file-input" accept="image/*" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                            <input type="file" id="file-input" accept="image/*" onchange="console.log('FILE CHANGE'); handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
                         </div>
                     </div>
                 </div>
@@ -213,6 +213,33 @@
         const SERVER_URL = window.location.origin;
         let currentEventData = null;
         let currentUser = null;
+
+        // Global file handler for inline onchange
+        function handleFileSelect(input) {
+            console.log('handleFileSelect called');
+            alert('File selected: ' + (input.files ? input.files.length : 0) + ' files');
+            if (input.files && input.files[0]) {
+                var file = input.files[0];
+                console.log('File:', file.name, file.size, file.type);
+                if (file.size > 10*1024*1024) {
+                    alert('Max 10 MB');
+                    return;
+                }
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    console.log('FileReader loaded');
+                    document.getElementById('preview-img').src = e.target.result;
+                    document.getElementById('image-preview').classList.remove('hidden');
+                    document.getElementById('drop-zone').classList.add('hidden');
+                    analyzeImage(e.target.result, file.type);
+                };
+                reader.onerror = function(e) {
+                    console.log('FileReader error', e);
+                    alert('Error reading file');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
         
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
