@@ -2085,8 +2085,16 @@
                     popupHtml += '</div>';
 
                     if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
-                    if (event.locationName) popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + event.locationName + '</div>';
-                    if (event.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:8px;">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+
+                    // Location display
+                    var locationParts = [];
+                    if (event.locationName) locationParts.push(event.locationName);
+                    if (event.address) locationParts.push(event.address);
+                    if (event.city) locationParts.push(event.city);
+                    if (locationParts.length > 0) {
+                        popupHtml += '<div style="margin-bottom:8px;"><strong>📍</strong> ' + locationParts.join(', ') + '</div>';
+                    }
+
                     if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
 
                     // Lien site web
@@ -2482,10 +2490,18 @@
                 popupHtml += '</div>';
                 
                 if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
-                if (event.locationName) popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + event.locationName + '</div>';
-                if (event.address) popupHtml += '<div style="font-size:12px;color:#666;margin-bottom:8px;">' + event.address + (event.city ? ', ' + event.city : '') + '</div>';
+
+                // Location display
+                var locParts = [];
+                if (event.locationName) locParts.push(event.locationName);
+                if (event.address) locParts.push(event.address);
+                if (event.city) locParts.push(event.city);
+                if (locParts.length > 0) {
+                    popupHtml += '<div style="margin-bottom:8px;"><strong>📍</strong> ' + locParts.join(', ') + '</div>';
+                }
+
                 if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
-                
+
                 // Lien site web
                 if (event.website) {
                     var websiteUrl = event.website.startsWith('http') ? event.website : 'https://' + event.website;
