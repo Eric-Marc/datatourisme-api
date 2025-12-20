@@ -134,16 +134,16 @@
                     <p class="text-gray-600 font-medium mb-4">Choisissez une source</p>
                     
                     <div class="flex flex-col gap-3 justify-center">
-                        <label for="camera-input" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition cursor-pointer">
+                        <button type="button" id="camera-btn" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition cursor-pointer">
                             📸 Prendre une photo
-                        </label>
-                        <label for="file-input" class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-300 transition cursor-pointer">
+                        </button>
+                        <button type="button" id="file-btn" class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-300 transition cursor-pointer">
                             📁 Choisir un fichier
-                        </label>
+                        </button>
                     </div>
 
-                    <input type="file" id="camera-input" accept="image/*" capture="environment" style="width:0;height:0;opacity:0;position:absolute;">
-                    <input type="file" id="file-input" accept="image/*" style="width:0;height:0;opacity:0;position:absolute;">
+                    <input type="file" id="camera-input" accept="image/*" capture="environment" style="position:fixed;top:-100px;left:-100px;">
+                    <input type="file" id="file-input" accept="image/*" style="position:fixed;top:-100px;left:-100px;">
                 </div>
                 <div id="image-preview" class="hidden bg-white rounded-2xl overflow-hidden shadow-lg relative">
                     <img id="preview-img" class="w-full max-h-96 object-contain bg-gray-100">
@@ -465,24 +465,35 @@
         
         // === DRAG & DROP ===
         const cameraInput = document.getElementById('camera-input');
+        const cameraBtn = document.getElementById('camera-btn');
+        const fileBtn = document.getElementById('file-btn');
+
         dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
         dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-active'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) handleImageFile(f); });
 
+        // Button click handlers for Android
+        cameraBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Camera button clicked');
+            cameraInput.click();
+        });
+        fileBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('File button clicked');
+            fileInput.click();
+        });
+
         // File input handlers - robust for Android
         function onFileSelected(input) {
-            console.log('File selected:', input.files);
+            console.log('File input changed, files:', input.files ? input.files.length : 0);
             if (input.files && input.files[0]) {
+                console.log('Processing file:', input.files[0].name);
                 handleImageFile(input.files[0]);
-                // Reset to allow selecting same file again
-                setTimeout(() => { input.value = ''; }, 100);
             }
         }
-        fileInput.addEventListener('change', function() { onFileSelected(this); });
-        cameraInput.addEventListener('change', function() { onFileSelected(this); });
-        // Also listen for input event (some Android browsers use this)
-        fileInput.addEventListener('input', function() { onFileSelected(this); });
-        cameraInput.addEventListener('input', function() { onFileSelected(this); });
+        fileInput.onchange = function() { onFileSelected(this); };
+        cameraInput.onchange = function() { onFileSelected(this); };
         
         function handleImageFile(file) {
             if (file.size > 10*1024*1024) { showError('Max 10 MB'); return; }
