@@ -1141,6 +1141,8 @@
                     if (state.showCinema !== undefined) showCinema = state.showCinema;
                     if (state.showSalons !== undefined) showSalons = state.showSalons;
                     if (state.showScanned !== undefined) showScanned = state.showScanned;
+                    if (state.currentPosition) currentPosition = state.currentPosition;
+                    if (state.exclusiveMode !== undefined) exclusiveMode = state.exclusiveMode;
                     restoredFromScanner = true;
                     // Clear saved state after using it
                     localStorage.removeItem('gedeon_map_state');
@@ -1828,7 +1830,9 @@
                     showEvents: showEvents,
                     showCinema: showCinema,
                     showSalons: showSalons,
-                    showScanned: showScanned
+                    showScanned: showScanned,
+                    currentPosition: currentPosition,
+                    exclusiveMode: exclusiveMode
                 }));
             }
 
@@ -2470,17 +2474,13 @@
 
             // 📷 Si on revient du scanner, restaurer l'état précédent
             if (restoredFromScanner) {
-                // Déterminer le mode exclusif basé sur les toggles restaurés
-                if (showScanned && !showEvents && !showCinema && !showSalons) {
-                    exclusiveMode = 'scanned';
-                } else if (showSalons && !showEvents && !showCinema && !showScanned) {
-                    exclusiveMode = 'salons';
-                } else {
-                    exclusiveMode = null;
-                }
                 updateToggleVisuals();
-                // Afficher les événements selon l'état restauré
-                if (showScanned && scannedEventsData.length > 0) {
+
+                // Si on avait une position sélectionnée, re-lancer la recherche
+                if (currentPosition && currentPosition.coords) {
+                    fetchNearbyEvents(currentPosition);
+                } else if (showScanned && scannedEventsData.length > 0) {
+                    // Sinon afficher les scans globaux si c'était le mode
                     displayScannedEventsGlobal();
                 }
                 restoredFromScanner = false;
