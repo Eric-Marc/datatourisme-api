@@ -2653,10 +2653,59 @@
 
     // Prompt d'installation PWA
     let deferredPrompt;
+
+    // Créer le bouton d'installation
+    const installBtn = document.createElement('button');
+    installBtn.id = 'installBtn';
+    installBtn.innerHTML = '📲 Installer';
+    installBtn.style.cssText = `
+        display: none;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        z-index: 9999;
+        transition: transform 0.2s, box-shadow 0.2s;
+    `;
+    installBtn.onmouseover = () => {
+        installBtn.style.transform = 'scale(1.05)';
+        installBtn.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.5)';
+    };
+    installBtn.onmouseout = () => {
+        installBtn.style.transform = 'scale(1)';
+        installBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+    };
+    document.body.appendChild(installBtn);
+
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
+        installBtn.style.display = 'block';
         console.log('📱 PWA installable');
+    });
+
+    installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('Installation:', outcome);
+        if (outcome === 'accepted') {
+            installBtn.style.display = 'none';
+        }
+        deferredPrompt = null;
+    });
+
+    window.addEventListener('appinstalled', () => {
+        installBtn.style.display = 'none';
+        console.log('✅ PWA installée');
     });
     </script>
 </body>
