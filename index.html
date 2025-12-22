@@ -1,0 +1,2663 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Carte des Événements - GEDEON</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="GEDEON">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="GEDEON">
+    <meta name="description" content="Carte des événements - Découvrez les événements autour de vous">
+    <meta name="msapplication-TileColor" content="#6366f1">
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png">
+
+    <!-- PWA Manifest & Icons -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-72x72.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
+
+    <!-- MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="anonymous" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #header img {
+            max-height: 60px;
+            object-fit: cover;
+        }
+
+        #controls {
+            background: white;
+            padding: 8px 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .slider-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            min-width: 50px;
+        }
+
+        button {
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #667eea;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        #btnMyPosition,
+        #resetViewBtn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .scanner-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            background: #fefce8;
+            color: #333;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: 2px solid #facc15;
+        }
+        
+        .scanner-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(250, 204, 21, 0.5);
+            background: #fef9c3;
+        }
+
+        .buttons-group {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .top-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .sliders-row {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+            align-items: center;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            max-width: 120px;
+        }
+
+        .slider-value {
+            font-size: 12px;
+            font-weight: bold;
+            color: #667eea;
+            min-width: 50px;
+        }
+
+        .status {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .status.waiting { background: #fef3c7; color: #92400e; }
+        .status.active  { background: #d1fae5; color: #065f46; }
+        .status.error   { background: #fee2e2; color: #991b1b; }
+        
+        .status.loading {
+            animation: blinkStatus 1s ease-in-out infinite;
+        }
+
+        @keyframes blinkStatus {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.98); }
+        }
+
+        #stats {
+            background: white;
+            padding: 6px 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .source-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid #e2e8f0;
+            background: #f8fafc;
+            user-select: none;
+        }
+
+        .source-toggle:hover {
+            border-color: #cbd5e1;
+        }
+
+        .source-toggle.active {
+            border-color: #667eea;
+            background: white;
+        }
+
+        .source-toggle.inactive {
+            opacity: 0.5;
+            background: #f1f5f9;
+        }
+
+        /* 🎯 COULEURS DISTINCTES POUR LES TOGGLES */
+        #toggle-events.active {
+            border-color: #3b82f6;
+        }
+        
+        #toggle-cinema.active {
+            border-color: #dc2626;
+        }
+
+        .toggle-value {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        /* 🎯 COULEURS DISTINCTES : Bleu pour événements, Rouge pour cinéma, Vert pour salons, Orange pour scannés */
+        #toggle-events .toggle-value {
+            color: #3b82f6;  /* Bleu vif */
+        }
+        
+        #toggle-cinema .toggle-value {
+            color: #dc2626;  /* Rouge cinéma */
+        }
+        
+        #toggle-salons .toggle-value {
+            color: #22c55e;  /* Vert salons */
+        }
+        
+        #toggle-scanned .toggle-value {
+            color: #facc15;  /* Jaune lumineux */
+        }
+        
+        #toggle-scanned .toggle-icon {
+            color: #facc15;  /* Jaune lumineux */
+        }
+        
+        #toggle-scanned.active {
+            border-color: #facc15;
+            background: #fefce8;  /* Fond jaune très clair */
+        }
+
+        .toggle-label {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .toggle-check {
+            font-size: 14px;
+            color: #22c55e;
+            font-weight: bold;
+            margin-left: 3px;
+        }
+
+        .source-toggle.inactive .toggle-check {
+            visibility: hidden;
+        }
+        
+        /* 🎯 MODE EXCLUSIF : bordure colorée + ombre */
+        .source-toggle.exclusive {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.5);
+            transform: scale(1.05);
+        }
+        
+        #toggle-events.exclusive {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+        
+        #toggle-cinema.exclusive {
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.5);
+        }
+        
+        #toggle-salons.exclusive {
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.5);
+        }
+        
+        #toggle-scanned.exclusive {
+            box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.5);
+            background: #fef9c3;  /* Fond jaune clair en mode exclusif */
+        }
+        
+        .source-toggle.loading {
+            animation: pulseLoading 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulseLoading {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+            }
+        }
+        
+        .source-toggle.loading .toggle-value {
+            animation: blinkValue 0.8s ease-in-out infinite;
+        }
+        
+        @keyframes blinkValue {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        #map-container {
+            position: relative;
+            height: calc(100vh - 150px);
+            width: 100%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            cursor: crosshair;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: pan-x pan-y;
+        }
+
+        /* 🎯 MARQUEURS ÉVÉNEMENTS - BLEU VIF */
+        .event-marker {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            background: #3b82f6;  /* Bleu vif */
+            animation: pulseEvent 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseEvent {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+            }
+            50% { 
+                opacity: 0.8;
+                transform: scale(0.9);
+                box-shadow: 0 2px 12px rgba(59, 130, 246, 0.6);
+            }
+        }
+
+        /* 🎬 MARQUEURS CINÉMA - ROUGE CINÉMA */
+        .cinema-marker {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);  /* Rouge dégradé */
+            animation: pulseCinema 1.8s ease-in-out infinite;
+            position: relative;
+        }
+        
+        /* Icône film à l'intérieur du marqueur cinéma */
+        .cinema-marker::after {
+            content: '🎬';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        @keyframes pulseCinema {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+            }
+            50% { 
+                opacity: 0.85;
+                transform: scale(0.92);
+                box-shadow: 0 2px 15px rgba(220, 38, 38, 0.7);
+            }
+        }
+
+        /* MARQUEURS SALONS - VERT */
+        .salon-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            background: #22c55e;
+            animation: pulseSalon 1.8s ease-in-out infinite;
+        }
+
+        /* 📷 MARQUEURS SCANNÉS - ORANGE */
+        .scanned-marker {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 10px rgba(250, 204, 21, 0.6);
+            background: linear-gradient(135deg, #fef08a 0%, #facc15 100%);
+            animation: pulseScanned 1.5s ease-in-out infinite;
+            position: relative;
+        }
+        
+        .scanned-marker::after {
+            content: '📷';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        @keyframes pulseScanned {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 2px 10px rgba(249, 115, 22, 0.6);
+            }
+            50% { 
+                transform: scale(1.1);
+                box-shadow: 0 2px 20px rgba(249, 115, 22, 0.9);
+            }
+        }
+
+        @keyframes pulseSalon {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 2px 8px rgba(34, 197, 94, 0.5);
+            }
+            50% { 
+                opacity: 0.85;
+                transform: scale(0.92);
+                box-shadow: 0 2px 15px rgba(34, 197, 94, 0.7);
+            }
+        }
+
+        /* 🏢 POPUP SALONS - STYLE VERT */
+        .salon-popup {
+            max-width: 350px;
+            min-width: 280px;
+        }
+
+        .salon-popup h3 {
+            margin: 0 0 6px 0;
+            font-size: 14px;
+            color: #166534;
+            line-height: 1.3;
+        }
+
+        .salon-popup .date {
+            font-size: 12px;
+            color: #22c55e;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .salon-popup .venue {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .salon-popup .link {
+            display: inline-block;
+            background: #22c55e;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 500;
+            margin-top: 6px;
+        }
+
+        .salon-popup .link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+        }
+
+        /* Indicateur de long-press */
+        #longpress-indicator {
+            position: fixed;
+            pointer-events: none;
+            z-index: 2000;
+            width: 70px;
+            height: 70px;
+            margin-left: -35px;
+            margin-top: -35px;
+            display: none;
+        }
+
+        #longpress-indicator.visible {
+            display: block;
+        }
+
+        #longpress-indicator svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        #longpress-indicator .bg-circle {
+            fill: none;
+            stroke: rgba(102, 126, 234, 0.3);
+            stroke-width: 6;
+        }
+
+        #longpress-indicator .progress-circle {
+            fill: none;
+            stroke: #667eea;
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-dasharray: 188.5;
+            stroke-dashoffset: 188.5;
+        }
+
+        #longpress-indicator .center-dot {
+            fill: #667eea;
+        }
+
+        /* 🎯 POPUP ÉVÉNEMENTS - STYLE BLEU */
+        .event-popup {
+            max-width: 300px;
+        }
+
+        .event-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #1e3a5f;
+            line-height: 1.4;
+        }
+
+        .event-popup .date {
+            background: #3b82f6;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .venue {
+            font-size: 13px;
+            color: #444;
+            margin-bottom: 4px;
+        }
+
+        .event-popup .venue strong {
+            color: #3b82f6;
+        }
+
+        .event-popup .address {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .event-popup .link {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+            margin-top: 8px;
+            transition: background 0.3s;
+        }
+
+        .event-popup .link:hover {
+            background: #2563eb;
+        }
+
+        /* 🎬 POPUP CINÉMA - STYLE ROUGE */
+        .cinema-popup {
+            max-width: 320px;
+        }
+
+        .cinema-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #7f1d1d;
+            line-height: 1.4;
+        }
+
+        .cinema-popup .cinema-badge {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            display: inline-block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .cinema-popup .film-item {
+            margin: 6px 0;
+            padding: 8px;
+            background: #fef2f2;
+            border-left: 3px solid #dc2626;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .cinema-popup .film-title {
+            font-weight: 600;
+            color: #991b1b;
+            font-size: 13px;
+        }
+
+        .cinema-popup .film-showtimes {
+            font-size: 12px;
+            color: #333;
+            margin-top: 3px;
+            font-weight: 500;
+        }
+
+        .cinema-popup .film-info {
+            font-size: 11px;
+            color: #666;
+            line-height: 1.3;
+            margin-top: 3px;
+        }
+
+        .leaflet-popup-content {
+            margin: 15px;
+        }
+        
+        /* 🎯 Bouton fermeture popup plus gros sur mobile */
+        .leaflet-popup-close-button {
+            font-size: 24px !important;
+            width: 30px !important;
+            height: 30px !important;
+            padding: 0 !important;
+            line-height: 28px !important;
+            color: #666 !important;
+            font-weight: bold !important;
+        }
+        
+        .leaflet-popup-close-button:hover {
+            color: #333 !important;
+            background: #f0f0f0 !important;
+            border-radius: 4px;
+        }
+        
+        /* Sur mobile : bouton encore plus gros et zone de tap élargie */
+        body.mobile .leaflet-popup-close-button,
+        body.tablet .leaflet-popup-close-button {
+            font-size: 28px !important;
+            width: 40px !important;
+            height: 40px !important;
+            line-height: 36px !important;
+            top: 2px !important;
+            right: 2px !important;
+            background: #f8f8f8 !important;
+            border-radius: 6px !important;
+        }
+
+        /* Instructions flottantes */
+        #map-instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 1000;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        #map-instructions.hidden {
+            opacity: 0;
+        }
+        
+        /* 🎯 LÉGENDE */
+        #map-legend {
+            position: absolute;
+            bottom: 70px;
+            right: 10px;
+            background: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            font-size: 12px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 6px 0;
+        }
+        
+        .legend-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .legend-dot.events {
+            background: #3b82f6;
+        }
+        
+        .legend-dot.cinema {
+            background: #dc2626;
+        }
+        
+        .legend-dot.salons {
+            background: #22c55e;
+        }
+        
+        .legend-dot.scanned {
+            background: #f97316;
+        }
+        
+        .legend-label {
+            color: #555;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            #header h1 { font-size: 18px; }
+            #header p { font-size: 11px; }
+            #header img { max-height: 50px; }
+            
+            #controls {
+                padding: 8px;
+            }
+            
+            .control-group { 
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            
+            /* Top row: boutons + status sur lignes séparées sur mobile */
+            .top-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .buttons-group {
+                display: flex;
+                gap: 8px;
+                justify-content: flex-start;
+                width: 100%;
+            }
+            
+            #btnMyPosition,
+            #resetViewBtn,
+            .scanner-btn {
+                width: 44px !important;
+                height: 44px;
+                font-size: 22px;
+                flex-shrink: 0;
+            }
+            
+            /* Status sur toute la largeur sur mobile */
+            .status {
+                width: 100%;
+                text-align: center;
+                margin-left: 0;
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+            
+            /* Sliders sur toute la largeur */
+            .sliders-row {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 100%;
+            }
+            
+            .slider-group { 
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+            }
+            
+            .slider-group .slider-label {
+                min-width: 55px;
+                font-size: 12px;
+            }
+            
+            .slider-group input[type="range"] {
+                flex: 1;
+                max-width: none;
+                min-width: 0;
+            }
+            
+            .slider-group .slider-value {
+                min-width: 55px;
+                text-align: right;
+            }
+            
+            /* Stats */
+            #stats { 
+                gap: 6px; 
+                padding: 6px 8px;
+                justify-content: space-around;
+            }
+            
+            .source-toggle {
+                padding: 6px 10px;
+                flex: 1;
+                min-width: 0;
+            }
+            
+            .toggle-value {
+                font-size: 16px;
+            }
+            
+            .toggle-label {
+                font-size: 9px;
+            }
+            
+            /* Map */
+            #map-container { 
+                height: calc(100vh - 200px); 
+            }
+            
+            #map-legend {
+                bottom: 60px;
+                right: 5px;
+                padding: 8px 10px;
+                font-size: 11px;
+            }
+            
+            #map-instructions {
+                font-size: 11px;
+                padding: 6px 12px;
+                bottom: 15px;
+            }
+            
+            /* Marqueurs scannés plus petits sur mobile */
+            .scanned-marker {
+                width: 20px;
+                height: 20px;
+                border: 2px solid white;
+            }
+            
+            .scanned-marker::after {
+                font-size: 10px;
+            }
+        }
+        
+        /* Très petits écrans (iPhone SE, etc.) */
+        @media (max-width: 380px) {
+            .slider-group .slider-label {
+                min-width: 45px;
+                font-size: 11px;
+            }
+            
+            .slider-group .slider-value {
+                min-width: 45px;
+                font-size: 11px;
+            }
+            
+            .source-toggle {
+                padding: 5px 8px;
+            }
+            
+            .toggle-value {
+                font-size: 14px;
+            }
+            
+            .toggle-label {
+                font-size: 8px;
+            }
+        }
+        
+        body.mobile .event-popup,
+        body.mobile .cinema-popup {
+            max-width: 260px;
+        }
+        
+        body.mobile #map-instructions {
+            font-size: 11px;
+            padding: 6px 12px;
+        }
+        
+        body.mobile .status {
+            font-size: 10px;
+        }
+        
+        body.desktop #map-instructions {
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <img src="Gedeon_1.jpg" alt="GEDEON - Agenda global des événements" style="width:100%; height:auto; display:block;">
+    </div>
+
+    <div id="controls">
+        <div class="control-group">
+            <div class="top-row">
+                <div class="buttons-group">
+                    <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
+                    <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
+                    <button onclick="goToScanner()" class="scanner-btn" title="Scanner une affiche">📷</button>
+                </div>
+                <div class="status" id="status">Maintenez appuyé sur la carte</div>
+            </div>
+
+            <div class="sliders-row">
+                <div class="slider-group">
+                    <span class="slider-label">Rayon:</span>
+                    <input type="range" id="radiusRange" min="5" max="100" value="30" step="5">
+                    <span class="slider-value"><span id="radiusValue">30</span> km</span>
+                </div>
+
+                <div class="slider-group">
+                    <span class="slider-label">Période:</span>
+                    <input type="range" id="daysRange" min="1" max="180" value="60" step="1">
+                    <span class="slider-value"><span id="daysValue">60</span> jours</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="stats">
+        <div class="source-toggle active" id="toggle-events" onclick="toggleSource('events')">
+            <div>
+                <div class="toggle-value" id="events-count">0</div>
+                <div class="toggle-label">Événements</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
+        <div class="source-toggle active" id="toggle-cinema" onclick="toggleCinema()">
+            <div>
+                <div class="toggle-value" id="cinema-count">0</div>
+                <div class="toggle-label">Films</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
+        <div class="source-toggle active" id="toggle-salons" onclick="toggleSalons()">
+            <div>
+                <div class="toggle-value" id="salons-count">0</div>
+                <div class="toggle-label">Salons</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
+        <div class="source-toggle active" id="toggle-scanned" onclick="toggleScanned()">
+            <span class="toggle-icon">📷</span>
+            <div>
+                <div class="toggle-value" id="scanned-count">0</div>
+                <div class="toggle-label">Scannés</div>
+            </div>
+            <span class="toggle-check">✓</span>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="map-instructions">👆 Maintenez appuyé 2s pour sélectionner un point</div>
+        
+        <!-- 🎯 LÉGENDE -->
+    </div>
+
+    <!-- Indicateur de long-press -->
+    <div id="longpress-indicator">
+        <svg viewBox="0 0 60 60">
+            <circle class="bg-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="progress-circle" cx="30" cy="30" r="27"></circle>
+            <circle class="center-dot" cx="30" cy="30" r="5"></circle>
+        </svg>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+    
+    <!-- MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin="anonymous"></script>
+
+    <script>
+        // 📱 DÉTECTION D'APPAREIL
+        var DEVICE_INFO = (function() {
+            var isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            var screenWidth = window.innerWidth;
+            
+            var type = 'desktop';
+            if (isMobileUA && screenWidth < 768) {
+                type = 'mobile';
+            } else if (isMobileUA && screenWidth >= 768 && screenWidth < 1024) {
+                type = 'tablet';
+            }
+            
+            return {
+                type: type,
+                isMobile: type === 'mobile',
+                isTablet: type === 'tablet',
+                isDesktop: type === 'desktop',
+                hasTouch: isTouchDevice,
+                width: screenWidth,
+                height: window.innerHeight
+            };
+        })();
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.add(DEVICE_INFO.type);
+            console.log('📱 Device detected:', DEVICE_INFO);
+        });
+        
+        // Configuration
+        var SERVER_URL = window.location.origin;
+
+        var LONGPRESS_DURATION = DEVICE_INFO.isMobile ? 1500 : 2000;
+        var LONGPRESS_MOVE_THRESHOLD = DEVICE_INFO.isMobile ? 30 : 15;
+
+        // 🌍 FONCTION HAVERSINE - Calcul de distance entre deux points GPS
+        function haversine_km(lat1, lon1, lat2, lon2) {
+            var R = 6371.0; // Rayon de la Terre en km
+            var phi1 = lat1 * Math.PI / 180;
+            var phi2 = lat2 * Math.PI / 180;
+            var dphi = (lat2 - lat1) * Math.PI / 180;
+            var dlambda = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dphi/2) * Math.sin(dphi/2) +
+                    Math.cos(phi1) * Math.cos(phi2) *
+                    Math.sin(dlambda/2) * Math.sin(dlambda/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        // État global
+        var map = null;
+        var currentMarkerCluster = null;
+        var currentPosition = null;
+        var currentRadiusKm = 30;
+        var currentDays = 7;
+        var currentContextLabel = '';
+        var currentFetchController = null;
+        var currentRadiusCircle = null;
+        var currentCenterMarker = null;
+        var initialMapBounds = null;
+        var showEvents = false;
+        var showCinema = false;
+        var showSalons = false;
+        var showScanned = true;  // 📷 Par défaut, afficher seulement les scans
+        var salonsEventsData = [];
+        var scannedEventsData = [];  // 📷 Stockage des événements scannés
+        var restoredFromScanner = false;  // 📷 Flag pour savoir si on revient du scanner
+
+        // État du long-press
+        var longPressTimer = null;
+        var longPressInterval = null;
+        var longPressStartTime = null;
+        var longPressStartX = 0;
+        var longPressStartY = 0;
+        var longPressLatLng = null;
+        var longPressActive = false;
+        var clearOldSearchTimer = null;
+        var tapStartTime = null;  // 🎯 Pour détecter les taps courts
+
+        var indicator = document.getElementById('longpress-indicator');
+        var progressCircle = indicator.querySelector('.progress-circle');
+        var mapInstructions = document.getElementById('map-instructions');
+
+        // 🎯 ICÔNE ÉVÉNEMENTS - BLEU
+        function createEventIcon() {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="event-marker"></div>',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11]
+            });
+        }
+
+        // 🎬 ICÔNE CINÉMA - ROUGE
+        function createCinemaIcon() {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="cinema-marker"></div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        // 🏢 ICÔNE SALON - VERT
+        function createSalonIcon() {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="salon-marker"></div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        // 📷 ICÔNE SCANNÉ - ORANGE
+        function createScannedIcon() {
+            return L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div class="scanned-marker"></div>',
+                iconSize: [26, 26],
+                iconAnchor: [13, 13]
+            });
+        }
+
+        // Initialiser la carte
+        function initMap() {
+            // Check for saved map state (from scanner return)
+            var savedState = localStorage.getItem('gedeon_map_state');
+            var initialCenter = [46.603354, 1.888334];
+            var initialZoom = 6;
+
+            if (savedState) {
+                try {
+                    var state = JSON.parse(savedState);
+                    initialCenter = [state.lat, state.lng];
+                    initialZoom = state.zoom;
+                    // Restore toggle states
+                    if (state.showEvents !== undefined) showEvents = state.showEvents;
+                    if (state.showCinema !== undefined) showCinema = state.showCinema;
+                    if (state.showSalons !== undefined) showSalons = state.showSalons;
+                    if (state.showScanned !== undefined) showScanned = state.showScanned;
+                    if (state.currentPosition) currentPosition = state.currentPosition;
+                    if (state.exclusiveMode !== undefined) exclusiveMode = state.exclusiveMode;
+                    restoredFromScanner = true;
+                    // Clear saved state after using it
+                    localStorage.removeItem('gedeon_map_state');
+                } catch (e) {
+                    console.error('Error restoring map state:', e);
+                }
+            }
+
+            map = L.map('map', {
+                center: initialCenter,
+                zoom: initialZoom,
+                tap: true,
+                tapTolerance: 15,
+                zoomControl: false
+            });
+            
+            // Ajouter le contrôle de zoom en bas à droite
+            L.control.zoom({
+                position: 'bottomright'
+            }).addTo(map);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            map.on('click', function(e) {
+                map.closePopup();
+            });
+
+            setupLongPressEvents();
+        }
+
+        // Configuration des événements long-press
+        function setupLongPressEvents() {
+            var mapEl = document.getElementById('map');
+
+            mapEl.addEventListener('mousedown', onPressStart);
+            document.addEventListener('mouseup', onPressEnd);
+            document.addEventListener('mousemove', onPressMove);
+
+            mapEl.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchend', onPressEnd, { passive: true });
+            document.addEventListener('touchcancel', onPressEnd, { passive: true });
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+
+            map.on('movestart', cancelLongPress);
+            map.on('zoomstart', cancelLongPress);
+        }
+
+        function onTouchStart(e) {
+            if (e.touches.length !== 1) return;
+            
+            var touch = e.touches[0];
+            var target = document.elementFromPoint(touch.clientX, touch.clientY);
+            
+            // 🎯 Enregistrer le temps de début pour détecter les taps courts
+            tapStartTime = Date.now();
+            
+            // Si on touche un popup, un marqueur ou un contrôle, ne pas interférer
+            if (target && (
+                target.closest('.leaflet-marker-icon') ||
+                target.closest('.leaflet-marker-pane') ||
+                target.closest('.leaflet-popup') ||
+                target.closest('.leaflet-popup-pane') ||
+                target.closest('.leaflet-control') ||
+                target.closest('.marker-cluster') ||
+                target.closest('.leaflet-interactive')
+            )) {
+                tapStartTime = null;  // Annuler le tap
+                return;
+            }
+            
+            e.preventDefault();
+            onPressStart({ clientX: touch.clientX, clientY: touch.clientY, target: target });
+        }
+
+        function onTouchMove(e) {
+            if (!longPressActive) return;
+            if (e.touches.length !== 1) return;
+            e.preventDefault();
+            var touch = e.touches[0];
+            onPressMove({ clientX: touch.clientX, clientY: touch.clientY });
+        }
+
+        function onPressStart(e) {
+            if (e.target && (
+                e.target.closest('.leaflet-control') || 
+                e.target.closest('.leaflet-popup') ||
+                e.target.closest('.leaflet-popup-pane') ||
+                e.target.closest('.leaflet-marker-icon') ||
+                e.target.closest('.leaflet-marker-pane') ||
+                e.target.closest('.marker-cluster') ||
+                e.target.closest('.leaflet-interactive')
+            )) {
+                return;
+            }
+
+            cancelLongPress();
+
+            clearOldSearchTimer = setTimeout(function() {
+                if (longPressActive) {
+                    clearOldSearch();
+                }
+            }, 1000);
+
+            var mapContainer = map.getContainer();
+            var rect = mapContainer.getBoundingClientRect();
+            var point = L.point(e.clientX - rect.left, e.clientY - rect.top);
+            
+            longPressLatLng = map.containerPointToLatLng(point);
+            longPressStartTime = Date.now();
+            longPressStartX = e.clientX;
+            longPressStartY = e.clientY;
+            longPressActive = true;
+
+            indicator.style.left = e.clientX + 'px';
+            indicator.style.top = e.clientY + 'px';
+            progressCircle.style.strokeDashoffset = '188.5';
+            indicator.classList.add('visible');
+
+            longPressInterval = setInterval(function() {
+                if (!longPressActive) {
+                    clearInterval(longPressInterval);
+                    return;
+                }
+                
+                var elapsed = Date.now() - longPressStartTime;
+                var progress = Math.min(elapsed / LONGPRESS_DURATION, 1);
+                var offset = 188.5 * (1 - progress);
+                progressCircle.style.strokeDashoffset = String(offset);
+            }, 30);
+
+            longPressTimer = setTimeout(function() {
+                if (longPressActive && longPressLatLng) {
+                    var lat = longPressLatLng.lat;
+                    var lng = longPressLatLng.lng;
+                    
+                    cancelLongPress();
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lng);
+                }
+            }, LONGPRESS_DURATION);
+        }
+
+        function onPressMove(e) {
+            if (!longPressActive) return;
+
+            var dx = e.clientX - longPressStartX;
+            var dy = e.clientY - longPressStartY;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > LONGPRESS_MOVE_THRESHOLD) {
+                tapStartTime = null;  // 🎯 Annuler aussi le tap si on bouge
+                cancelLongPress();
+            }
+        }
+
+        function onPressEnd(e) {
+            // 🎯 MOBILE : Fermer le popup si c'était un tap court (< 300ms)
+            if (tapStartTime !== null && DEVICE_INFO.hasTouch) {
+                var tapDuration = Date.now() - tapStartTime;
+                var wasMoved = false;
+                
+                // Vérifier si on a bougé pendant le tap
+                if (longPressStartX !== 0 && longPressStartY !== 0) {
+                    var touch = e.changedTouches ? e.changedTouches[0] : e;
+                    if (touch && touch.clientX !== undefined) {
+                        var dx = Math.abs(touch.clientX - longPressStartX);
+                        var dy = Math.abs(touch.clientY - longPressStartY);
+                        wasMoved = (dx > 10 || dy > 10);
+                    }
+                }
+                
+                // Si tap court (< 300ms) et pas de mouvement significatif → fermer popup
+                if (tapDuration < 300 && !wasMoved) {
+                    map.closePopup();
+                }
+            }
+            
+            tapStartTime = null;
+            cancelLongPress();
+        }
+
+        function cancelLongPress() {
+            if (longPressTimer !== null) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            if (longPressInterval !== null) {
+                clearInterval(longPressInterval);
+                longPressInterval = null;
+            }
+
+            if (clearOldSearchTimer !== null) {
+                clearTimeout(clearOldSearchTimer);
+                clearOldSearchTimer = null;
+            }
+            
+            longPressActive = false;
+            longPressLatLng = null;
+            longPressStartTime = null;
+            longPressStartX = 0;
+            longPressStartY = 0;
+            
+            indicator.classList.remove('visible');
+            progressCircle.style.strokeDashoffset = '188.5';
+        }
+
+        function clearOldSearch() {
+            if (currentMarkerCluster) {
+                map.removeLayer(currentMarkerCluster);
+                currentMarkerCluster = null;
+            }
+            if (currentRadiusCircle) {
+                map.removeLayer(currentRadiusCircle);
+                currentRadiusCircle = null;
+            }
+            if (currentCenterMarker) {
+                map.removeLayer(currentCenterMarker);
+                currentCenterMarker = null;
+            }
+            
+            // 🎯 Réinitialiser les données
+            eventsRawData = [];
+            cinemaRawData = [];
+            salonsEventsData = [];
+            eventsRealCount = 0;
+            cinemaRealCount = 0;
+            updateCounters();
+            document.getElementById('salons-count').textContent = '0';
+        }
+
+        function onLocationSelected(lat, lon) {
+            // Location restriction removed - worldwide events allowed
+            updateStatus('🔍 Recherche de la localisation...', 'active');
+            
+            getCityFromCoordinates(lat, lon).then(function(locationInfo) {
+                if (locationInfo && locationInfo.city) {
+                    currentContextLabel = 'à ' + locationInfo.city;
+                } else {
+                    currentContextLabel = 'à cette position';
+                }
+
+                currentPosition = { coords: { latitude: lat, longitude: lon } };
+                fetchNearbyEvents(currentPosition);
+            });
+        }
+
+        function getUserLocation() {
+            if (!navigator.geolocation) {
+                updateStatus('❌ Géolocalisation non supportée', 'error');
+                return;
+            }
+
+            clearOldSearch();
+            updateStatus('🔍 Recherche de votre position...', 'active');
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    
+                    map.setView([lat, lon], 11);
+                    mapInstructions.classList.add('hidden');
+                    onLocationSelected(lat, lon);
+                },
+                function(error) {
+                    var msg = '❌ ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            msg += 'Permission refusée (activez la localisation)';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            msg += 'Position non disponible';
+                            break;
+                        case error.TIMEOUT:
+                            msg += 'Délai dépassé';
+                            break;
+                        default:
+                            msg += 'Erreur de géolocalisation';
+                    }
+                    updateStatus(msg, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        function getCityFromCoordinates(lat, lon) {
+            return fetch(
+                'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&zoom=10&addressdetails=1',
+                { headers: { 'User-Agent': 'DATAtourisme OpenAgenda Events App' } }
+            )
+            .then(function(response) {
+                if (!response.ok) return null;
+                return response.json();
+            })
+            .then(function(data) {
+                if (!data) return null;
+                var address = data.address || {};
+                var city = address.city || address.town || address.village || 
+                          address.municipality || address.county || address.state;
+                return { city: city, country: address.country || '' };
+            })
+            .catch(function(e) {
+                console.error('Erreur géocodage:', e);
+                return null;
+            });
+        }
+
+        function updateStatus(message, type) {
+            type = type || 'waiting';
+            var statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+            
+            if (type === 'active' && message.indexOf('🔍') >= 0) {
+                statusEl.classList.add('loading');
+            }
+        }
+
+        // ============================================================
+        // 🎯 NOUVELLE GESTION DES DONNÉES ET TOGGLES
+        // ============================================================
+        
+        // Données brutes (ne changent qu'au fetch)
+        var eventsRawData = [];      // Événements DATAtourisme + OpenAgenda
+        var cinemaRawData = [];      // Films Allociné
+        
+        // Compteurs réels (indépendants de l'affichage)
+        var eventsRealCount = 0;
+        var cinemaRealCount = 0;
+        
+        // Met à jour les compteurs affichés (basés sur les données réelles, pas filtrées)
+        function updateCounters() {
+            document.getElementById('events-count').textContent = eventsRealCount;
+            document.getElementById('cinema-count').textContent = cinemaRealCount;
+        }
+
+        // 🎬 METTRE À JOUR LE COMPTEUR DE CINÉMA (selon rayon si location sélectionnée)
+        function updateCinemaCount() {
+            if (currentPosition && cinemaRawData.length > 0) {
+                // Location sélectionnée: compter seulement dans le rayon
+                var lat = currentPosition.coords.latitude;
+                var lon = currentPosition.coords.longitude;
+                var cinemasInRadius = cinemaRawData.filter(function(event) {
+                    if (!event.latitude || !event.longitude) return false;
+                    var dist = haversine_km(lat, lon, event.latitude, event.longitude);
+                    return dist <= currentRadiusKm;
+                }).length;
+                document.getElementById('cinema-count').textContent = cinemasInRadius;
+            } else {
+                // Utiliser le compteur réel
+                document.getElementById('cinema-count').textContent = cinemaRealCount;
+            }
+        }
+
+        // 🏢 METTRE À JOUR LE COMPTEUR DE SALONS (selon rayon si location sélectionnée)
+        function updateSalonsCount() {
+            if (currentPosition && salonsEventsData.length > 0) {
+                // Location sélectionnée: compter seulement dans le rayon
+                var lat = currentPosition.coords.latitude;
+                var lon = currentPosition.coords.longitude;
+                var salonsInRadius = salonsEventsData.filter(function(event) {
+                    if (!event.latitude || !event.longitude) return false;
+                    var dist = haversine_km(lat, lon, event.latitude, event.longitude);
+                    return dist <= currentRadiusKm;
+                }).length;
+                document.getElementById('salons-count').textContent = salonsInRadius;
+            } else {
+                // Utiliser les données actuelles
+                document.getElementById('salons-count').textContent = salonsEventsData.length;
+            }
+        }
+        
+        // Met à jour l'état visuel des toggles
+        function updateToggleVisuals() {
+            var toggleEventsEl = document.getElementById('toggle-events');
+            var toggleCinemaEl = document.getElementById('toggle-cinema');
+            var toggleSalonsEl = document.getElementById('toggle-salons');
+            var toggleScannedEl = document.getElementById('toggle-scanned');
+            
+            // Mode exclusif = un seul actif et mis en évidence
+            toggleEventsEl.classList.toggle('active', showEvents);
+            toggleEventsEl.classList.toggle('inactive', !showEvents);
+            toggleEventsEl.classList.toggle('exclusive', exclusiveMode === 'events');
+            
+            toggleCinemaEl.classList.toggle('active', showCinema);
+            toggleCinemaEl.classList.toggle('inactive', !showCinema);
+            toggleCinemaEl.classList.toggle('exclusive', exclusiveMode === 'cinema');
+            
+            if (toggleSalonsEl) {
+                toggleSalonsEl.classList.toggle('active', showSalons);
+                toggleSalonsEl.classList.toggle('inactive', !showSalons);
+                toggleSalonsEl.classList.toggle('exclusive', exclusiveMode === 'salons');
+            }
+            
+            if (toggleScannedEl) {
+                toggleScannedEl.classList.toggle('active', showScanned);
+                toggleScannedEl.classList.toggle('inactive', !showScanned);
+                toggleScannedEl.classList.toggle('exclusive', exclusiveMode === 'scanned');
+            }
+        }
+        
+        // Recalcule et affiche les marqueurs selon les filtres actifs
+        function refreshMapDisplay() {
+            if (!currentPosition) return;
+
+            var lat = currentPosition.coords.latitude;
+            var lon = currentPosition.coords.longitude;
+
+            // Construire la liste des événements à afficher
+            var eventsToShow = [];
+
+            if (showEvents) {
+                eventsToShow = eventsToShow.concat(eventsRawData);
+            }
+
+            if (showCinema) {
+                eventsToShow = eventsToShow.concat(cinemaRawData);
+            }
+
+            if (showSalons) {
+                eventsToShow = eventsToShow.concat(salonsEventsData);
+            }
+
+            if (showScanned) {
+                // Filtrer les événements scannés par rayon
+                var filteredScanned = scannedEventsData.filter(function(event) {
+                    if (!event.latitude || !event.longitude) return false;
+                    var dist = haversine_km(lat, lon, event.latitude, event.longitude);
+                    return dist <= currentRadiusKm;
+                });
+                eventsToShow = eventsToShow.concat(filteredScanned);
+            }
+
+            displayEventsOnMap(eventsToShow, lat, lon, currentRadiusKm);
+        }
+        
+        // 🎯 MODE EXCLUSIF : clic = affiche SEULEMENT cette source, reclic = affiche tout
+        var exclusiveMode = null;  // null = tout, 'events' | 'cinema' | 'salons' | 'scanned' = exclusif
+        
+        function setExclusiveMode(source) {
+            if (exclusiveMode === source) {
+                // Déjà en mode exclusif sur cette source → revenir à tout
+                exclusiveMode = null;
+                showEvents = true;
+                showCinema = true;
+                showSalons = true;
+                showScanned = true;
+            } else {
+                // Passer en mode exclusif sur cette source
+                exclusiveMode = source;
+                showEvents = (source === 'events');
+                showCinema = (source === 'cinema');
+                showSalons = (source === 'salons');
+                showScanned = (source === 'scanned');
+            }
+
+            updateToggleVisuals();
+
+            // Gestion de l'affichage selon la source et la position
+            if (currentPosition) {
+                // Location sélectionnée: utiliser le système de filtrage par rayon
+                refreshMapDisplay();
+            } else if (showScanned && scannedEventsData.length > 0) {
+                // Pas de location mais scans actifs: afficher tous les scans (monde entier)
+                displayScannedEventsGlobal();
+            } else if (!currentPosition) {
+                // Pas de location, scans désactivés: effacer la carte
+                if (currentMarkerCluster) {
+                    map.removeLayer(currentMarkerCluster);
+                    currentMarkerCluster = null;
+                }
+            }
+        }
+        
+        // Toggle Événements
+        function toggleSource(source) {
+            if (source === 'events') {
+                setExclusiveMode('events');
+            }
+        }
+        
+        // Toggle Cinéma
+        function toggleCinema() {
+            // Si on n'a pas encore chargé les données cinéma, les charger d'abord
+            if (currentPosition && cinemaRawData.length === 0 && cinemaRealCount === 0) {
+                // Charger puis passer en mode exclusif
+                showCinema = true;
+                fetchCinemaEvents(
+                    currentPosition.coords.latitude, 
+                    currentPosition.coords.longitude, 
+                    currentRadiusKm
+                );
+                // Passer en mode exclusif après le premier chargement
+                exclusiveMode = 'cinema';
+                showEvents = false;
+                showSalons = false;
+                showScanned = false;
+                updateToggleVisuals();
+            } else {
+                setExclusiveMode('cinema');
+            }
+        }
+
+        function toggleSalons() {
+            console.log('toggleSalons() appelé, exclusiveMode:', exclusiveMode, 'salonsEventsData.length:', salonsEventsData.length);
+            
+            // Si on n'a pas encore chargé les données salons, les charger d'abord
+            if (currentPosition && salonsEventsData.length === 0) {
+                showSalons = true;
+                fetchSalonsEvents(
+                    currentPosition.coords.latitude, 
+                    currentPosition.coords.longitude, 
+                    currentRadiusKm
+                );
+                // Passer en mode exclusif après le premier chargement
+                exclusiveMode = 'salons';
+                showEvents = false;
+                showCinema = false;
+                showScanned = false;
+                updateToggleVisuals();
+            } else {
+                setExclusiveMode('salons');
+            }
+        }
+
+        // 📷 TOGGLE SCANNÉS - Comportement identique aux autres toggles
+        async function toggleScanned() {
+            console.log('toggleScanned() appelé, exclusiveMode:', exclusiveMode, 'showScanned:', showScanned);
+
+            // Si on n'a pas encore chargé les données scannées, les charger d'abord
+            if (scannedEventsData.length === 0) {
+                await loadScannedEventsFromServer();
+
+                if (scannedEventsData.length === 0) {
+                    updateStatus('📷 Aucun événement scanné', 'waiting');
+                    return;
+                }
+
+                // Passer en mode exclusif après le premier chargement
+                showScanned = true;
+                exclusiveMode = 'scanned';
+                showEvents = false;
+                showCinema = false;
+                showSalons = false;
+                updateToggleVisuals();
+
+                // Afficher selon la situation
+                if (currentPosition) {
+                    refreshMapDisplay();
+                } else {
+                    displayScannedEventsGlobal();
+                }
+            } else {
+                // Données déjà chargées: comportement toggle standard
+                setExclusiveMode('scanned');
+            }
+        }
+
+        // 📷 CHARGER LES ÉVÉNEMENTS SCANNÉS DEPUIS LE SERVEUR
+        async function loadScannedEventsFromServer() {
+            try {
+                var user = getCurrentUser();
+                var url = SERVER_URL + '/api/scanned';
+                
+                // Si connecté, récupérer tous les events (publics + ses privés)
+                if (user) {
+                    url += '?user_id=' + user.id + '&mine=1';
+                }
+                // Sinon, juste les publics
+                
+                var response = await fetch(url);
+                var data = await response.json();
+                
+                if (data.status === 'success') {
+                    scannedEventsData = data.events.filter(function(e) {
+                        return e.latitude && e.longitude;
+                    }).map(function(e) {
+                        // Adapter le format serveur au format attendu
+                        return {
+                            uid: e.uid,
+                            id: e.id,
+                            title: e.title,
+                            category: e.category,
+                            begin: e.begin_date,
+                            end: e.end_date,
+                            startTime: e.start_time,
+                            endTime: e.end_time,
+                            locationName: e.location_name,
+                            city: e.city,
+                            address: e.address,
+                            latitude: e.latitude,
+                            longitude: e.longitude,
+                            description: e.description,
+                            organizer: e.organizer,
+                            pricing: e.pricing,
+                            website: e.website,
+                            tags: e.tags,
+                            is_private: e.is_private,
+                            user_id: e.user_id,
+                            user_pseudo: e.user_pseudo,
+                            created_at: e.created_at,
+                            scan_number: e.scan_number,
+                            total_scans: e.total_scans,
+                            source: 'Scanner'
+                        };
+                    });
+                    console.log('📷 Événements scannés chargés depuis serveur:', scannedEventsData.length);
+                } else {
+                    scannedEventsData = [];
+                }
+            } catch (e) {
+                console.error('Erreur chargement événements scannés:', e);
+                scannedEventsData = [];
+            }
+
+            updateScannedCount();
+            return scannedEventsData;
+        }
+        
+        // Ancienne fonction pour compatibilité (charge depuis serveur maintenant)
+        function loadScannedEvents() {
+            // Version synchrone - utilise les données déjà chargées
+            document.getElementById('scanned-count').textContent = scannedEventsData.length;
+            return scannedEventsData;
+        }
+
+        // 📷 METTRE À JOUR LE COMPTEUR DE SCANS (selon rayon si location sélectionnée)
+        function updateScannedCount() {
+            if (currentPosition) {
+                // Location sélectionnée: compter seulement dans le rayon
+                var lat = currentPosition.coords.latitude;
+                var lon = currentPosition.coords.longitude;
+                var scansInRadius = scannedEventsData.filter(function(event) {
+                    if (!event.latitude || !event.longitude) return false;
+                    var dist = haversine_km(lat, lon, event.latitude, event.longitude);
+                    return dist <= currentRadiusKm;
+                }).length;
+                document.getElementById('scanned-count').textContent = scansInRadius;
+            } else {
+                // Pas de location: afficher le total
+                document.getElementById('scanned-count').textContent = scannedEventsData.length;
+            }
+        }
+
+        // Récupérer le device ID
+        function getDeviceId() {
+            var deviceId = localStorage.getItem('gedeon_device_id');
+            if (!deviceId) {
+                deviceId = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 16);
+                localStorage.setItem('gedeon_device_id', deviceId);
+            }
+            return deviceId;
+        }
+        
+        // Récupérer l'utilisateur courant
+        function getCurrentUser() {
+            try {
+                var stored = localStorage.getItem('gedeon_user');
+                if (stored) {
+                    var user = JSON.parse(stored);
+                    return user;
+                }
+            } catch (e) {}
+            return null;
+        }
+        
+        // 📷 ALLER AU SCANNER (vérifie l'auth)
+        function goToScanner() {
+            // Save current map position and toggle states before leaving
+            if (map) {
+                var center = map.getCenter();
+                var zoom = map.getZoom();
+                localStorage.setItem('gedeon_map_state', JSON.stringify({
+                    lat: center.lat,
+                    lng: center.lng,
+                    zoom: zoom,
+                    showEvents: showEvents,
+                    showCinema: showCinema,
+                    showSalons: showSalons,
+                    showScanned: showScanned,
+                    currentPosition: currentPosition,
+                    exclusiveMode: exclusiveMode
+                }));
+            }
+
+            var user = getCurrentUser();
+            if (user && user.confirmed) {
+                // Utilisateur connecté et confirmé → aller au scanner
+                window.location.href = 'scanner.html';
+            } else {
+                // Pas connecté → aller au scanner qui demandera la connexion
+                window.location.href = 'scanner.html?login=1';
+            }
+        }
+        
+        // 📷 SUPPRIMER UN ÉVÉNEMENT SCANNÉ
+        async function deleteScannedEvent(eventId) {
+            if (!confirm('Supprimer cet événement scanné ?')) return;
+            
+            var user = getCurrentUser();
+            if (!user) {
+                alert('Vous devez être connecté pour supprimer');
+                return;
+            }
+            
+            try {
+                var response = await fetch(SERVER_URL + '/api/scanned/' + eventId + '?user_id=' + user.id, {
+                    method: 'DELETE'
+                });
+                var data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Recharger depuis le serveur et rafraîchir
+                    await loadScannedEventsFromServer();
+                    if (exclusiveMode === 'scanned') {
+                        displayScannedEventsGlobal();
+                    } else {
+                        refreshMapDisplay();
+                    }
+                    map.closePopup();
+                    updateStatus('🗑️ Événement supprimé', 'active');
+                } else {
+                    alert('Erreur: ' + (data.message || 'Suppression impossible'));
+                }
+            } catch (e) {
+                console.error('Erreur suppression:', e);
+                alert('Erreur de connexion au serveur');
+            }
+        }
+
+        // ============================================================
+        // 🏢 FETCH SALONS
+        // ============================================================
+        function fetchSalonsEvents(lat, lon, radiusKm) {
+            var url = SERVER_URL + '/api/salons/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + radiusKm + '&days=365';
+            
+            var toggleSalonsEl = document.getElementById('toggle-salons');
+            toggleSalonsEl.classList.add('loading');
+            
+            document.getElementById('salons-count').textContent = '...';
+            
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    toggleSalonsEl.classList.remove('loading');
+
+                    if (data.status === 'success') {
+                        salonsEventsData = data.events || [];
+                        updateSalonsCount();
+
+                        if (showSalons) {
+                            refreshMapDisplay();
+                        }
+                    } else {
+                        salonsEventsData = [];
+                        document.getElementById('salons-count').textContent = '0';
+                    }
+                })
+                .catch(function(error) {
+                    toggleSalonsEl.classList.remove('loading');
+                    console.error('Erreur fetch salons:', error);
+                    salonsEventsData = [];
+                    document.getElementById('salons-count').textContent = '0';
+                });
+        }
+
+        // ============================================================
+        // 🎬 FETCH CINÉMA PROGRESSIF (par batch de 5)
+        // ============================================================
+        var cinemaCurrentBatch = 0;
+        var cinemaHasMore = false;
+        var cinemaLoading = false;
+        
+        function fetchCinemaEvents(lat, lon, radiusKm) {
+            // Réinitialiser pour une nouvelle recherche
+            cinemaCurrentBatch = 0;
+            cinemaRawData = [];
+            cinemaRealCount = 0;
+            cinemaHasMore = true;
+            
+            // Lancer le premier batch
+            fetchCinemaBatch(lat, lon, radiusKm, 0);
+        }
+        
+        function fetchCinemaBatch(lat, lon, radiusKm, batch) {
+            if (cinemaLoading) return;
+            cinemaLoading = true;
+            
+            var url = SERVER_URL + '/api/cinema/nearby?lat=' + lat + '&lon=' + lon + 
+                      '&radiusKm=' + radiusKm + '&batch=' + batch + '&batchSize=5';
+            
+            var toggleCinemaEl = document.getElementById('toggle-cinema');
+            toggleCinemaEl.classList.add('loading');
+            
+            // Afficher le compteur en cours
+            if (batch === 0) {
+                document.getElementById('cinema-count').textContent = '...';
+            }
+            
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    cinemaLoading = false;
+                    
+                    if (data.status === 'success') {
+                        var newEvents = data.events || [];
+                        
+                        // Ajouter les nouveaux films aux existants
+                        cinemaRawData = cinemaRawData.concat(newEvents);
+                        cinemaRealCount = cinemaRawData.length;
+                        cinemaHasMore = data.hasMore;
+                        cinemaCurrentBatch = batch;
+
+                        // Mettre à jour le compteur (filtré par rayon si location active)
+                        updateCinemaCount();
+
+                        // Ajouter l'indicateur "+" si plus de données à charger
+                        if (cinemaHasMore) {
+                            var currentCount = document.getElementById('cinema-count').textContent;
+                            document.getElementById('cinema-count').textContent = currentCount + '+';
+                        }
+                        
+                        // Rafraîchir la carte immédiatement
+                        if (showCinema) {
+                            refreshMapDisplay();
+                        }
+                        
+                        // Charger le batch suivant automatiquement
+                        if (cinemaHasMore) {
+                            setTimeout(function() {
+                                fetchCinemaBatch(lat, lon, radiusKm, batch + 1);
+                            }, 100);  // Petit délai pour laisser la carte se rafraîchir
+                        } else {
+                            toggleCinemaEl.classList.remove('loading');
+                        }
+                    } else {
+                        toggleCinemaEl.classList.remove('loading');
+                        cinemaHasMore = false;
+                    }
+                })
+                .catch(function(error) {
+                    cinemaLoading = false;
+                    toggleCinemaEl.classList.remove('loading');
+                    console.error('Erreur fetch cinéma batch ' + batch + ':', error);
+                    cinemaHasMore = false;
+                });
+        }
+
+        function formatDate(isoString) {
+            if (!isoString) return 'Date non précisée';
+            try {
+                return new Date(isoString).toLocaleDateString('fr-FR', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Date non précisée';
+            }
+        }
+
+        // 🎯 AFFICHAGE DES ÉVÉNEMENTS AVEC COULEURS DISTINCTES
+        function displayEventsOnMap(events, centerLat, centerLon, radiusKm) {
+            if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
+            if (currentRadiusCircle) map.removeLayer(currentRadiusCircle);
+            if (currentCenterMarker) map.removeLayer(currentCenterMarker);
+
+            currentMarkerCluster = L.markerClusterGroup({
+                chunkedLoading: true,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                spiderfyDistanceMultiplier: 2,
+                disableClusteringAtZoom: 18,
+                iconCreateFunction: function(cluster) {
+                    var childMarkers = cluster.getAllChildMarkers();
+                    var count = cluster.getChildCount();
+                    var size = count >= 100 ? 50 : (count >= 10 ? 40 : 30);
+                    var fontSize = size > 35 ? 14 : 12;
+                    
+                    // 🎯 Couleur du cluster selon le contenu
+                    var hasCinema = childMarkers.some(function(m) { 
+                        return m.options && m.options.isCinema; 
+                    });
+                    var hasEvents = childMarkers.some(function(m) { 
+                        return m.options && !m.options.isCinema; 
+                    });
+                    
+                    var bgColor;
+                    if (hasCinema && hasEvents) {
+                        // Mix : dégradé violet
+                        bgColor = 'linear-gradient(135deg, #3b82f6 0%, #dc2626 100%)';
+                    } else if (hasCinema) {
+                        // Cinéma uniquement : rouge
+                        bgColor = '#dc2626';
+                    } else {
+                        // Événements uniquement : bleu
+                        bgColor = '#3b82f6';
+                    }
+                    
+                    return L.divIcon({
+                        html: '<div style="background:' + bgColor + ';width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:' + fontSize + 'px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + count + '</div>',
+                        className: 'marker-cluster',
+                        iconSize: [size, size]
+                    });
+                }
+            });
+
+            if (centerLat && centerLon && radiusKm) {
+                currentRadiusCircle = L.circle([centerLat, centerLon], {
+                    radius: radiusKm * 1000,
+                    color: '#667eea',
+                    fillColor: '#667eea',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    dashArray: '5, 10',
+                    interactive: false
+                }).addTo(map);
+            }
+
+            // Grouper par lieu
+            var eventsByLocation = {};
+            for (var i = 0; i < events.length; i++) {
+                var event = events[i];
+                if (!event.latitude || !event.longitude) continue;
+                
+                var locKey = event.latitude.toFixed(6) + ',' + event.longitude.toFixed(6);
+                if (!eventsByLocation[locKey]) {
+                    eventsByLocation[locKey] = [];
+                }
+                eventsByLocation[locKey].push(event);
+            }
+            
+            // Créer les marqueurs
+            for (var locKey in eventsByLocation) {
+                var eventsAtLocation = eventsByLocation[locKey];
+                if (eventsAtLocation.length === 0) continue;
+                
+                var firstEvent = eventsAtLocation[0];
+                var isCinema = firstEvent.source === 'Allocine';
+                var isSalon = firstEvent.source === 'EventsEye';
+                var isScanned = firstEvent.source === 'Scanner';
+                
+                // 🎯 ICÔNE SELON LE TYPE
+                var icon;
+                if (isScanned) {
+                    icon = createScannedIcon();
+                } else if (isCinema) {
+                    icon = createCinemaIcon();
+                } else if (isSalon) {
+                    icon = createSalonIcon();
+                } else {
+                    icon = createEventIcon();
+                }
+                
+                var marker = L.marker([firstEvent.latitude, firstEvent.longitude], {
+                    icon: icon,
+                    isCinema: isCinema,
+                    isSalon: isSalon,
+                    isScanned: isScanned
+                });
+                
+                // 🎯 POPUP SELON LE TYPE
+                var popupHtml;
+                
+                if (isScanned) {
+                    // POPUP SCANNÉ - STYLE SPÉCIAL
+                    popupHtml = '<div class="scanned-popup" style="max-width:260px;">';
+                    var event = firstEvent;
+                    popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
+
+                    // Badge privé/public
+                    var badge = event.is_private ? '🔒 PRIVÉ' : '📷 SCANNÉ';
+                    popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + '</span>';
+                    popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;padding-right:25px;">' + (event.title || 'Événement scanné') + '</h3>';
+                    popupHtml += '</div>';
+
+                    if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
+
+                    // Location display - always show city
+                    var locationLine = '';
+                    if (event.locationName) locationLine += event.locationName;
+                    if (event.address) locationLine += (locationLine ? ', ' : '') + event.address;
+                    if (locationLine) {
+                        popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + locationLine + '</div>';
+                    }
+                    if (event.city) {
+                        popupHtml += '<div style="margin-bottom:8px;font-size:13px;color:#666;margin-left:24px;">' + event.city + '</div>';
+                    }
+
+                    if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
+
+                    // Lien site web
+                    if (event.website) {
+                        var websiteUrl = event.website.startsWith('http') ? event.website : 'https://' + event.website;
+                        popupHtml += '<div style="margin-bottom:8px;"><a href="' + websiteUrl + '" target="_blank" style="color:#4f46e5;font-size:12px;text-decoration:none;">🌐 ' + event.website + '</a></div>';
+                    }
+
+                    // Date de scan + auteur
+                    var scanInfo = '📷 Scanné';
+                    if (event.created_at) {
+                        var scanDate = new Date(event.created_at);
+                        var scanDateStr = scanDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        scanInfo += ' le ' + scanDateStr;
+                    }
+                    if (event.user_pseudo && event.user_id) {
+                        var userLabel = event.user_pseudo + '_' + event.user_id;
+                        var scanCount = '';
+                        if (event.scan_number && event.total_scans) {
+                            scanCount = ' (' + event.scan_number + '/' + event.total_scans + ')';
+                        }
+                        scanInfo += ' par <strong>' + userLabel + scanCount + '</strong>';
+                    }
+                    popupHtml += '<div style="font-size:11px;color:#999;margin-bottom:8px;font-style:italic;">' + scanInfo + '</div>';
+
+                    // Vérifier si c'est notre événement
+                    var currentUser = getCurrentUser();
+                    var isOwner = currentUser && event.user_id === currentUser.id;
+
+                    // Bouton supprimer seulement si owner
+                    if (isOwner && event.id) {
+                        popupHtml += '<div style="margin-top:10px;">';
+                        popupHtml += '<button onclick="deleteScannedEvent(' + event.id + ')" style="width:100%;padding:6px;background:#fee2e2;color:#dc2626;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🗑️ Supprimer</button>';
+                        popupHtml += '</div>';
+                    }
+                    popupHtml += '</div>';
+                } else if (isSalon) {
+                    // POPUP SALON - AFFICHE TOUS LES SALONS AU MÊME ENDROIT
+                    popupHtml = '<div class="salon-popup">';
+                    
+                    if (eventsAtLocation.length > 1) {
+                        // Plusieurs salons au même endroit
+                        popupHtml += '<h3>' + eventsAtLocation.length + ' salons</h3>';
+                        if (firstEvent.locationName) {
+                            popupHtml += '<div class="venue">' + firstEvent.locationName + '</div>';
+                        }
+                        popupHtml += '<div style="max-height:300px;overflow-y:auto;margin-top:8px;">';
+                        
+                        for (var j = 0; j < eventsAtLocation.length; j++) {
+                            var salon = eventsAtLocation[j];
+                            popupHtml += '<div style="padding:6px 0;border-bottom:1px solid #e5e7eb;">';
+                            popupHtml += '<div style="font-weight:600;font-size:12px;color:#166534;">' + salon.title + '</div>';
+                            if (salon.begin) {
+                                popupHtml += '<div style="font-size:11px;color:#666;">' + salon.begin;
+                                if (salon.duration) popupHtml += ' • ' + salon.duration;
+                                popupHtml += '</div>';
+                            }
+                            if (salon.openagendaUrl) {
+                                popupHtml += '<a href="' + salon.openagendaUrl + '" target="_blank" style="font-size:10px;color:#22c55e;">Infos →</a>';
+                            }
+                            popupHtml += '</div>';
+                        }
+                        popupHtml += '</div>';
+                    } else {
+                        // Un seul salon
+                        popupHtml += '<h3>' + firstEvent.title + '</h3>';
+                        if (firstEvent.begin) {
+                            popupHtml += '<div class="date">' + firstEvent.begin;
+                            if (firstEvent.duration) popupHtml += ' • ' + firstEvent.duration;
+                            popupHtml += '</div>';
+                        }
+                        if (firstEvent.locationName) {
+                            popupHtml += '<div class="venue">' + firstEvent.locationName + '</div>';
+                        }
+                        if (firstEvent.openagendaUrl) {
+                            popupHtml += '<a href="' + firstEvent.openagendaUrl + '" target="_blank" class="link">Infos →</a>';
+                        }
+                    }
+                    popupHtml += '</div>';
+                    
+                } else if (isCinema) {
+                    // 🎬 POPUP CINÉMA - SIMPLIFIÉ
+                    // Helper to decode HTML entities
+                    var decodeHTML = function(html) {
+                        var txt = document.createElement('textarea');
+                        txt.innerHTML = html;
+                        return txt.value;
+                    };
+
+                    popupHtml = '<div class="cinema-popup">';
+                    popupHtml += '<h3>' + decodeHTML(firstEvent.locationName) + '</h3>';
+
+                    // Add today's date
+                    var today = new Date();
+                    var dateStr = today.toLocaleDateString('fr-FR', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                    });
+                    popupHtml += '<div style="font-size:12px;color:#dc2626;font-weight:600;margin-bottom:8px;">📅 ' + dateStr + '</div>';
+
+                    if (firstEvent.address) popupHtml += '<div style="font-size:11px;color:#666;margin-bottom:8px;">' + decodeHTML(firstEvent.address) + '</div>';
+
+                    popupHtml += '<div style="max-height:280px;overflow-y:auto;">';
+
+                    // Get current date info
+                    var now = new Date();
+                    var todayDate = new Date(now);
+                    todayDate.setHours(0, 0, 0, 0);
+                    var tomorrowDate = new Date(todayDate);
+                    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+
+                    for (var j = 0; j < eventsAtLocation.length; j++) {
+                        var film = eventsAtLocation[j];
+                        var filmTitle = decodeHTML(film.title.replace('🎬 ', ''));
+                        popupHtml += '<div class="film-item">';
+                        popupHtml += '<div class="film-title">' + filmTitle + '</div>';
+                        if (film.description) {
+                            var desc = decodeHTML(film.description);
+
+                            // Apply labels: remove "Auj:", keep "Dem:"
+                            // Result: today's times have no label, tomorrow's have "Dem:"
+                            desc = desc.replace(/Auj:\s*/g, '');
+
+                            // Reorder "VO dem :" or "VF dem :" to "dem : VO" or "dem : VF"
+                            desc = desc.replace(/(VO|VF)\s+(dem\s*:\s*)/gi, '$2$1 ');
+
+                            popupHtml += '<div class="film-showtimes">' + desc + '</div>';
+                        }
+                        popupHtml += '</div>';
+                    }
+                    popupHtml += '</div>';
+                    popupHtml += '</div>';
+                    
+                } else {
+                    // 📅 POPUP ÉVÉNEMENTS - SIMPLIFIÉ
+                    popupHtml = '<div class="event-popup">';
+                    
+                    for (var j = 0; j < eventsAtLocation.length; j++) {
+                        var event = eventsAtLocation[j];
+                        if (j > 0) popupHtml += '<hr style="margin:8px 0;border:none;border-top:1px solid #e5e7eb;">';
+                        
+                        var eventTitle = event.title || 'Événement';
+                        
+                        popupHtml += '<h3>' + eventTitle + '</h3>';
+                        
+                        if (event.begin) popupHtml += '<div class="date">' + formatDate(event.begin) + '</div>';
+                        
+                        if (event.locationName) {
+                            popupHtml += '<div class="venue">' + event.locationName + '</div>';
+                        }
+                        if (event.address) {
+                            popupHtml += '<div class="address">' + event.address + '</div>';
+                        }
+                        
+                        if (event.openagendaUrl) popupHtml += '<a href="' + event.openagendaUrl + '" target="_blank" class="link">Détails →</a>';
+                    }
+                    
+                    popupHtml += '</div>';
+                }
+                
+                var popupOptions = {
+                    maxWidth: DEVICE_INFO.isMobile ? 280 : 400,
+                    maxHeight: DEVICE_INFO.isMobile ? 350 : 450,
+                    closeButton: true,
+                    autoClose: true,
+                    closeOnClick: false,
+                    keepInView: true
+                };
+                
+                marker.bindPopup(popupHtml, popupOptions);
+                currentMarkerCluster.addLayer(marker);
+            }
+
+            map.addLayer(currentMarkerCluster);
+
+            if (centerLat && centerLon && radiusKm && currentRadiusCircle) {
+                map.fitBounds(currentRadiusCircle.getBounds().pad(0.1));
+                initialMapBounds = currentRadiusCircle.getBounds().pad(0.1);
+                document.getElementById('resetViewBtn').style.display = 'inline-block';
+            }
+        }
+
+        function resetMapView() {
+            if (initialMapBounds && map) {
+                // 🎯 Fermer le popup AVANT de recentrer la carte
+                map.closePopup();
+                
+                // Petit délai pour laisser le popup se fermer
+                setTimeout(function() {
+                    map.fitBounds(initialMapBounds);
+                }, 50);
+            }
+        }
+
+        function fetchNearbyEvents(position) {
+            if (!position) {
+                updateStatus('❌ Position non disponible', 'error');
+                return;
+            }
+
+            if (currentFetchController) currentFetchController.abort();
+            currentFetchController = new AbortController();
+
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            var placeText = currentContextLabel || 'à proximité';
+
+            updateStatus('🔍 Connexion au serveur...', 'active');
+
+            var url = SERVER_URL + '/api/events/nearby?lat=' + lat + '&lon=' + lon + '&radiusKm=' + currentRadiusKm + '&days=' + currentDays;
+
+            var timeoutId = setTimeout(function() { currentFetchController.abort(); }, 180000);
+
+            updateStatus('🔍 Recherche ' + placeText + ' (' + currentRadiusKm + 'km, ' + currentDays + 'j)...', 'active');
+
+            fetch(url, { signal: currentFetchController.signal })
+                .then(function(res) {
+                    clearTimeout(timeoutId);
+                    return res.json();
+                })
+                .then(function(result) {
+                    console.log('Résultat API:', result);
+                    
+                    if (result.status !== 'success') {
+                        updateStatus('❌ ' + (result.message || 'Erreur'), 'error');
+                        return;
+                    }
+
+                    var events = result.events || [];
+                    
+                    // 🎯 Stocker les événements (sans cinéma)
+                    eventsRawData = events.filter(function(e) {
+                        return e.source !== 'Allocine';
+                    });
+                    eventsRealCount = eventsRawData.length;
+                    
+                    // Réinitialiser les données cinéma (nouvelle recherche)
+                    cinemaRawData = [];
+                    cinemaRealCount = 0;
+                    
+                    // Mettre à jour les compteurs
+                    updateCounters();
+                    
+                    // Format location display
+                    var locationDisplay = '';
+                    if (currentContextLabel && currentContextLabel.startsWith('à ')) {
+                        var cityName = currentContextLabel.substring(2); // Remove 'à '
+                        locationDisplay = cityName + ' (' + lat.toFixed(4) + ', ' + lon.toFixed(4) + ')';
+                    } else {
+                        locationDisplay = placeText;
+                    }
+
+                    if (eventsRealCount === 0) {
+                        updateStatus('🔍 Aucun événement ' + placeText, 'waiting');
+                    } else {
+                        updateStatus('✅ ' + locationDisplay, 'active');
+                    }
+                    
+                    // Afficher sur la carte
+                    refreshMapDisplay();
+
+                    // 🎯 TOUJOURS charger cinéma, salons et scannés (en arrière-plan)
+                    // L'affichage dépendra du toggle, mais les données sont prêtes
+                    fetchCinemaEvents(lat, lon, currentRadiusKm);
+                    fetchSalonsEvents(lat, lon, currentRadiusKm);
+                    loadScannedEventsFromServer().then(function() {
+                        // Mettre à jour le compteur de scans dans le rayon
+                        updateScannedCount();
+                        // Rafraîchir l'affichage si les scans sont actifs
+                        if (showScanned) {
+                            refreshMapDisplay();
+                        }
+                    });
+                })
+                .catch(function(e) {
+                    if (e.name === 'AbortError') return;
+                    console.error('Erreur:', e);
+                    updateStatus('❌ Erreur: ' + e.message, 'error');
+                });
+        }
+
+        function setupSliders() {
+            var radiusRange = document.getElementById('radiusRange');
+            var daysRange = document.getElementById('daysRange');
+            var radiusValue = document.getElementById('radiusValue');
+            var daysValue = document.getElementById('daysValue');
+
+            radiusRange.addEventListener('input', function() {
+                currentRadiusKm = parseInt(radiusRange.value, 10);
+                radiusValue.textContent = currentRadiusKm;
+                if (currentRadiusCircle) {
+                    currentRadiusCircle.setRadius(currentRadiusKm * 1000);
+                }
+                // Mettre à jour tous les compteurs en temps réel
+                if (scannedEventsData.length > 0) {
+                    updateScannedCount();
+                }
+                if (cinemaRawData.length > 0) {
+                    updateCinemaCount();
+                }
+                if (salonsEventsData.length > 0) {
+                    updateSalonsCount();
+                }
+            });
+
+            daysRange.addEventListener('input', function() {
+                currentDays = parseInt(daysRange.value, 10);
+                daysValue.textContent = currentDays;
+            });
+
+            radiusRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
+            });
+
+            daysRange.addEventListener('change', function() {
+                if (currentPosition) fetchNearbyEvents(currentPosition);
+            });
+        }
+
+        async function init() {
+            if (typeof L === 'undefined') {
+                setTimeout(init, 100);
+                return;
+            }
+            initMap();
+            setupSliders();
+            
+            // 📷 Charger les événements scannés depuis le serveur
+            await loadScannedEventsFromServer();
+
+            // 📷 Si on revient du scanner, restaurer l'état précédent
+            if (restoredFromScanner) {
+                updateToggleVisuals();
+
+                // Si on avait une position sélectionnée, re-lancer la recherche
+                if (currentPosition && currentPosition.coords) {
+                    fetchNearbyEvents(currentPosition);
+                } else if (showScanned && scannedEventsData.length > 0) {
+                    // Sinon afficher les scans globaux si c'était le mode
+                    displayScannedEventsGlobal();
+                }
+                restoredFromScanner = false;
+            } else {
+                // 📷 Par défaut, mode scannés uniquement
+                exclusiveMode = 'scanned';
+                updateToggleVisuals();
+
+                // 📷 Si on a des événements scannés, les afficher et centrer dessus
+                if (scannedEventsData.length > 0) {
+                    displayScannedEventsGlobal();
+                }
+            }
+            
+            var instructionText = DEVICE_INFO.isMobile 
+                ? '👆 Maintenez appuyé 1s pour sélectionner'
+                : '👆 Maintenez appuyé 2s pour sélectionner un point';
+            document.getElementById('map-instructions').textContent = instructionText;
+            
+            updateStatus('📷 ' + scannedEventsData.length + ' événement(s) scanné(s)', 'active');
+        }
+        
+        // 📷 Afficher les événements scannés SANS zone de recherche (mode global)
+        function displayScannedEventsGlobal() {
+            if (scannedEventsData.length === 0) return;
+            
+            console.log('📷 Affichage global de', scannedEventsData.length, 'événements scannés');
+            
+            // Créer un cluster pour les scannés
+            if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
+            
+            currentMarkerCluster = L.markerClusterGroup({
+                chunkedLoading: true,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                maxClusterRadius: 50,
+                iconCreateFunction: function(cluster) {
+                    var count = cluster.getChildCount();
+                    return L.divIcon({
+                        html: '<div style="background:#f97316;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:14px;border:3px solid white;box-shadow:0 2px 8px rgba(249,115,22,0.5);">📷' + count + '</div>',
+                        className: 'marker-cluster-scanned',
+                        iconSize: [40, 40]
+                    });
+                }
+            });
+            
+            var bounds = L.latLngBounds();
+            var hasValidBounds = false;
+            
+            scannedEventsData.forEach(function(event) {
+                if (!event.latitude || !event.longitude) return;
+                
+                var icon = createScannedIcon();
+                var marker = L.marker([event.latitude, event.longitude], { icon: icon });
+                
+                // Vérifier si c'est notre événement
+                var currentUser = getCurrentUser();
+                var isOwner = currentUser && event.user_id === currentUser.id;
+                
+                // Popup
+                var popupHtml = '<div class="scanned-popup" style="max-width:260px;">';
+                popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
+                
+                // Badge privé/public
+                var badge = event.is_private ? '🔒 PRIVÉ' : '📷 SCANNÉ';
+                popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + '</span>';
+                popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;padding-right:25px;">' + (event.title || 'Événement scanné') + '</h3>';
+                popupHtml += '</div>';
+                
+                if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
+
+                // Location display - always show city
+                var locLine = '';
+                if (event.locationName) locLine += event.locationName;
+                if (event.address) locLine += (locLine ? ', ' : '') + event.address;
+                if (locLine) {
+                    popupHtml += '<div style="margin-bottom:4px;"><strong>📍</strong> ' + locLine + '</div>';
+                }
+                if (event.city) {
+                    popupHtml += '<div style="margin-bottom:8px;font-size:13px;color:#666;margin-left:24px;">' + event.city + '</div>';
+                }
+
+                if (event.description) popupHtml += '<div style="font-size:12px;color:#444;background:#f9fafb;padding:8px;border-radius:4px;margin-bottom:8px;">' + event.description + '</div>';
+
+                // Lien site web
+                if (event.website) {
+                    var websiteUrl = event.website.startsWith('http') ? event.website : 'https://' + event.website;
+                    popupHtml += '<div style="margin-bottom:8px;"><a href="' + websiteUrl + '" target="_blank" style="color:#4f46e5;font-size:12px;text-decoration:none;">🌐 ' + event.website + '</a></div>';
+                }
+                
+                // Date de scan + auteur
+                var scanInfo = '📷 Scanné';
+                if (event.created_at) {
+                    var scanDate = new Date(event.created_at);
+                    var scanDateStr = scanDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    scanInfo += ' le ' + scanDateStr;
+                }
+                if (event.user_pseudo && event.user_id) {
+                    var userLabel = event.user_pseudo + '_' + event.user_id;
+                    var scanCount = '';
+                    if (event.scan_number && event.total_scans) {
+                        scanCount = ' (' + event.scan_number + '/' + event.total_scans + ')';
+                    }
+                    scanInfo += ' par <strong>' + userLabel + scanCount + '</strong>';
+                }
+                popupHtml += '<div style="font-size:11px;color:#999;margin-bottom:8px;font-style:italic;">' + scanInfo + '</div>';
+                
+                // Bouton supprimer seulement si owner
+                if (isOwner && event.id) {
+                    popupHtml += '<div style="margin-top:10px;">';
+                    popupHtml += '<button onclick="deleteScannedEvent(' + event.id + ')" style="width:100%;padding:6px;background:#fee2e2;color:#dc2626;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🗑️ Supprimer</button>';
+                    popupHtml += '</div>';
+                }
+                popupHtml += '</div>';
+                
+                marker.bindPopup(popupHtml, { maxWidth: 260, className: 'scanned-popup-container' });
+                currentMarkerCluster.addLayer(marker);
+                
+                bounds.extend([event.latitude, event.longitude]);
+                hasValidBounds = true;
+            });
+            
+            map.addLayer(currentMarkerCluster);
+            
+            // Centrer la carte sur les événements scannés
+            if (hasValidBounds) {
+                map.fitBounds(bounds.pad(0.2));
+                updateStatus('📷 ' + scannedEventsData.length + ' événement(s) scanné(s)', 'active');
+                
+                // Masquer les instructions
+                document.getElementById('map-instructions').classList.add('hidden');
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+
+    <!-- Service Worker Registration -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('✅ Service Worker enregistré:', reg.scope))
+                .catch(err => console.log('❌ Service Worker erreur:', err));
+        });
+    }
+
+    // Prompt d'installation PWA
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        console.log('📱 PWA installable');
+    });
+    </script>
+</body>
+</html>
