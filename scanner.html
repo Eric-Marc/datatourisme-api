@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEDEON - Scanner d'Affiches</title>
-    
+
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#6366f1">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,16 +13,12 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="application-name" content="GEDEON">
     <meta name="description" content="Scanner d'affiches IA - Découvrez les événements autour de vous">
-    <meta name="msapplication-TileColor" content="#6366f1">
-    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png">
-    
+
     <!-- PWA Manifest & Icons -->
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -36,86 +32,86 @@
     
     <!-- Modal Login -->
     <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-overlay hidden">
-        <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4 animate-fade-in">
-            <div class="text-center mb-6">
-                <div class="bg-indigo-500 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <span class="text-3xl">ðŸ‘¤</span>
+        <div class="bg-white rounded-xl shadow-xl p-5 max-w-sm w-full mx-4 animate-fade-in">
+            <div class="text-center mb-4">
+                <div class="bg-indigo-500 p-2 rounded-full w-12 h-12 mx-auto mb-2 flex items-center justify-center">
+                    <span class="text-xl">👤</span>
                 </div>
-                <h2 class="text-2xl font-bold text-gray-900">Bienvenue sur GEDEON</h2>
-                <p class="text-gray-500 mt-2" id="login-subtitle">Connectez-vous pour ajouter des Ã©vÃ©nements</p>
+                <h2 class="text-lg font-bold text-gray-900">Bienvenue sur GEDEON</h2>
+                <p class="text-gray-500 text-sm" id="login-subtitle">Connectez-vous pour scanner</p>
             </div>
             
             <!-- Tabs -->
-            <div class="flex mb-6 bg-gray-100 rounded-xl p-1">
-                <button id="tab-login" onclick="showTab('login')" class="flex-1 py-2 rounded-lg font-medium transition-all bg-white text-indigo-600 shadow-sm">Connexion</button>
-                <button id="tab-register" onclick="showTab('register')" class="flex-1 py-2 rounded-lg font-medium transition-all text-gray-500">Inscription</button>
+            <div class="flex mb-4 bg-gray-100 rounded-lg p-1">
+                <button id="tab-login" onclick="showTab('login')" class="flex-1 py-1.5 text-sm rounded-md font-medium transition-all bg-white text-indigo-600 shadow-sm">Connexion</button>
+                <button id="tab-register" onclick="showTab('register')" class="flex-1 py-1.5 text-sm rounded-md font-medium transition-all text-gray-500">Inscription</button>
             </div>
             
-            <div class="space-y-4">
+            <div class="space-y-3">
                 <!-- Email -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Email</label>
                     <input type="email" id="login-email" 
-                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                            placeholder="votre@email.com" autocomplete="email">
                 </div>
                 
                 <!-- Pseudo (inscription uniquement) -->
                 <div id="pseudo-field" class="hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Pseudo</label>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Pseudo</label>
                     <input type="text" id="login-pseudo" 
-                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                            placeholder="Ex: Eric, Philippe..." maxlength="20" autocomplete="username">
-                    <p class="text-xs text-gray-400 mt-1">2-20 caractÃ¨res (lettres, chiffres, _)</p>
+                    <p class="text-xs text-gray-400 mt-0.5">2-20 caractères</p>
                 </div>
                 
                 <!-- Mot de passe -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Mot de passe</label>
                     <input type="password" id="login-password" 
-                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                           placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" maxlength="50" autocomplete="current-password">
-                    <p class="text-xs text-gray-400 mt-1">4 caractÃ¨res minimum</p>
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                           placeholder="••••••••" maxlength="50" autocomplete="current-password">
+                    <p class="text-xs text-gray-400 mt-0.5">4 caractères min.</p>
                 </div>
                 
                 <!-- Erreur -->
-                <div id="login-error" class="text-red-500 text-sm hidden"></div>
+                <div id="login-error" class="text-red-500 text-xs hidden"></div>
                 
-                <!-- SuccÃ¨s inscription -->
-                <div id="login-success" class="bg-green-50 text-green-700 text-sm p-3 rounded-lg hidden">
-                    âœ… Compte crÃ©Ã© ! VÃ©rifiez votre email pour confirmer.
+                <!-- Succès inscription -->
+                <div id="login-success" class="bg-green-50 text-green-700 text-xs p-2 rounded-lg hidden">
+                    ✅ Compte créé ! Vérifiez votre email.
                 </div>
                 
                 <!-- Bouton -->
-                <button id="login-btn" onclick="doAuth()" class="w-full bg-indigo-500 text-white py-3 rounded-xl font-semibold hover:bg-indigo-600">Se connecter</button>
+                <button id="login-btn" onclick="doAuth()" class="w-full bg-indigo-500 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-600">Se connecter</button>
                 
-                <!-- Mot de passe oubliÃ© -->
-                <button id="forgot-password-btn" onclick="showForgotPassword()" class="w-full text-gray-500 text-sm hover:text-indigo-500">Mot de passe oubliÃ© ?</button>
+                <!-- Mot de passe oublié -->
+                <button id="forgot-password-btn" onclick="showForgotPassword()" class="w-full text-gray-400 text-xs hover:text-indigo-500">Mot de passe oublié ?</button>
             </div>
         </div>
     </div>
     
-    <!-- Modal Mot de passe oubliÃ© -->
+    <!-- Modal Mot de passe oublié -->
     <div id="forgot-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-overlay hidden">
-        <div class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4 animate-fade-in">
-            <div class="text-center mb-6">
-                <div class="bg-orange-500 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <span class="text-3xl">ðŸ”</span>
+        <div class="bg-white rounded-xl shadow-xl p-5 max-w-sm w-full mx-4 animate-fade-in">
+            <div class="text-center mb-4">
+                <div class="bg-orange-500 p-2 rounded-full w-12 h-12 mx-auto mb-2 flex items-center justify-center">
+                    <span class="text-xl">🔐</span>
                 </div>
-                <h2 class="text-2xl font-bold text-gray-900">Mot de passe oubliÃ©</h2>
-                <p class="text-gray-500 mt-2">Entrez votre email pour recevoir un lien de rÃ©initialisation</p>
+                <h2 class="text-lg font-bold text-gray-900">Mot de passe oublié</h2>
+                <p class="text-gray-500 text-sm">Entrez votre email</p>
             </div>
             
-            <div class="space-y-4">
+            <div class="space-y-3">
                 <div>
                     <input type="email" id="forgot-email" 
-                           class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
                            placeholder="votre@email.com">
                 </div>
-                <div id="forgot-error" class="text-red-500 text-sm hidden"></div>
-                <div id="forgot-success" class="bg-green-50 text-green-700 text-sm p-3 rounded-lg hidden"></div>
-                <button id="forgot-btn" onclick="doForgotPassword()" class="w-full bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600">Envoyer le lien</button>
-                <button onclick="hideForgotPassword()" class="w-full text-gray-500 text-sm hover:text-gray-700">â† Retour Ã  la connexion</button>
+                <div id="forgot-error" class="text-red-500 text-xs hidden"></div>
+                <div id="forgot-success" class="bg-green-50 text-green-700 text-xs p-2 rounded-lg hidden"></div>
+                <button id="forgot-btn" onclick="doForgotPassword()" class="w-full bg-orange-500 text-white py-2 rounded-lg text-sm font-semibold hover:bg-orange-600">Envoyer</button>
+                <button onclick="hideForgotPassword()" class="w-full text-gray-400 text-xs hover:text-gray-700">← Retour</button>
             </div>
         </div>
     </div>
@@ -124,17 +120,17 @@
     <header class="bg-white shadow-sm sticky top-0 z-40">
         <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center gap-3">
-                <a href="index.html" class="text-gray-500 hover:text-gray-700">â†</a>
-                <div class="bg-indigo-500 p-2 rounded-lg"><span class="text-white text-xl">ðŸ“·</span></div>
+                <a href="index.html" class="text-gray-500 hover:text-gray-700">←</a>
+                <div class="bg-indigo-500 p-2 rounded-lg"><span class="text-white text-xl">📷</span></div>
                 <div>
                     <h1 class="text-lg font-bold text-gray-900">GEDEON Scanner</h1>
                     <p class="text-xs text-gray-500">Extracteur IA</p>
                 </div>
             </div>
             <div id="user-info" class="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full">
-                <span>ðŸ‘¤</span>
+                <span>👤</span>
                 <span id="user-pseudo-display" class="font-medium text-gray-700">...</span>
-                <button onclick="logout()" class="text-gray-400 hover:text-red-500 ml-1" title="DÃ©connexion">âœ•</button>
+                <button onclick="logout()" class="text-gray-400 hover:text-red-500 ml-1" title="Déconnexion">✕</button>
             </div>
         </div>
     </header>
@@ -146,24 +142,27 @@
             <!-- Gauche: Zone image -->
             <div class="space-y-4">
                 <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center bg-white hover:border-indigo-500">
-                    <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center text-3xl">ðŸ–¼ï¸</div>
+                    <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center text-3xl">🖼️</div>
                     <p class="text-gray-600 font-medium mb-4">Choisissez une source</p>
                     
                     <div class="flex flex-col gap-3 justify-center">
-                        <button onclick="document.getElementById('camera-input').click()" class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-indigo-600 transition">
-                            ðŸ“¸ Prendre une photo
-                        </button>
-                        <button onclick="document.getElementById('file-input').click()" class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-300 transition">
-                            ðŸ“ Choisir un fichier
-                        </button>
+                        <div class="relative">
+                            <div class="flex items-center justify-center gap-2 bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold">
+                                📸 Prendre une photo
+                            </div>
+                            <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                        </div>
+                        <div class="relative">
+                            <div class="flex items-center justify-center gap-2 bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-semibold">
+                                📁 Choisir un fichier
+                            </div>
+                            <input type="file" id="file-input" onchange="handleFileSelect(this);" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                        </div>
                     </div>
-                    
-                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
-                    <input type="file" id="file-input" accept="image/*" class="hidden">
                 </div>
                 <div id="image-preview" class="hidden bg-white rounded-2xl overflow-hidden shadow-lg relative">
                     <img id="preview-img" class="w-full max-h-96 object-contain bg-gray-100">
-                    <button onclick="clearImage()" class="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600">âœ•</button>
+                    <button onclick="clearImage()" class="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600">✕</button>
                 </div>
                 <div id="processing-overlay" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div class="bg-white rounded-2xl p-8 text-center">
@@ -173,7 +172,7 @@
                 </div>
             </div>
 
-            <!-- Droite: RÃ©sultat -->
+            <!-- Droite: Résultat -->
             <div class="space-y-4">
                 <div id="skeleton-loader" class="hidden bg-white rounded-2xl p-6 shadow-lg animate-pulse">
                     <div class="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
@@ -184,26 +183,26 @@
                 <div id="event-container" class="hidden animate-fade-in">
                     <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
                         <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-5 text-white">
-                            <span id="event-category" class="inline-block px-3 py-1 bg-white/20 rounded-full text-sm mb-2">Ã‰vÃ©nement</span>
+                            <span id="event-category" class="inline-block px-3 py-1 bg-white/20 rounded-full text-sm mb-2">Événement</span>
                             <h2 id="event-title" class="text-xl font-bold">Titre</h2>
                         </div>
                         <div class="p-5 space-y-3 text-sm">
-                            <div class="flex gap-3"><span class="text-xl">ðŸ“…</span><div><p class="text-gray-500">Date</p><p id="event-date" class="text-gray-900">-</p><p id="event-time" class="text-gray-600">-</p></div></div>
-                            <div class="flex gap-3"><span class="text-xl">ðŸ“</span><div><p class="text-gray-500">Lieu</p><p id="event-venue" class="text-gray-900">-</p><p id="event-address" class="text-gray-600">-</p></div></div>
-                            <div class="flex gap-3"><span class="text-xl">ðŸ‘¥</span><div><p class="text-gray-500">Organisateur</p><p id="event-organizer" class="text-gray-900">-</p></div></div>
-                            <div class="flex gap-3"><span class="text-xl">ðŸ’°</span><div><p class="text-gray-500">Tarif</p><p id="event-pricing" class="text-gray-900">-</p></div></div>
-                            <div id="event-website-container" class="hidden flex gap-3"><span class="text-xl">ðŸŒ</span><div><p class="text-gray-500">Site web</p><a id="event-website" href="#" target="_blank" class="text-indigo-600 hover:underline">-</a></div></div>
+                            <div class="flex gap-3"><span class="text-xl">📅</span><div><p class="text-gray-500">Date</p><p id="event-date" class="text-gray-900">-</p><p id="event-time" class="text-gray-600">-</p></div></div>
+                            <div class="flex gap-3"><span class="text-xl">📍</span><div><p class="text-gray-500">Lieu</p><p id="event-venue" class="text-gray-900">-</p><p id="event-address" class="text-gray-600">-</p></div></div>
+                            <div class="flex gap-3"><span class="text-xl">👥</span><div><p class="text-gray-500">Organisateur</p><p id="event-organizer" class="text-gray-900">-</p></div></div>
+                            <div class="flex gap-3"><span class="text-xl">💰</span><div><p class="text-gray-500">Tarif</p><p id="event-pricing" class="text-gray-900">-</p></div></div>
+                            <div id="event-website-container" class="hidden flex gap-3"><span class="text-xl">🌐</span><div><p class="text-gray-500">Site web</p><a id="event-website" href="#" target="_blank" class="text-indigo-600 hover:underline">-</a></div></div>
                             <div id="event-description-container" class="hidden"><p class="text-gray-500 mb-1">Description</p><p id="event-description" class="text-gray-700 bg-gray-50 p-3 rounded-lg">-</p></div>
                             <div id="event-tags-container" class="hidden"><p class="text-gray-500 mb-1">Tags</p><div id="event-tags" class="flex flex-wrap gap-2"></div></div>
                         </div>
                         <div class="p-5 bg-gray-50 border-t space-y-3">
                             <div class="flex items-center gap-3 p-3 bg-white rounded-xl border">
                                 <input type="checkbox" id="is-private" class="w-5 h-5">
-                                <label for="is-private" class="flex-1"><span class="font-medium text-gray-700">Ã‰vÃ©nement privÃ©</span><p class="text-xs text-gray-400">Visible uniquement par vous</p></label>
-                                <span class="text-xl">ðŸ”’</span>
+                                <label for="is-private" class="flex-1"><span class="font-medium text-gray-700">Événement privé</span><p class="text-xs text-gray-400">Visible uniquement par vous</p></label>
+                                <span class="text-xl">🔒</span>
                             </div>
                             <div class="flex gap-3">
-                                <button id="add-to-gedeon-btn" onclick="addToGedeon()" class="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600">âž• Ajouter Ã  GEDEON</button>
+                                <button id="add-to-gedeon-btn" onclick="addToGedeon()" class="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600">➕ Ajouter à GEDEON</button>
                                 <button onclick="toggleJson()" class="px-4 py-3 bg-gray-200 rounded-xl hover:bg-gray-300">{ }</button>
                             </div>
                         </div>
@@ -212,20 +211,40 @@
                 </div>
 
                 <div id="error-message" class="hidden bg-red-50 border border-red-200 rounded-2xl p-5">
-                    <span class="text-xl">âš ï¸</span> <span id="error-text" class="text-red-600">-</span>
+                    <span class="text-xl">⚠️</span> <span id="error-text" class="text-red-600">-</span>
                 </div>
             </div>
         </div>
     </main>
 
     <footer class="bg-white border-t py-3 text-center text-sm text-gray-400">
-        PropulsÃ© par <span class="font-medium text-indigo-500">Gemini AI</span> â€¢ GEDEON Scanner v2.0
+        Propulsé par <span class="font-medium text-indigo-500">Gemini AI</span> • GEDEON Scanner v2.0
     </footer>
 
     <script>
         const SERVER_URL = window.location.origin;
         let currentEventData = null;
         let currentUser = null;
+
+        // Global file handler for inline onchange (Android compatible)
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                var file = input.files[0];
+                if (file.size > 10*1024*1024) {
+                    document.getElementById('error-text').textContent = 'Max 10 MB';
+                    document.getElementById('error-message').classList.remove('hidden');
+                    return;
+                }
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('preview-img').src = e.target.result;
+                    document.getElementById('image-preview').classList.remove('hidden');
+                    document.getElementById('drop-zone').classList.add('hidden');
+                    analyzeImage(e.target.result, file.type);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
         
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
@@ -241,7 +260,7 @@
         function getDeviceId() {
             let deviceId = localStorage.getItem('gedeon_device_id');
             if (!deviceId) {
-                // GÃ©nÃ©rer un ID unique pour ce device
+                // Générer un ID unique pour ce device
                 deviceId = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 16);
                 localStorage.setItem('gedeon_device_id', deviceId);
             }
@@ -259,12 +278,12 @@
                     return true;
                 } catch (e) {}
             }
-            // Ne PAS afficher le modal automatiquement, seulement Ã  la demande
-            document.getElementById('user-pseudo-display').textContent = 'Non connectÃ©';
+            // Ne PAS afficher le modal automatiquement, seulement à la demande
+            document.getElementById('user-pseudo-display').textContent = 'Non connecté';
             return false;
         }
         
-        // Afficher le modal login (appelÃ© quand nÃ©cessaire)
+        // Afficher le modal login (appelé quand nécessaire)
         function showLoginModal() {
             loginModal.classList.remove('hidden');
             showTab('login');
@@ -292,7 +311,7 @@
                 tabRegister.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
                 tabRegister.classList.add('text-gray-500');
                 btn.textContent = 'Se connecter';
-                subtitle.textContent = 'Connectez-vous pour ajouter des Ã©vÃ©nements';
+                subtitle.textContent = 'Connectez-vous pour ajouter des événements';
                 pseudoField.classList.add('hidden');
                 forgotBtn.classList.remove('hidden');
             } else {
@@ -300,8 +319,8 @@
                 tabRegister.classList.remove('text-gray-500');
                 tabLogin.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
                 tabLogin.classList.add('text-gray-500');
-                btn.textContent = 'CrÃ©er mon compte';
-                subtitle.textContent = 'CrÃ©ez votre compte pour commencer';
+                btn.textContent = 'Créer mon compte';
+                subtitle.textContent = 'Créez votre compte pour commencer';
                 pseudoField.classList.remove('hidden');
                 forgotBtn.classList.add('hidden');
             }
@@ -328,11 +347,11 @@
             // Validation pseudo (inscription uniquement)
             if (authMode === 'register') {
                 if (pseudo.length < 2 || pseudo.length > 20) {
-                    errorDiv.textContent = 'Pseudo: 2-20 caractÃ¨res'; 
+                    errorDiv.textContent = 'Pseudo: 2-20 caractères'; 
                     errorDiv.classList.remove('hidden'); 
                     return;
                 }
-                if (!/^[a-zA-Z0-9_Ã Ã¢Ã¤Ã©Ã¨ÃªÃ«Ã¯Ã®Ã´Ã¹Ã»Ã¼Ã§Ã€Ã‚Ã„Ã‰ÃˆÃŠÃ‹ÃÃŽÃ”Ã™Ã›ÃœÃ‡]+$/.test(pseudo)) {
+                if (!/^[a-zA-Z0-9_àâäéèêëïîôùûüçÀÂÄÉÈÊËÏÎÔÙÛÜÇ]+$/.test(pseudo)) {
                     errorDiv.textContent = 'Pseudo: lettres, chiffres, _ uniquement'; 
                     errorDiv.classList.remove('hidden'); 
                     return;
@@ -341,14 +360,14 @@
             
             // Validation mot de passe
             if (password.length < 4) {
-                errorDiv.textContent = 'Mot de passe: 4 caractÃ¨res minimum'; 
+                errorDiv.textContent = 'Mot de passe: 4 caractères minimum'; 
                 errorDiv.classList.remove('hidden'); 
                 return;
             }
             
             const originalText = btn.textContent;
             btn.disabled = true; 
-            btn.textContent = authMode === 'login' ? 'Connexion...' : 'CrÃ©ation...'; 
+            btn.textContent = authMode === 'login' ? 'Connexion...' : 'Création...'; 
             
             const deviceId = getDeviceId();
             const endpoint = authMode === 'login' ? '/api/users/login' : '/api/users/register';
@@ -363,14 +382,14 @@
                 
                 if (data.status === 'success') {
                     if (authMode === 'register') {
-                        // Inscription rÃ©ussie - attendre confirmation email
-                        successDiv.textContent = 'âœ… ' + (data.message || 'Compte crÃ©Ã© ! VÃ©rifiez votre email pour confirmer.');
+                        // Inscription réussie - attendre confirmation email
+                        successDiv.textContent = '✅ ' + (data.message || 'Compte créé ! Vérifiez votre email pour confirmer.');
                         successDiv.classList.remove('hidden');
                         btn.textContent = originalText;
                         btn.disabled = false;
                         // Ne pas fermer le modal
                     } else {
-                        // Connexion rÃ©ussie
+                        // Connexion réussie
                         currentUser = data.user;
                         localStorage.setItem('gedeon_user', JSON.stringify(currentUser));
                         document.getElementById('user-pseudo-display').textContent = currentUser.pseudo;
@@ -404,14 +423,14 @@
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    document.getElementById('login-success').textContent = 'âœ… Email renvoyÃ© ! VÃ©rifiez votre boÃ®te mail.';
+                    document.getElementById('login-success').textContent = '✅ Email renvoyé ! Vérifiez votre boîte mail.';
                     document.getElementById('login-success').classList.remove('hidden');
                     document.getElementById('login-error').classList.add('hidden');
                 } else {
-                    alert('âŒ ' + (data.message || 'Erreur'));
+                    alert('❌ ' + (data.message || 'Erreur'));
                 }
             } catch (e) {
-                alert('âŒ Erreur serveur');
+                alert('❌ Erreur serveur');
             }
         }
         
@@ -452,7 +471,7 @@
                 });
                 const data = await res.json();
                 
-                successDiv.textContent = 'âœ… Si cet email existe, vous recevrez un lien de rÃ©initialisation.';
+                successDiv.textContent = '✅ Si cet email existe, vous recevrez un lien de réinitialisation.';
                 successDiv.classList.remove('hidden');
             } catch (e) {
                 errorDiv.textContent = 'Erreur serveur';
@@ -463,7 +482,7 @@
             btn.textContent = 'Envoyer le lien';
         }
         
-        function logout() { if (confirm('DÃ©connexion ?')) { localStorage.removeItem('gedeon_user'); location.reload(); } }
+        function logout() { if (confirm('Déconnexion ?')) { localStorage.removeItem('gedeon_user'); location.reload(); } }
         
         // Event listeners
         document.getElementById('login-email').addEventListener('keypress', e => { 
@@ -481,11 +500,21 @@
         
         // === DRAG & DROP ===
         const cameraInput = document.getElementById('camera-input');
+
         dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
         dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-active'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) handleImageFile(f); });
-        fileInput.addEventListener('change', e => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
-        cameraInput.addEventListener('change', e => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
+
+        // File input handlers - direct overlay approach for Android
+        function onFileSelected(input) {
+            console.log('File input changed, files:', input.files ? input.files.length : 0);
+            if (input.files && input.files[0]) {
+                console.log('Processing file:', input.files[0].name, 'size:', input.files[0].size);
+                handleImageFile(input.files[0]);
+            }
+        }
+        fileInput.onchange = function() { onFileSelected(this); };
+        cameraInput.onchange = function() { onFileSelected(this); };
         
         function handleImageFile(file) {
             if (file.size > 10*1024*1024) { showError('Max 10 MB'); return; }
@@ -514,8 +543,8 @@
         function displayEventData(d) {
             eventContainer.classList.remove('hidden');
             document.getElementById('event-title').textContent = d.title || 'Sans titre';
-            document.getElementById('event-category').textContent = d.category || 'Ã‰vÃ©nement';
-            let dateText = d.startDate || '-'; if (d.endDate && d.endDate !== d.startDate) dateText += ` â†’ ${d.endDate}`;
+            document.getElementById('event-category').textContent = d.category || 'Événement';
+            let dateText = d.startDate || '-'; if (d.endDate && d.endDate !== d.startDate) dateText += ` → ${d.endDate}`;
             document.getElementById('event-date').textContent = dateText;
             document.getElementById('event-time').textContent = d.startTime ? (d.startTime + (d.endTime ? ` - ${d.endTime}` : '')) : '-';
             document.getElementById('event-venue').textContent = d.location?.venueName || '-';
@@ -537,17 +566,64 @@
         
         function toggleJson() { document.getElementById('json-viewer').classList.toggle('hidden'); }
         
-        // === AJOUTER Ã€ GEDEON ===
+        // === AJOUTER À GEDEON ===
         async function addToGedeon() {
             if (!currentEventData) return;
-            if (!currentUser) { 
-                showLoginModal(); 
-                return; 
+
+            // Validation: require at least title, date and location
+            const missingFields = [];
+            if (!currentEventData.title) missingFields.push('titre');
+            if (!currentEventData.startDate) missingFields.push('date');
+            if (!currentEventData.location?.city && !currentEventData.location?.venueName && !currentEventData.location?.address) {
+                missingFields.push('lieu');
+            }
+
+            if (missingFields.length > 0) {
+                alert('❌ Informations manquantes: ' + missingFields.join(', ') + '\n\nVeuillez scanner une affiche avec plus de détails.');
+                return;
+            }
+
+            if (!currentUser) {
+                showLoginModal();
+                return;
             }
             
             const btn = document.getElementById('add-to-gedeon-btn');
             const isPrivate = document.getElementById('is-private').checked;
-            btn.disabled = true; btn.textContent = 'â³ GÃ©ocodage...';
+            btn.disabled = true; btn.textContent = '⏳ Vérification...';
+            
+            // 🔐 Vérifier que l'utilisateur est valide côté serveur
+            try {
+                const verifyRes = await fetch(`${SERVER_URL}/api/users/verify`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user_id: currentUser.id, email: currentUser.email })
+                });
+                const verifyData = await verifyRes.json();
+                
+                if (verifyData.status !== 'success') {
+                    // Utilisateur invalide → forcer reconnexion
+                    localStorage.removeItem('gedeon_user');
+                    currentUser = null;
+                    document.getElementById('user-pseudo-display').textContent = 'Non connecté';
+                    btn.disabled = false; btn.textContent = '➕ Ajouter à GEDEON';
+                    
+                    if (verifyData.code === 'EMAIL_NOT_CONFIRMED') {
+                        alert('⚠️ Votre email n\'est pas confirmé. Vérifiez votre boîte mail.');
+                    } else {
+                        alert('⚠️ Session expirée. Veuillez vous reconnecter.');
+                    }
+                    showLoginModal();
+                    return;
+                }
+            } catch (e) {
+                console.error('Erreur vérification:', e);
+                btn.disabled = false; btn.textContent = '➕ Ajouter à GEDEON';
+                alert('❌ Erreur de connexion au serveur');
+                return;
+            }
+            
+            btn.textContent = '⏳ Géocodage...';
             
             const addr = [currentEventData.location?.venueName, currentEventData.location?.address, currentEventData.location?.city].filter(Boolean).join(', ');
             let lat = null, lon = null;
@@ -565,8 +641,11 @@
                 } catch (e) { console.error('Geocode error:', e); }
             }
             
-            btn.textContent = 'â³ Enregistrement...';
-            
+            btn.textContent = '⏳ Enregistrement...';
+
+            // Récupérer l'image depuis l'aperçu
+            const imageData = document.getElementById('preview-img').src;
+
             try {
                 const res = await fetch(`${SERVER_URL}/api/scanned`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -587,42 +666,41 @@
                         pricing: currentEventData.pricing?.isFree ? 'Gratuit' : currentEventData.pricing?.priceRange,
                         website: currentEventData.website,
                         tags: currentEventData.tags || [],
-                        is_private: isPrivate
+                        is_private: isPrivate,
+                        image: imageData  // Inclure l'image en base64
                     })
                 });
                 const result = await res.json();
                 if (result.status === 'success') {
-                    const priv = isPrivate ? ' (privÃ©)' : ' (public)';
-                    if (lat && lon) { if (confirm(`âœ… AjoutÃ©${priv} !\n\nVoir la carte ?`)) window.location.href = 'index.html'; }
-                    else { alert(`âœ… AjoutÃ©${priv} mais non gÃ©olocalisÃ©.`); }
-                } else { alert('âŒ ' + (result.message || 'Erreur')); }
-            } catch (e) { alert('âŒ Erreur serveur'); }
+                    const priv = isPrivate ? ' (privé)' : ' (public)';
+                    if (lat && lon) { if (confirm(`✅ Ajouté${priv} !\n\nVoir la carte ?`)) window.location.href = 'index.html'; }
+                    else { alert(`✅ Ajouté${priv} mais non géolocalisé.`); }
+                } else { alert('❌ ' + (result.message || 'Erreur')); }
+            } catch (e) { alert('❌ Erreur serveur'); }
             
-            btn.disabled = false; btn.textContent = 'âž• Ajouter Ã  GEDEON';
+            btn.disabled = false; btn.textContent = '➕ Ajouter à GEDEON';
         }
         
         // Init
         checkAuth();
+        
+        // Si ?login=1 dans l'URL, afficher le modal de connexion
+        if (new URLSearchParams(window.location.search).get('login') === '1') {
+            if (!currentUser) {
+                showLoginModal();
+            }
+        }
     </script>
-    
+
     <!-- Service Worker Registration -->
     <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js')
-                .then(reg => console.log('✅ Service Worker enregistré:', reg.scope))
-                .catch(err => console.log('❌ Service Worker erreur:', err));
+                .then(reg => console.log('✅ SW enregistré'))
+                .catch(err => console.log('❌ SW erreur:', err));
         });
     }
-    
-    // Prompt d'installation PWA
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        // Afficher un bouton d'installation si souhaité
-        console.log('📱 PWA installable');
-    });
     </script>
 </body>
 </html>
