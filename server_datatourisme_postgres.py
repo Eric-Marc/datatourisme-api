@@ -2052,7 +2052,41 @@ def health():
 # IMPORTANT: Ne jamais mettre la clé dans le code !
 # Configurer GEMINI_API_KEY dans les variables d'environnement Render
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"]
+GEMINI_MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"]  # Pro en premier pour meilleure précision
+
+# Corrections OCR françaises courantes
+OCR_FIXES = {
+    "Noel": "Noël", "NOEL": "NOËL", "Noел": "Noël",
+    "Decembre": "Décembre", "DECEMBRE": "DÉCEMBRE",
+    "Fevrier": "Février", "FEVRIER": "FÉVRIER",
+    "Evenement": "Événement", "EVENEMENT": "ÉVÉNEMENT",
+    "Theatre": "Théâtre", "THEATRE": "THÉÂTRE",
+    "Opera": "Opéra", "OPERA": "OPÉRA",
+    "Congres": "Congrès", "CONGRES": "CONGRÈS",
+    "Cafe": "Café", "CAFE": "CAFÉ",
+    "Entree": "Entrée", "ENTREE": "ENTRÉE",
+    "Creche": "Crèche", "CRECHE": "CRÈCHE",
+    "Marche": "Marché", "MARCHE": "MARCHÉ",
+    "Fete": "Fête", "FETE": "FÊTE",
+}
+
+def fix_ocr_text(text):
+    """Corrige les erreurs OCR courantes en français"""
+    if not text:
+        return text
+    for wrong, right in OCR_FIXES.items():
+        text = text.replace(wrong, right)
+    return text
+
+def fix_ocr_dict(data):
+    """Applique les corrections OCR sur un dictionnaire"""
+    if isinstance(data, str):
+        return fix_ocr_text(data)
+    elif isinstance(data, dict):
+        return {k: fix_ocr_dict(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [fix_ocr_dict(item) for item in data]
+    return data
 
 @app.route('/api/scanner/analyze', methods=['POST'])
 def analyze_poster():
@@ -2079,12 +2113,20 @@ def analyze_poster():
         if not base64_image:
             return jsonify({"status": "error", "message": "Image manquante"}), 400
         
-        prompt = """Analyse cette image d'affiche événementielle ou publicitaire.
-Extrais toutes les informations et retourne UNIQUEMENT un JSON valide avec cette structure exacte:
+        prompt = """Analyse cette affiche d'événement en français.
+
+RÈGLES IMPORTANTES:
+- Extrais UNIQUEMENT le texte visible sur l'affiche
+- TOUJOURS utiliser les accents français corrects: Noël, Décembre, Février, Théâtre, Opéra, Événement, Congrès, Entrée, Marché, Fête
+- Ne devine pas, n'invente pas de texte
+- Ignore les logos et éléments décoratifs
+- Si un texte est illisible, utilise null
+
+Retourne UNIQUEMENT un JSON valide avec cette structure:
 {
-    "title": "Titre de l'événement",
-    "category": "Concert|Théâtre|Atelier|Conférence|Sport|Exposition|Festival|Autre",
-    "startDate": "YYYY-MM-DD ou texte brut",
+    "title": "Titre de l'événement (avec accents corrects)",
+    "category": "Concert|Théâtre|Atelier|Conférence|Sport|Exposition|Festival|Marché|Fête|Autre",
+    "startDate": "YYYY-MM-DD ou texte brut si format différent",
     "startTime": "HH:MM ou null",
     "endDate": "YYYY-MM-DD ou null",
     "endTime": "HH:MM ou null",
@@ -2096,17 +2138,17 @@ Extrais toutes les informations et retourne UNIQUEMENT un JSON valide avec cette
     "organizer": {
         "name": "Nom ou null"
     },
-    "website": "URL du site web de l'événement ou null",
+    "website": "URL du site web ou null",
     "pricing": {
         "isFree": true/false,
         "priceRange": "10€ - 25€ ou null",
-        "currency": "EUR ou null"
+        "currency": "EUR"
     },
-    "description": "Résumé court (max 3 phrases) ou null",
+    "description": "Résumé court (max 2 phrases) ou null",
     "tags": ["tag1", "tag2"]
 }
 
-Réponds UNIQUEMENT avec le JSON, sans markdown ni explications."""
+JSON uniquement, sans markdown ni explications."""
 
         # Essayer plusieurs modèles
         last_error = None
@@ -2149,8 +2191,12 @@ Réponds UNIQUEMENT avec le JSON, sans markdown ni explications."""
                         
                         import json
                         event_data = json.loads(json_text)
+
+                        # Post-processing: corriger les accents français
+                        event_data = fix_ocr_dict(event_data)
+
                         print(f"✅ Gemini: Analyse réussie avec {model}")
-                        
+
                         return jsonify({
                             "status": "success",
                             "data": event_data,
