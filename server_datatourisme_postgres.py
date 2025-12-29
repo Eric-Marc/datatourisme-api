@@ -303,6 +303,7 @@ def init_user_tables():
                 end_time VARCHAR(10),
                 location_name VARCHAR(500),
                 city VARCHAR(200),
+                country VARCHAR(100),
                 address VARCHAR(500),
                 latitude DOUBLE PRECISION,
                 longitude DOUBLE PRECISION,
@@ -332,6 +333,16 @@ def init_user_tables():
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='scanned_events' AND column_name='image_path') THEN
                     ALTER TABLE scanned_events ADD COLUMN image_path VARCHAR(500);
+                END IF;
+            END $$;
+        """)
+
+        # Ajouter colonne country si elle n'existe pas (migration)
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='scanned_events' AND column_name='country') THEN
+                    ALTER TABLE scanned_events ADD COLUMN country VARCHAR(100);
                 END IF;
             END $$;
         """)
@@ -2133,7 +2144,8 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
     "location": {
         "venueName": "Nom du lieu",
         "address": "Adresse ou null",
-        "city": "Ville"
+        "city": "Ville",
+        "country": "Pays (France par défaut si non précisé)"
     },
     "organizer": {
         "name": "Nom ou null"
@@ -3064,11 +3076,11 @@ def add_scanned_event():
         cur.execute("""
             INSERT INTO scanned_events (
                 user_id, uid, title, category, begin_date, end_date,
-                start_time, end_time, location_name, city, address,
+                start_time, end_time, location_name, city, country, address,
                 latitude, longitude, description, organizer, pricing,
                 website, tags, is_private, image_path
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING id, uid, created_at
         """, (
             user_id,
@@ -3081,6 +3093,7 @@ def add_scanned_event():
             data.get('endTime'),
             data.get('locationName'),
             data.get('city'),
+            data.get('country'),
             data.get('address'),
             data.get('latitude'),
             data.get('longitude'),
