@@ -2121,9 +2121,10 @@
                     var event = firstEvent;
                     popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
 
-                    // Badge privé/public
+                    // Badge privé/public + numéro de scan
                     var badge = event.is_private ? '🔒 PRIVÉ' : '📷 SCANNÉ';
-                    popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + '</span>';
+                    var scanId = event.id ? ' #' + String(event.id).padStart(3, '0') : '';
+                    popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + scanId + '</span>';
                     popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;padding-right:25px;">' + (event.title || 'Événement scanné') + '</h3>';
                     popupHtml += '</div>';
 
@@ -2152,7 +2153,7 @@
                     var scanInfo = '📷 Scanné';
                     if (event.created_at) {
                         var scanDate = new Date(event.created_at);
-                        var scanDateStr = scanDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        var scanDateStr = scanDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
                         scanInfo += ' le ' + scanDateStr;
                     }
                     if (event.user_pseudo && event.user_id) {
@@ -2545,9 +2546,10 @@
                 var popupHtml = '<div class="scanned-popup" style="max-width:260px;">';
                 popupHtml += '<div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:10px;margin:-15px -15px 10px -15px;border-radius:4px 4px 0 0;">';
                 
-                // Badge privé/public
+                // Badge privé/public + numéro de scan
                 var badge = event.is_private ? '🔒 PRIVÉ' : '📷 SCANNÉ';
-                popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + '</span>';
+                var scanId = event.id ? ' #' + String(event.id).padStart(3, '0') : '';
+                popupHtml += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:4px;font-size:10px;">' + badge + scanId + '</span>';
                 popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;padding-right:25px;">' + (event.title || 'Événement scanné') + '</h3>';
                 popupHtml += '</div>';
                 
@@ -2576,7 +2578,7 @@
                 var scanInfo = '📷 Scanné';
                 if (event.created_at) {
                     var scanDate = new Date(event.created_at);
-                    var scanDateStr = scanDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    var scanDateStr = scanDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
                     scanInfo += ' le ' + scanDateStr;
                 }
                 if (event.user_pseudo && event.user_id) {
@@ -2588,7 +2590,7 @@
                     scanInfo += ' par <strong>' + userLabel + scanCount + '</strong>';
                 }
                 popupHtml += '<div style="font-size:11px;color:#999;margin-bottom:8px;font-style:italic;">' + scanInfo + '</div>';
-                
+
                 // Bouton supprimer seulement si owner
                 if (isOwner && event.id) {
                     popupHtml += '<div style="margin-top:10px;">';
