@@ -2002,12 +2002,23 @@
         function formatDate(isoString) {
             if (!isoString) return 'Date non précisée';
             try {
-                return new Date(isoString).toLocaleDateString('fr-FR', { 
+                return new Date(isoString).toLocaleDateString('fr-FR', {
                     day: '2-digit', month: '2-digit', year: 'numeric',
                     hour: '2-digit', minute: '2-digit'
                 });
             } catch (e) {
                 return 'Date non précisée';
+            }
+        }
+
+        function formatDateOnly(isoString) {
+            if (!isoString) return '';
+            try {
+                return new Date(isoString).toLocaleDateString('fr-FR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric'
+                });
+            } catch (e) {
+                return isoString;
             }
         }
 
@@ -2128,7 +2139,7 @@
                     popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;padding-right:25px;">' + (event.title || 'Événement scanné') + '</h3>';
                     popupHtml += '</div>';
 
-                    if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
+                    if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + formatDateOnly(event.begin) + (event.end && event.end !== event.begin ? ' - ' + formatDateOnly(event.end) : '') + '</div>';
 
                     // Location display - always show city
                     var locationLine = '';
@@ -2553,7 +2564,7 @@
                 popupHtml += '<h3 style="color:white;margin:8px 0 0 0;font-size:16px;padding-right:25px;">' + (event.title || 'Événement scanné') + '</h3>';
                 popupHtml += '</div>';
                 
-                if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + event.begin + (event.end && event.end !== event.begin ? ' - ' + event.end : '') + '</div>';
+                if (event.begin) popupHtml += '<div style="margin-bottom:8px;"><strong>📅</strong> ' + formatDateOnly(event.begin) + (event.end && event.end !== event.begin ? ' - ' + formatDateOnly(event.end) : '') + '</div>';
 
                 // Location display - always show city
                 var locLine = '';
