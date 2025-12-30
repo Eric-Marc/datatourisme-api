@@ -2168,77 +2168,64 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Étape 1: Demander à Gemini de localiser le QR code
+        # 📱 Décoder le QR code avec Claude API (Anthropic)
         qr_content = None
-        try:
-            from PIL import Image
-            import io
-            import base64 as b64
-            import numpy as np
-            import json as json_module
+        ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 
-            print(f"📱 Recherche QR code avec Gemini...")
+        if ANTHROPIC_API_KEY:
+            try:
+                print(f"📱 Recherche QR code avec Claude...")
 
-            qr_prompt = """Si un QR code est visible sur cette image, retourne ses coordonnées en JSON:
-{"found": true, "x": X, "y": Y, "width": W, "height": H}
+                claude_url = "https://api.anthropic.com/v1/messages"
+                claude_headers = {
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json"
+                }
 
-Où X,Y sont les coordonnées du coin supérieur gauche en pixels, et W,H sont la largeur et hauteur.
-Si aucun QR code n'est visible, retourne: {"found": false}
+                # Déterminer le media type pour Claude
+                claude_media_type = mime_type if mime_type in ["image/jpeg", "image/png", "image/gif", "image/webp"] else "image/jpeg"
 
-JSON uniquement, sans markdown."""
+                claude_request = {
+                    "model": "claude-sonnet-4-20250514",
+                    "max_tokens": 500,
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": claude_media_type,
+                                    "data": base64_image
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": "Si un QR code est visible sur cette image, décode-le et retourne UNIQUEMENT l'URL qu'il contient, sans aucun texte supplémentaire. Si aucun QR code n'est visible ou si tu ne peux pas le décoder, retourne uniquement: NULL"
+                            }
+                        ]
+                    }]
+                }
 
-            # Appel Gemini pour localiser le QR
-            qr_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-            qr_request = {
-                "contents": [{
-                    "parts": [
-                        {"inlineData": {"mimeType": mime_type, "data": base64_image}},
-                        {"text": qr_prompt}
-                    ]
-                }],
-                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}
-            }
+                claude_response = requests.post(claude_url, headers=claude_headers, json=claude_request, timeout=30)
 
-            qr_response = requests.post(qr_url, json=qr_request, timeout=30)
-            if qr_response.status_code == 200:
-                qr_result = qr_response.json()
-                qr_text = qr_result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
-                qr_text = qr_text.strip().replace('```json', '').replace('```', '').strip()
-                qr_data = json_module.loads(qr_text)
+                if claude_response.status_code == 200:
+                    claude_result = claude_response.json()
+                    qr_text = claude_result.get('content', [{}])[0].get('text', '').strip()
 
-                if qr_data.get('found'):
-                    print(f"📱 QR code localisé: x={qr_data['x']}, y={qr_data['y']}, w={qr_data['width']}, h={qr_data['height']}")
-
-                    # Décoder l'image et cropper le QR
-                    image_bytes = b64.b64decode(base64_image)
-                    img = Image.open(io.BytesIO(image_bytes))
-
-                    # Ajouter une marge de 10% autour du QR
-                    margin = int(max(qr_data['width'], qr_data['height']) * 0.1)
-                    x1 = max(0, qr_data['x'] - margin)
-                    y1 = max(0, qr_data['y'] - margin)
-                    x2 = min(img.width, qr_data['x'] + qr_data['width'] + margin)
-                    y2 = min(img.height, qr_data['y'] + qr_data['height'] + margin)
-
-                    qr_crop = img.crop((x1, y1, x2, y2))
-
-                    # Convertir en array pour qreader
-                    qr_array = np.array(qr_crop.convert('RGB'))
-
-                    # Décoder avec qreader (deep learning)
-                    from qreader import QReader
-                    qr_reader = QReader()
-                    decoded_data = qr_reader.detect_and_decode(image=qr_array)
-
-                    if decoded_data and len(decoded_data) > 0 and decoded_data[0]:
-                        qr_content = decoded_data[0]
-                        print(f"📱 QR Code décodé: {qr_content[:100]}...")
+                    if qr_text and qr_text.upper() != 'NULL' and qr_text.startswith('http'):
+                        qr_content = qr_text
+                        print(f"📱 QR Code décodé par Claude: {qr_content}")
                     else:
-                        print(f"📱 QR code localisé mais non décodable par qreader")
+                        print(f"📱 Aucun QR code détecté par Claude")
                 else:
-                    print(f"📱 Aucun QR code détecté par Gemini")
-        except Exception as e:
-            print(f"⚠️ Erreur recherche QR: {e}")
+                    print(f"⚠️ Claude API erreur: {claude_response.status_code} - {claude_response.text[:200]}")
+
+            except Exception as e:
+                print(f"⚠️ Erreur recherche QR avec Claude: {e}")
+        else:
+            print(f"⚠️ ANTHROPIC_API_KEY non configurée, QR code ignoré")
 
         # Construire le prompt avec les infos QR si disponibles
         qr_info = ""
