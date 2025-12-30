@@ -2184,7 +2184,7 @@ def analyze_poster():
                 }
 
                 openai_request = {
-                    "model": "gpt-4o-mini",
+                    "model": "gpt-4o",
                     "messages": [{
                         "role": "user",
                         "content": [
