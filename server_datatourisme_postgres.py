@@ -3620,41 +3620,35 @@ def check_disk_files():
         return jsonify({"error": str(e)}), 500
 
 # ============================================================================
-# MAIN
+# INITIALISATION AU DÉMARRAGE (fonctionne avec Gunicorn)
+# ============================================================================
+
+print("=" * 70)
+print("🚀 GEDEON API - VERSION AVEC SCANNER")
+print("=" * 70)
+
+# Initialiser les tables users et scanned_events (migrations incluses)
+init_user_tables()
+
+# Charger les caches au démarrage
+load_cinema_coords_cache()
+
+# Charger la base CNC des cinémas français
+load_cinemas_cnc()
+
+# Charger le mapping Allociné dynamiquement
+if ALLOCINE_AVAILABLE:
+    load_allocine_departments()
+
+print("✅ Initialisation terminée")
+print("=" * 70)
+
+# ============================================================================
+# MAIN (uniquement pour développement local)
 # ============================================================================
 
 if __name__ == '__main__':
     import sys
     port = int(os.environ.get("PORT", 5000))
-
-    print("=" * 70)
-    print("🚀 GEDEON API - VERSION AVEC SCANNER")
-    print("=" * 70)
-    print(f"Port: {port}")
-    print("📁 Scan images route: /api/get-scan?file=<path>")
-    print("🧪 Test route registered: /api/test-route")
-    sys.stdout.flush()
-    print(f"Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
-    
-    # Initialiser les tables users et scanned_events
-    init_user_tables()
-    
-    # Charger les caches au démarrage
-    load_cinema_coords_cache()
-    
-    # Charger la base CNC des cinémas français
-    load_cinemas_cnc()
-    
-    # Charger le mapping Allociné dynamiquement
-    if ALLOCINE_AVAILABLE:
-        load_allocine_departments()
-    
-    print("Optimisations:")
-    print("  ✅ BASE CNC: 2053 cinémas français avec GPS")
-    print("  ✅ MAPPING DYNAMIQUE Allociné (vrais IDs)")
-    print("  ✅ Cache persistant des cinémas")
-    print("  ✅ Parallélisation DATAtourisme + OpenAgenda")
-    print("  ✅ Scanner avec gestion utilisateurs")
-    print("=" * 70)
-    
+    print(f"🔧 Mode développement sur port {port}")
     app.run(host='0.0.0.0', port=port, debug=True)
