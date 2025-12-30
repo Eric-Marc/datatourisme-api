@@ -2189,17 +2189,18 @@ def analyze_poster():
                         "role": "user",
                         "content": [
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{base64_image}"
-                                }
+                                "type": "text",
+                                "text": "Lis uniquement le contenu du QR code présent dans cette image. Donne juste l'URL ou la chaîne encodée, sans commentaire."
                             },
                             {
-                                "type": "text",
-                                "text": "Si un QR code est visible sur cette image, décode-le et retourne UNIQUEMENT l'URL qu'il contient, sans aucun texte supplémentaire. Si aucun QR code n'est visible ou illisible, retourne uniquement: NULL"
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
                             }
                         ]
                     }],
+                    "temperature": 0,
                     "max_tokens": 500
                 }
 
