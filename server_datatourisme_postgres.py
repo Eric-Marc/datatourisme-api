@@ -2168,45 +2168,7 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder les QR codes présents dans l'image (qreader - deep learning)
-        qr_content = None
-        try:
-            from qreader import QReader
-            from PIL import Image
-            import numpy as np
-            import io
-            import base64 as b64
-
-            print(f"📱 Recherche QR code avec qreader...")
-            image_bytes = b64.b64decode(base64_image)
-            img = Image.open(io.BytesIO(image_bytes))
-
-            # Convertir en numpy array pour qreader
-            img_array = np.array(img)
-
-            # QReader utilise du deep learning pour détecter les QR codes
-            qr_reader = QReader()
-            decoded_data = qr_reader.detect_and_decode(image=img_array)
-
-            if decoded_data and len(decoded_data) > 0 and decoded_data[0]:
-                qr_content = decoded_data[0]  # Premier QR code trouvé
-                print(f"📱 QR Code trouvé: {qr_content[:100]}...")
-            else:
-                print(f"📱 Aucun QR code détecté")
-        except Exception as e:
-            print(f"⚠️ Erreur décodage QR: {e}")
-
-        # Construire le prompt avec les infos QR si disponibles
-        qr_info = ""
-        if qr_content:
-            qr_info = f"""INFORMATION IMPORTANTE - QR Code détecté sur l'affiche:
-{qr_content}
-
-Utilise cette URL/information du QR code pour enrichir les données (notamment le site web).
-
-"""
-
-        prompt = qr_info + """Analyse cette affiche d'événement en français.
+        prompt = """Analyse cette affiche d'événement en français.
 
 RÈGLES IMPORTANTES:
 - Extrais UNIQUEMENT le texte visible sur l'affiche
@@ -2214,6 +2176,7 @@ RÈGLES IMPORTANTES:
 - Ne devine pas, n'invente pas de texte
 - Ignore les logos et éléments décoratifs
 - Si un texte est illisible, utilise null
+- Si un QR code est présent sur l'affiche, scanne-le et extrais l'URL qu'il contient
 
 Retourne UNIQUEMENT un JSON valide avec cette structure:
 {
@@ -2233,6 +2196,7 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
         "name": "Nom ou null"
     },
     "website": "URL du site web ou null",
+    "qr_code_url": "URL extraite du QR code si présent, sinon null",
     "pricing": {
         "isFree": true/false,
         "priceRange": "10€ - 25€ ou null",
@@ -2305,6 +2269,14 @@ JSON uniquement, sans markdown ni explications."""
 
                         # Post-processing: corriger les accents français
                         event_data = fix_ocr_dict(event_data)
+
+                        # Utiliser qr_code_url comme website si website est vide
+                        qr_url = event_data.get('qr_code_url')
+                        if qr_url and not event_data.get('website'):
+                            event_data['website'] = qr_url
+                            print(f"📱 QR Code URL utilisée comme website: {qr_url}")
+                        elif qr_url:
+                            print(f"📱 QR Code URL détectée: {qr_url}")
 
                         print(f"✅ Gemini: Analyse réussie avec {model}")
 
