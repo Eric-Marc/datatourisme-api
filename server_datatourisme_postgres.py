@@ -2176,7 +2176,7 @@ RÈGLES IMPORTANTES:
 - Ne devine pas, n'invente pas de texte
 - Ignore les logos et éléments décoratifs
 - Si un texte est illisible, utilise null
-- Si un QR code est présent sur l'affiche, scanne-le et extrais l'URL qu'il contient
+- Si un QR code est présent, DÉCODE-LE vraiment et extrais l'URL exacte encodée dedans. NE DEVINE PAS l'URL, retourne null si tu ne peux pas décoder le QR code
 
 Retourne UNIQUEMENT un JSON valide avec cette structure:
 {
@@ -2196,7 +2196,7 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
         "name": "Nom ou null"
     },
     "website": "URL du site web ou null",
-    "qr_code_url": "URL extraite du QR code si présent, sinon null",
+    "qr_code_url": "URL EXACTE décodée du QR code (ne pas deviner, null si impossible à décoder)",
     "pricing": {
         "isFree": true/false,
         "priceRange": "10€ - 25€ ou null",
