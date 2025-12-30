@@ -2168,7 +2168,89 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        prompt = """Analyse cette affiche d'événement en français.
+        # 📱 Étape 1: Demander à Gemini de localiser le QR code
+        qr_content = None
+        try:
+            from PIL import Image
+            import io
+            import base64 as b64
+            import cv2
+            import numpy as np
+
+            print(f"📱 Recherche QR code avec Gemini...")
+
+            qr_prompt = """Si un QR code est visible sur cette image, retourne ses coordonnées en JSON:
+{"found": true, "x": X, "y": Y, "width": W, "height": H}
+
+Où X,Y sont les coordonnées du coin supérieur gauche en pixels, et W,H sont la largeur et hauteur.
+Si aucun QR code n'est visible, retourne: {"found": false}
+
+JSON uniquement, sans markdown."""
+
+            # Appel Gemini pour localiser le QR
+            qr_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+            qr_request = {
+                "contents": [{
+                    "parts": [
+                        {"inlineData": {"mimeType": mime_type, "data": base64_image}},
+                        {"text": qr_prompt}
+                    ]
+                }],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}
+            }
+
+            qr_response = requests.post(qr_url, json=qr_request, timeout=30)
+            if qr_response.status_code == 200:
+                qr_result = qr_response.json()
+                qr_text = qr_result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                qr_text = qr_text.strip().replace('```json', '').replace('```', '').strip()
+                qr_data = json.loads(qr_text)
+
+                if qr_data.get('found'):
+                    print(f"📱 QR code localisé: x={qr_data['x']}, y={qr_data['y']}, w={qr_data['width']}, h={qr_data['height']}")
+
+                    # Décoder l'image et cropper le QR
+                    image_bytes = b64.b64decode(base64_image)
+                    img = Image.open(io.BytesIO(image_bytes))
+
+                    # Ajouter une marge de 10% autour du QR
+                    margin = int(max(qr_data['width'], qr_data['height']) * 0.1)
+                    x1 = max(0, qr_data['x'] - margin)
+                    y1 = max(0, qr_data['y'] - margin)
+                    x2 = min(img.width, qr_data['x'] + qr_data['width'] + margin)
+                    y2 = min(img.height, qr_data['y'] + qr_data['height'] + margin)
+
+                    qr_crop = img.crop((x1, y1, x2, y2))
+
+                    # Convertir en array pour OpenCV
+                    qr_array = np.array(qr_crop.convert('RGB'))
+                    qr_gray = cv2.cvtColor(qr_array, cv2.COLOR_RGB2GRAY)
+
+                    # Décoder avec OpenCV QRCodeDetector
+                    detector = cv2.QRCodeDetector()
+                    data, _, _ = detector.detectAndDecode(qr_gray)
+
+                    if data:
+                        qr_content = data
+                        print(f"📱 QR Code décodé: {qr_content[:100]}...")
+                    else:
+                        print(f"📱 QR code localisé mais non décodable par OpenCV")
+                else:
+                    print(f"📱 Aucun QR code détecté par Gemini")
+        except Exception as e:
+            print(f"⚠️ Erreur recherche QR: {e}")
+
+        # Construire le prompt avec les infos QR si disponibles
+        qr_info = ""
+        if qr_content:
+            qr_info = f"""INFORMATION IMPORTANTE - URL du QR Code détecté sur l'affiche:
+{qr_content}
+
+Utilise cette URL pour le champ website si aucun autre site n'est mentionné.
+
+"""
+
+        prompt = qr_info + """Analyse cette affiche d'événement en français.
 
 RÈGLES IMPORTANTES:
 - Extrais UNIQUEMENT le texte visible sur l'affiche
@@ -2176,7 +2258,6 @@ RÈGLES IMPORTANTES:
 - Ne devine pas, n'invente pas de texte
 - Ignore les logos et éléments décoratifs
 - Si un texte est illisible, utilise null
-- Si un QR code est présent, DÉCODE-LE vraiment et extrais l'URL exacte encodée dedans. NE DEVINE PAS l'URL, retourne null si tu ne peux pas décoder le QR code
 
 Retourne UNIQUEMENT un JSON valide avec cette structure:
 {
@@ -2196,7 +2277,6 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
         "name": "Nom ou null"
     },
     "website": "URL du site web ou null",
-    "qr_code_url": "URL EXACTE décodée du QR code (ne pas deviner, null si impossible à décoder)",
     "pricing": {
         "isFree": true/false,
         "priceRange": "10€ - 25€ ou null",
@@ -2270,13 +2350,10 @@ JSON uniquement, sans markdown ni explications."""
                         # Post-processing: corriger les accents français
                         event_data = fix_ocr_dict(event_data)
 
-                        # Utiliser qr_code_url comme website si website est vide
-                        qr_url = event_data.get('qr_code_url')
-                        if qr_url and not event_data.get('website'):
-                            event_data['website'] = qr_url
-                            print(f"📱 QR Code URL utilisée comme website: {qr_url}")
-                        elif qr_url:
-                            print(f"📱 QR Code URL détectée: {qr_url}")
+                        # Si QR décodé et pas de website, l'utiliser
+                        if qr_content and not event_data.get('website'):
+                            event_data['website'] = qr_content
+                            print(f"📱 Website rempli avec QR code: {qr_content}")
 
                         print(f"✅ Gemini: Analyse réussie avec {model}")
 
