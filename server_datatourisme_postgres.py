@@ -72,16 +72,24 @@ except ImportError:
 # ============================================================================
 
 # Use Render Persistent Disk if available, fallback to relative path
-PERSISTENT_DISK_PATH = os.environ.get('PERSISTENT_DISK_PATH', '/mnt/data')
+PERSISTENT_DISK_PATH = os.environ.get('PERSISTENT_DISK_PATH')
 
 # Determine uploads base directory
-if os.path.exists(PERSISTENT_DISK_PATH):
+if PERSISTENT_DISK_PATH:
+    # Variable d'environnement définie - utiliser le stockage persistant
     UPLOADS_BASE_DIR = PERSISTENT_DISK_PATH
+    # Créer le dossier s'il n'existe pas
+    os.makedirs(UPLOADS_BASE_DIR, exist_ok=True)
+    os.makedirs(os.path.join(UPLOADS_BASE_DIR, 'scans'), exist_ok=True)
     print(f"✅ Using persistent disk: {UPLOADS_BASE_DIR}")
 else:
+    # Pas de variable - fallback vers chemin relatif (NON RECOMMANDÉ)
     UPLOADS_BASE_DIR = os.path.join(os.path.dirname(__file__), 'uploads')
-    print(f"⚠️  Using relative path (ephemeral): {UPLOADS_BASE_DIR}")
-    print(f"   💡 Set PERSISTENT_DISK_PATH env var to use persistent storage")
+    os.makedirs(UPLOADS_BASE_DIR, exist_ok=True)
+    os.makedirs(os.path.join(UPLOADS_BASE_DIR, 'scans'), exist_ok=True)
+    print(f"⚠️  WARNING: PERSISTENT_DISK_PATH not set!")
+    print(f"⚠️  Using relative path (may be ephemeral): {UPLOADS_BASE_DIR}")
+    print(f"   💡 Set PERSISTENT_DISK_PATH env var for persistent storage")
 
 # ============================================================================
 # MAPPING DYNAMIQUE ALLOCINÉ (chargé au démarrage)
