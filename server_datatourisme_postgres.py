@@ -2176,6 +2176,7 @@ def analyze_poster():
             import base64 as b64
             import cv2
             import numpy as np
+            import json as json_module
 
             print(f"📱 Recherche QR code avec Gemini...")
 
@@ -2204,7 +2205,7 @@ JSON uniquement, sans markdown."""
                 qr_result = qr_response.json()
                 qr_text = qr_result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
                 qr_text = qr_text.strip().replace('```json', '').replace('```', '').strip()
-                qr_data = json.loads(qr_text)
+                qr_data = json_module.loads(qr_text)
 
                 if qr_data.get('found'):
                     print(f"📱 QR code localisé: x={qr_data['x']}, y={qr_data['y']}, w={qr_data['width']}, h={qr_data['height']}")
