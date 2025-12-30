@@ -9,3 +9,4 @@ Pillow==10.2.0
 pillow-avif-plugin==1.4.3
 numpy>=1.24.0,<2.0.0
 opencv-python-headless==4.9.0.80
+qreader==3.14

@@ -2168,45 +2168,31 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder les QR codes présents dans l'image (OpenCV amélioré)
+        # 📱 Décoder les QR codes présents dans l'image (qreader - deep learning)
         qr_content = None
         try:
-            import cv2
+            from qreader import QReader
+            from PIL import Image
             import numpy as np
+            import io
             import base64 as b64
 
+            print(f"📱 Recherche QR code avec qreader...")
             image_bytes = b64.b64decode(base64_image)
-            nparr = np.frombuffer(image_bytes, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            img = Image.open(io.BytesIO(image_bytes))
 
-            if img is not None:
-                print(f"📱 Recherche QR code dans image {img.shape}...")
-                qr_detector = cv2.QRCodeDetector()
+            # Convertir en numpy array pour qreader
+            img_array = np.array(img)
 
-                # Essai 1: Image originale
-                decoded_data, points, _ = qr_detector.detectAndDecode(img)
+            # QReader utilise du deep learning pour détecter les QR codes
+            qr_reader = QReader()
+            decoded_data = qr_reader.detect_and_decode(image=img_array)
 
-                # Essai 2: Niveaux de gris si échec
-                if not decoded_data:
-                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    decoded_data, points, _ = qr_detector.detectAndDecode(gray)
-
-                # Essai 3: Amélioration contraste si échec
-                if not decoded_data:
-                    enhanced = cv2.convertScaleAbs(gray, alpha=1.5, beta=30)
-                    decoded_data, points, _ = qr_detector.detectAndDecode(enhanced)
-
-                # Essai 4: Redimensionner si image trop grande
-                if not decoded_data and img.shape[0] > 1500:
-                    scale = 1000 / img.shape[0]
-                    resized = cv2.resize(gray, None, fx=scale, fy=scale)
-                    decoded_data, points, _ = qr_detector.detectAndDecode(resized)
-
-                if decoded_data:
-                    qr_content = decoded_data
-                    print(f"📱 QR Code trouvé: {decoded_data[:100]}...")
-                else:
-                    print(f"📱 Aucun QR code détecté")
+            if decoded_data and len(decoded_data) > 0 and decoded_data[0]:
+                qr_content = decoded_data[0]  # Premier QR code trouvé
+                print(f"📱 QR Code trouvé: {qr_content[:100]}...")
+            else:
+                print(f"📱 Aucun QR code détecté")
         except Exception as e:
             print(f"⚠️ Erreur décodage QR: {e}")
 
