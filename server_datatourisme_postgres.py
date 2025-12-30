@@ -2168,7 +2168,39 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        prompt = """Analyse cette affiche d'événement en français.
+        # 📱 Décoder les QR codes présents dans l'image
+        qr_content = None
+        try:
+            from PIL import Image
+            from pyzbar.pyzbar import decode as decode_qr
+            import io
+            import base64 as b64
+
+            image_bytes = b64.b64decode(base64_image)
+            img = Image.open(io.BytesIO(image_bytes))
+            qr_codes = decode_qr(img)
+
+            if qr_codes:
+                qr_content = []
+                for qr in qr_codes:
+                    decoded_data = qr.data.decode('utf-8')
+                    qr_content.append(decoded_data)
+                    print(f"📱 QR Code trouvé: {decoded_data[:100]}...")
+                qr_content = "\n".join(qr_content)
+        except Exception as e:
+            print(f"⚠️ Erreur décodage QR: {e}")
+
+        # Construire le prompt avec les infos QR si disponibles
+        qr_info = ""
+        if qr_content:
+            qr_info = f"""
+INFORMATION IMPORTANTE - QR Code détecté sur l'affiche:
+{qr_content}
+
+Utilise cette URL/information du QR code pour enrichir les données (notamment le site web).
+"""
+
+        prompt = f"""{qr_info}Analyse cette affiche d'événement en français.
 
 RÈGLES IMPORTANTES:
 - Extrais UNIQUEMENT le texte visible sur l'affiche
