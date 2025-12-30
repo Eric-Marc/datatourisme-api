@@ -3230,6 +3230,21 @@ def test_route():
     """Test route to verify routing works"""
     return jsonify({"status": "ok", "message": "Route works!"})
 
+@app.route('/api/storage-check')
+def storage_check():
+    """Diagnostic: Check storage configuration"""
+    import os
+    scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+    return jsonify({
+        "PERSISTENT_DISK_PATH_env": os.environ.get('PERSISTENT_DISK_PATH', 'NOT SET'),
+        "PERSISTENT_DISK_PATH_var": PERSISTENT_DISK_PATH,
+        "UPLOADS_BASE_DIR": UPLOADS_BASE_DIR,
+        "uploads_dir_exists": os.path.exists(UPLOADS_BASE_DIR),
+        "scans_dir_exists": os.path.exists(scans_dir),
+        "scans_count": len(os.listdir(scans_dir)) if os.path.exists(scans_dir) else 0,
+        "is_persistent": UPLOADS_BASE_DIR == PERSISTENT_DISK_PATH
+    })
+
 @app.route('/media/<path:filepath>')
 def serve_media(filepath):
     """
