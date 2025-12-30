@@ -3240,7 +3240,7 @@ def add_scanned_event():
                     break
 
             if geo_result:
-                print(f"✅ Geocode trouvé: {geo_result.get('city')}, {geo_result.get('country')}")
+                print(f"✅ Geocode trouvé: {geo_result.get('city')}, {geo_result.get('country')} ({geo_result.get('latitude')}, {geo_result.get('longitude')})")
 
                 # Remplir les champs manquants
                 if not city and geo_result.get('city'):
@@ -3252,13 +3252,16 @@ def add_scanned_event():
                     data['country'] = country
 
                 # Aussi mettre à jour lat/lon si manquants
+                print(f"🔍 Avant update: latitude={latitude}, longitude={longitude}")
                 if not latitude and geo_result.get('latitude'):
                     latitude = geo_result['latitude']
                     data['latitude'] = latitude
+                    print(f"📍 Latitude mise à jour: {latitude}")
 
                 if not longitude and geo_result.get('longitude'):
                     longitude = geo_result['longitude']
                     data['longitude'] = longitude
+                    print(f"📍 Longitude mise à jour: {longitude}")
             else:
                 print(f"⚠️ Geocode non trouvé pour aucune requête")
 
@@ -3343,6 +3346,7 @@ def add_scanned_event():
                 # Continue sans l'image si erreur
 
         # Insérer l'événement
+        print(f"🔍 INSERT: city={data.get('city')}, country={data.get('country')}, lat={data.get('latitude')}, lon={data.get('longitude')}")
         cur.execute("""
             INSERT INTO scanned_events (
                 user_id, uid, title, category, begin_date, end_date,
