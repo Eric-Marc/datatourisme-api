@@ -2134,10 +2134,40 @@ def analyze_poster():
         
         base64_image = data.get('image')
         mime_type = data.get('mimeType', 'image/jpeg')
-        
+
         if not base64_image:
             return jsonify({"status": "error", "message": "Image manquante"}), 400
-        
+
+        # Convertir les formats non supportés par Gemini en JPEG
+        supported_formats = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if mime_type not in supported_formats:
+            try:
+                from PIL import Image
+                import pillow_avif  # Support AVIF
+                import io
+                import base64
+
+                print(f"🔄 Conversion {mime_type} -> JPEG...")
+                image_bytes = base64.b64decode(base64_image)
+                img = Image.open(io.BytesIO(image_bytes))
+
+                # Convertir en RGB (nécessaire pour JPEG)
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    img = img.convert('RGB')
+
+                # Sauvegarder en JPEG
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG', quality=90)
+                buffer.seek(0)
+
+                base64_image = base64.b64encode(buffer.read()).decode('utf-8')
+                mime_type = 'image/jpeg'
+                print(f"✅ Image convertie en JPEG")
+
+            except Exception as e:
+                print(f"⚠️ Erreur conversion image: {e}")
+                return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
+
         prompt = """Analyse cette affiche d'événement en français.
 
 RÈGLES IMPORTANTES:
