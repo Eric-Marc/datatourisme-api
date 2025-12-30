@@ -2174,7 +2174,6 @@ def analyze_poster():
             from PIL import Image
             import io
             import base64 as b64
-            import cv2
             import numpy as np
             import json as json_module
 
@@ -2223,19 +2222,19 @@ JSON uniquement, sans markdown."""
 
                     qr_crop = img.crop((x1, y1, x2, y2))
 
-                    # Convertir en array pour OpenCV
+                    # Convertir en array pour qreader
                     qr_array = np.array(qr_crop.convert('RGB'))
-                    qr_gray = cv2.cvtColor(qr_array, cv2.COLOR_RGB2GRAY)
 
-                    # Décoder avec OpenCV QRCodeDetector
-                    detector = cv2.QRCodeDetector()
-                    data, _, _ = detector.detectAndDecode(qr_gray)
+                    # Décoder avec qreader (deep learning)
+                    from qreader import QReader
+                    qr_reader = QReader()
+                    decoded_data = qr_reader.detect_and_decode(image=qr_array)
 
-                    if data:
-                        qr_content = data
+                    if decoded_data and len(decoded_data) > 0 and decoded_data[0]:
+                        qr_content = decoded_data[0]
                         print(f"📱 QR Code décodé: {qr_content[:100]}...")
                     else:
-                        print(f"📱 QR code localisé mais non décodable par OpenCV")
+                        print(f"📱 QR code localisé mais non décodable par qreader")
                 else:
                     print(f"📱 Aucun QR code détecté par Gemini")
         except Exception as e:
