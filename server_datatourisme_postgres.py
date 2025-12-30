@@ -2193,14 +2193,14 @@ def analyze_poster():
         # Construire le prompt avec les infos QR si disponibles
         qr_info = ""
         if qr_content:
-            qr_info = f"""
-INFORMATION IMPORTANTE - QR Code détecté sur l'affiche:
+            qr_info = f"""INFORMATION IMPORTANTE - QR Code détecté sur l'affiche:
 {qr_content}
 
 Utilise cette URL/information du QR code pour enrichir les données (notamment le site web).
+
 """
 
-        prompt = f"""{qr_info}Analyse cette affiche d'événement en français.
+        prompt = qr_info + """Analyse cette affiche d'événement en français.
 
 RÈGLES IMPORTANTES:
 - Extrais UNIQUEMENT le texte visible sur l'affiche
