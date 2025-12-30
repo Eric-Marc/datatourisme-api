@@ -2168,64 +2168,30 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder le QR code avec Claude API (Anthropic)
+        # 📱 Décoder le QR code avec pyzbar
         qr_content = None
-        ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+        try:
+            from pyzbar.pyzbar import decode
+            from PIL import Image
+            import io
+            import base64 as b64
 
-        if ANTHROPIC_API_KEY:
-            try:
-                print(f"📱 Recherche QR code avec Claude...")
+            print(f"📱 Recherche QR code avec pyzbar...")
 
-                claude_url = "https://api.anthropic.com/v1/messages"
-                claude_headers = {
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json"
-                }
+            image_bytes = b64.b64decode(base64_image)
+            img = Image.open(io.BytesIO(image_bytes))
 
-                # Déterminer le media type pour Claude
-                claude_media_type = mime_type if mime_type in ["image/jpeg", "image/png", "image/gif", "image/webp"] else "image/jpeg"
+            # Décoder les QR codes
+            decoded = decode(img)
 
-                claude_request = {
-                    "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 500,
-                    "messages": [{
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": claude_media_type,
-                                    "data": base64_image
-                                }
-                            },
-                            {
-                                "type": "text",
-                                "text": "Si un QR code est visible sur cette image, décode-le et retourne UNIQUEMENT l'URL qu'il contient, sans aucun texte supplémentaire. Si aucun QR code n'est visible ou si tu ne peux pas le décoder, retourne uniquement: NULL"
-                            }
-                        ]
-                    }]
-                }
+            if decoded:
+                qr_content = decoded[0].data.decode('utf-8')
+                print(f"📱 QR Code décodé: {qr_content}")
+            else:
+                print(f"📱 Aucun QR code détecté")
 
-                claude_response = requests.post(claude_url, headers=claude_headers, json=claude_request, timeout=30)
-
-                if claude_response.status_code == 200:
-                    claude_result = claude_response.json()
-                    qr_text = claude_result.get('content', [{}])[0].get('text', '').strip()
-
-                    if qr_text and qr_text.upper() != 'NULL' and qr_text.startswith('http'):
-                        qr_content = qr_text
-                        print(f"📱 QR Code décodé par Claude: {qr_content}")
-                    else:
-                        print(f"📱 Aucun QR code détecté par Claude")
-                else:
-                    print(f"⚠️ Claude API erreur: {claude_response.status_code} - {claude_response.text[:200]}")
-
-            except Exception as e:
-                print(f"⚠️ Erreur recherche QR avec Claude: {e}")
-        else:
-            print(f"⚠️ ANTHROPIC_API_KEY non configurée, QR code ignoré")
+        except Exception as e:
+            print(f"⚠️ Erreur recherche QR: {e}")
 
         # Construire le prompt avec les infos QR si disponibles
         qr_info = ""
