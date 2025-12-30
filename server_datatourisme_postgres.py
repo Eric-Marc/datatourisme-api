@@ -2214,9 +2214,26 @@ JSON uniquement, sans markdown ni explications."""
                         json_text = text.strip()
                         if json_text.startswith('```'):
                             json_text = json_text.replace('```json', '').replace('```', '').strip()
-                        
+
+                        # Extraire seulement le JSON (entre { et })
+                        import re
+                        json_match = re.search(r'\{[\s\S]*\}', json_text)
+                        if json_match:
+                            json_text = json_match.group()
+
+                        # Corriger les problèmes courants de JSON
+                        # 1. Trailing commas avant } ou ]
+                        json_text = re.sub(r',\s*}', '}', json_text)
+                        json_text = re.sub(r',\s*]', ']', json_text)
+
                         import json
-                        event_data = json.loads(json_text)
+                        try:
+                            event_data = json.loads(json_text)
+                        except json.JSONDecodeError as je:
+                            # Debug: afficher le JSON problématique
+                            print(f"⚠️ JSON invalide reçu de {model}:")
+                            print(json_text[:500])
+                            raise je
 
                         # Post-processing: corriger les accents français
                         event_data = fix_ocr_dict(event_data)
