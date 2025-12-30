@@ -3206,50 +3206,61 @@ def add_scanned_event():
         latitude = data.get('latitude')
         longitude = data.get('longitude')
 
-        if not city or not country:
-            # Construire une requête de recherche
-            search_query = None
+        if not city or not country or not latitude or not longitude:
+            # Construire plusieurs requêtes de recherche à essayer
+            search_queries = []
 
-            # Priorité 1: adresse complète
+            # Ajouter le contexte pays (France par défaut)
+            country_context = country or data.get('country') or 'France'
+
+            # Priorité 1: adresse complète + pays
             if data.get('address'):
-                search_query = data['address']
+                search_queries.append(f"{data['address']}, {country_context}")
+                # Aussi essayer avec le nom du lieu
+                if data.get('locationName'):
+                    search_queries.append(f"{data['locationName']}, {data['address']}, {country_context}")
 
-            # Priorité 2: nom du lieu + ville si disponible
-            elif data.get('locationName'):
-                search_query = data['locationName']
+            # Priorité 2: nom du lieu + ville/pays
+            if data.get('locationName'):
                 if city:
-                    search_query += f", {city}"
+                    search_queries.append(f"{data['locationName']}, {city}, {country_context}")
+                else:
+                    search_queries.append(f"{data['locationName']}, {country_context}")
 
-            # Priorité 3: organisateur
-            elif data.get('organizer'):
-                search_query = data['organizer']
+            # Priorité 3: organisateur + pays
+            if data.get('organizer'):
+                search_queries.append(f"{data['organizer']}, {country_context}")
 
-            if search_query:
+            # Essayer chaque requête jusqu'à succès
+            geo_result = None
+            for search_query in search_queries:
                 print(f"🌍 Geocoding: '{search_query}'...")
                 geo_result = geocode_for_city_country(search_query)
-
                 if geo_result:
-                    print(f"✅ Geocode trouvé: {geo_result.get('city')}, {geo_result.get('country')}")
+                    break
 
-                    # Remplir les champs manquants
-                    if not city and geo_result.get('city'):
-                        city = geo_result['city']
-                        data['city'] = city
+            if geo_result:
+                print(f"✅ Geocode trouvé: {geo_result.get('city')}, {geo_result.get('country')}")
 
-                    if not country and geo_result.get('country'):
-                        country = geo_result['country']
-                        data['country'] = country
+                # Remplir les champs manquants
+                if not city and geo_result.get('city'):
+                    city = geo_result['city']
+                    data['city'] = city
 
-                    # Aussi mettre à jour lat/lon si manquants
-                    if not latitude and geo_result.get('latitude'):
-                        latitude = geo_result['latitude']
-                        data['latitude'] = latitude
+                if not country and geo_result.get('country'):
+                    country = geo_result['country']
+                    data['country'] = country
 
-                    if not longitude and geo_result.get('longitude'):
-                        longitude = geo_result['longitude']
-                        data['longitude'] = longitude
-                else:
-                    print(f"⚠️ Geocode non trouvé pour: {search_query}")
+                # Aussi mettre à jour lat/lon si manquants
+                if not latitude and geo_result.get('latitude'):
+                    latitude = geo_result['latitude']
+                    data['latitude'] = latitude
+
+                if not longitude and geo_result.get('longitude'):
+                    longitude = geo_result['longitude']
+                    data['longitude'] = longitude
+            else:
+                print(f"⚠️ Geocode non trouvé pour aucune requête")
 
         # Gérer l'image si fournie
         image_path = None
