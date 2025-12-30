@@ -2903,6 +2903,52 @@ def get_scanned_events():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+def geocode_for_city_country(query):
+    """
+    Geocode une adresse/lieu et retourne city, country, lat, lon.
+    Utilise Nominatim avec addressdetails pour obtenir la ville et le pays.
+    """
+    try:
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "q": query,
+            "format": "json",
+            "limit": 1,
+            "addressdetails": 1  # Important: pour avoir city/country
+        }
+        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
+
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            results = response.json()
+            if results:
+                result = results[0]
+                address = result.get('address', {})
+
+                # Extraire la ville (plusieurs champs possibles)
+                city = (address.get('city') or
+                        address.get('town') or
+                        address.get('village') or
+                        address.get('municipality') or
+                        address.get('county'))
+
+                # Extraire le pays
+                country = address.get('country')
+
+                return {
+                    'city': city,
+                    'country': country,
+                    'latitude': float(result['lat']),
+                    'longitude': float(result['lon']),
+                    'display_name': result.get('display_name', '')
+                }
+    except Exception as e:
+        print(f"⚠️ Erreur geocode: {e}")
+
+    return None
+
+
 @app.route('/api/scanned', methods=['POST'])
 def add_scanned_event():
     """
@@ -3045,6 +3091,57 @@ def add_scanned_event():
                 end_date = datetime.strptime(data['end'][:10], '%Y-%m-%d').date()
             except:
                 pass
+
+        # 🌍 Geocoding automatique si city/country manquants
+        city = data.get('city')
+        country = data.get('country')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+
+        if not city or not country:
+            # Construire une requête de recherche
+            search_query = None
+
+            # Priorité 1: adresse complète
+            if data.get('address'):
+                search_query = data['address']
+
+            # Priorité 2: nom du lieu + ville si disponible
+            elif data.get('locationName'):
+                search_query = data['locationName']
+                if city:
+                    search_query += f", {city}"
+
+            # Priorité 3: organisateur
+            elif data.get('organizer'):
+                search_query = data['organizer']
+
+            if search_query:
+                print(f"🌍 Geocoding: '{search_query}'...")
+                geo_result = geocode_for_city_country(search_query)
+
+                if geo_result:
+                    print(f"✅ Geocode trouvé: {geo_result.get('city')}, {geo_result.get('country')}")
+
+                    # Remplir les champs manquants
+                    if not city and geo_result.get('city'):
+                        city = geo_result['city']
+                        data['city'] = city
+
+                    if not country and geo_result.get('country'):
+                        country = geo_result['country']
+                        data['country'] = country
+
+                    # Aussi mettre à jour lat/lon si manquants
+                    if not latitude and geo_result.get('latitude'):
+                        latitude = geo_result['latitude']
+                        data['latitude'] = latitude
+
+                    if not longitude and geo_result.get('longitude'):
+                        longitude = geo_result['longitude']
+                        data['longitude'] = longitude
+                else:
+                    print(f"⚠️ Geocode non trouvé pour: {search_query}")
 
         # Gérer l'image si fournie
         image_path = None
