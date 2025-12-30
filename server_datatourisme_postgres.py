@@ -2071,7 +2071,13 @@ def health():
 # IMPORTANT: Ne jamais mettre la clé dans le code !
 # Configurer GEMINI_API_KEY dans les variables d'environnement Render
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"]  # Pro en premier pour meilleure précision
+# Modèles Gemini par ordre de préférence (expérimental en premier pour meilleure OCR)
+GEMINI_MODELS = [
+    "gemini-2.5-pro-exp-03-25",  # Expérimental - meilleure OCR
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash"
+]
 
 # Corrections OCR françaises courantes
 OCR_FIXES = {
