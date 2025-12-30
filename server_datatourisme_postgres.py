@@ -3237,8 +3237,10 @@ def add_scanned_event():
                 # Décoder le base64
                 image_bytes = base64.b64decode(image_data)
 
-                # 📍 Extraire GPS des métadonnées EXIF si lat/lon manquants
-                if not latitude or not longitude:
+                # 📍 FALLBACK: Extraire GPS des métadonnées EXIF
+                # Utilisé SEULEMENT si OCR et geocoding n'ont pas trouvé de localisation
+                if (not latitude or not longitude) and (not city or not country):
+                    print(f"📍 FALLBACK: Tentative extraction EXIF GPS...")
                     exif_lat, exif_lon = extract_exif_gps(image_bytes)
                     if exif_lat and exif_lon:
                         latitude = exif_lat
@@ -3247,17 +3249,16 @@ def add_scanned_event():
                         data['longitude'] = longitude
 
                         # Reverse geocode pour obtenir ville/pays
-                        if not city or not country:
-                            print(f"🌍 Reverse geocoding depuis EXIF...")
-                            geo_result = reverse_geocode(exif_lat, exif_lon)
-                            if geo_result:
-                                if not city and geo_result.get('city'):
-                                    city = geo_result['city']
-                                    data['city'] = city
-                                if not country and geo_result.get('country'):
-                                    country = geo_result['country']
-                                    data['country'] = country
-                                print(f"✅ Reverse geocode: {city}, {country}")
+                        print(f"🌍 Reverse geocoding depuis EXIF...")
+                        geo_result = reverse_geocode(exif_lat, exif_lon)
+                        if geo_result:
+                            if not city and geo_result.get('city'):
+                                city = geo_result['city']
+                                data['city'] = city
+                            if not country and geo_result.get('country'):
+                                country = geo_result['country']
+                                data['country'] = country
+                            print(f"✅ EXIF fallback réussi: {city}, {country}")
 
                 # Créer le nom de fichier avec l'uid
                 uploads_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
