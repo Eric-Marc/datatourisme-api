@@ -2903,6 +2903,84 @@ def get_scanned_events():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+def extract_exif_gps(image_bytes):
+    """
+    Extrait les coordonnées GPS des métadonnées EXIF d'une image.
+    Retourne (latitude, longitude) ou (None, None) si non disponible.
+    """
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS, GPSTAGS
+        import io
+
+        img = Image.open(io.BytesIO(image_bytes))
+        exif_data = img._getexif()
+        if not exif_data:
+            return None, None
+
+        # Trouver les données GPS
+        gps_info = {}
+        for tag_id, value in exif_data.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == 'GPSInfo':
+                for gps_tag_id, gps_value in value.items():
+                    gps_tag = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                    gps_info[gps_tag] = gps_value
+
+        if not gps_info:
+            return None, None
+
+        def convert_to_degrees(value):
+            d = float(value[0])
+            m = float(value[1])
+            s = float(value[2])
+            return d + (m / 60.0) + (s / 3600.0)
+
+        if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
+            lat = convert_to_degrees(gps_info['GPSLatitude'])
+            lon = convert_to_degrees(gps_info['GPSLongitude'])
+
+            if gps_info.get('GPSLatitudeRef') == 'S':
+                lat = -lat
+            if gps_info.get('GPSLongitudeRef') == 'W':
+                lon = -lon
+
+            print(f"📍 EXIF GPS trouvé: {lat:.6f}, {lon:.6f}")
+            return lat, lon
+
+    except Exception as e:
+        print(f"⚠️ Erreur extraction EXIF: {e}")
+
+    return None, None
+
+
+def reverse_geocode(lat, lon):
+    """
+    Reverse geocode: coordonnées GPS -> ville, pays.
+    """
+    try:
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {"lat": lat, "lon": lon, "format": "json", "addressdetails": 1}
+        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
+
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            result = response.json()
+            address = result.get('address', {})
+
+            city = (address.get('city') or address.get('town') or
+                    address.get('village') or address.get('municipality') or
+                    address.get('county'))
+
+            return {'city': city, 'country': address.get('country')}
+
+    except Exception as e:
+        print(f"⚠️ Erreur reverse geocode: {e}")
+
+    return None
+
+
 def geocode_for_city_country(query):
     """
     Geocode une adresse/lieu et retourne city, country, lat, lon.
@@ -3158,6 +3236,28 @@ def add_scanned_event():
 
                 # Décoder le base64
                 image_bytes = base64.b64decode(image_data)
+
+                # 📍 Extraire GPS des métadonnées EXIF si lat/lon manquants
+                if not latitude or not longitude:
+                    exif_lat, exif_lon = extract_exif_gps(image_bytes)
+                    if exif_lat and exif_lon:
+                        latitude = exif_lat
+                        longitude = exif_lon
+                        data['latitude'] = latitude
+                        data['longitude'] = longitude
+
+                        # Reverse geocode pour obtenir ville/pays
+                        if not city or not country:
+                            print(f"🌍 Reverse geocoding depuis EXIF...")
+                            geo_result = reverse_geocode(exif_lat, exif_lon)
+                            if geo_result:
+                                if not city and geo_result.get('city'):
+                                    city = geo_result['city']
+                                    data['city'] = city
+                                if not country and geo_result.get('country'):
+                                    country = geo_result['country']
+                                    data['country'] = country
+                                print(f"✅ Reverse geocode: {city}, {country}")
 
                 # Créer le nom de fichier avec l'uid
                 uploads_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
