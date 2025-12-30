@@ -1,2 +1,5 @@
 [phases.setup]
-aptPkgs = ["libzbar0"]
+aptPkgs = ["libzbar0", "libzbar-dev"]
+
+[phases.install]
+cmds = ["pip install pyzbar"]
