@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Carte des Événements - GEDEON</title>
 
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="GEDEON">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="GEDEON">
+    <meta name="description" content="Carte des événements - Découvrez les événements autour de vous">
+
+    <!-- PWA Manifest & Icons -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
 
@@ -2633,6 +2647,17 @@
             document.addEventListener('DOMContentLoaded', init);
         } else {
             init();
+        }
+    </script>
+
+    <!-- Service Worker Registration pour PWA -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('✅ Service Worker enregistré:', reg.scope))
+                    .catch(err => console.log('❌ Service Worker erreur:', err));
+            });
         }
     </script>
 </body>
