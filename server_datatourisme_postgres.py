@@ -2168,25 +2168,25 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder les QR codes présents dans l'image
+        # 📱 Décoder les QR codes présents dans l'image (OpenCV)
         qr_content = None
         try:
-            from PIL import Image
-            from pyzbar.pyzbar import decode as decode_qr
-            import io
+            import cv2
+            import numpy as np
             import base64 as b64
 
             image_bytes = b64.b64decode(base64_image)
-            img = Image.open(io.BytesIO(image_bytes))
-            qr_codes = decode_qr(img)
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-            if qr_codes:
-                qr_content = []
-                for qr in qr_codes:
-                    decoded_data = qr.data.decode('utf-8')
-                    qr_content.append(decoded_data)
+            if img is not None:
+                # Utiliser le détecteur QR intégré d'OpenCV
+                qr_detector = cv2.QRCodeDetector()
+                decoded_data, points, _ = qr_detector.detectAndDecode(img)
+
+                if decoded_data:
+                    qr_content = decoded_data
                     print(f"📱 QR Code trouvé: {decoded_data[:100]}...")
-                qr_content = "\n".join(qr_content)
         except Exception as e:
             print(f"⚠️ Erreur décodage QR: {e}")
 
