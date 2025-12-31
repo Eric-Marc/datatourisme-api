@@ -2168,75 +2168,7 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder le QR code avec OpenAI API (GPT-4 Vision)
-        qr_content = None
-        OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-
-        if OPENAI_API_KEY:
-            try:
-                import re
-                print(f"📱 Recherche QR code avec OpenAI...")
-
-                openai_url = "https://api.openai.com/v1/chat/completions"
-                openai_headers = {
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
-                    "Content-Type": "application/json"
-                }
-
-                openai_request = {
-                    "model": "gpt-4o",
-                    "messages": [{
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "Lis uniquement le contenu du QR code présent dans cette image. Donne juste l'URL ou la chaîne encodée, sans commentaire."
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }],
-                    "temperature": 0,
-                    "max_tokens": 500
-                }
-
-                openai_response = requests.post(openai_url, headers=openai_headers, json=openai_request, timeout=30)
-
-                if openai_response.status_code == 200:
-                    openai_result = openai_response.json()
-                    qr_text = openai_result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-                    print(f"📱 Réponse OpenAI QR: {qr_text[:200]}")
-
-                    # Extraire l'URL si présente
-                    url_match = re.search(r'https?://[^\s<>"{}|\\^`\[\]]+', qr_text)
-                    if url_match:
-                        qr_content = url_match.group(0).rstrip('.,;:)')
-                        print(f"📱 QR Code décodé: {qr_content}")
-                    else:
-                        print(f"📱 Aucun QR code détecté par OpenAI")
-                else:
-                    print(f"⚠️ OpenAI API erreur: {openai_response.status_code}")
-
-            except Exception as e:
-                print(f"⚠️ Erreur recherche QR: {e}")
-        else:
-            print(f"⚠️ OPENAI_API_KEY non configurée, QR code ignoré")
-
-        # Construire le prompt avec les infos QR si disponibles
-        qr_info = ""
-        if qr_content:
-            qr_info = f"""INFORMATION IMPORTANTE - URL du QR Code détecté sur l'affiche:
-{qr_content}
-
-Utilise cette URL pour le champ website si aucun autre site n'est mentionné.
-
-"""
-
-        prompt = qr_info + """Analyse cette affiche d'événement en français.
+        prompt = """Analyse cette affiche d'événement en français.
 
 RÈGLES IMPORTANTES:
 - Extrais UNIQUEMENT le texte visible sur l'affiche
@@ -2335,11 +2267,6 @@ JSON uniquement, sans markdown ni explications."""
 
                         # Post-processing: corriger les accents français
                         event_data = fix_ocr_dict(event_data)
-
-                        # Si QR décodé et pas de website, l'utiliser
-                        if qr_content and not event_data.get('website'):
-                            event_data['website'] = qr_content
-                            print(f"📱 Website rempli avec QR code: {qr_content}")
 
                         print(f"✅ Gemini: Analyse réussie avec {model}")
 
