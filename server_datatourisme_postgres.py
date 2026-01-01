@@ -2226,14 +2226,14 @@ JSON uniquement, sans markdown ni explications."""
                         ]
                     }],
                     "generationConfig": {
-                        "temperature": 0.2,
-                        "maxOutputTokens": 2048
+                        "temperature": 0.1,
+                        "maxOutputTokens": 4096
                     }
                 }
-                
+
                 print(f"🤖 Gemini: Tentative avec {model}...")
-                
-                response = requests.post(url, json=request_body, timeout=60)
+
+                response = requests.post(url, json=request_body, timeout=90)
                 
                 if response.status_code == 200:
                     result = response.json()
