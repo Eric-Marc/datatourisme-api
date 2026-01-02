@@ -1,8 +1,12 @@
 FROM python:3.11-slim
 
-# OpenCV headless n'a pas besoin de libzbar
-# Mais peut avoir besoin de libgl pour certaines ops
-RUN apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+# Libs minimales pour OpenCV headless
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
