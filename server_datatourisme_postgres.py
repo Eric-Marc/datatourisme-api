@@ -737,31 +737,36 @@ def reverse_geocode_nominatim(lat, lon):
 
 
 def geocode_address_nominatim(address_str):
-    """Géocode une adresse texte avec respect du rate limit Nominatim."""
+    """Géocode une adresse texte avec respect du rate limit Nominatim (1 req/sec + retry)."""
     if not address_str:
         return None, None
-    
+
     if address_str in GEOCODE_CACHE:
         cached = GEOCODE_CACHE[address_str]
         if isinstance(cached, tuple) and len(cached) == 2:
             return cached
-    
+
     url = "https://nominatim.openstreetmap.org/search"
     params = {"q": address_str, "format": "json", "limit": 1}
-    headers = {"User-Agent": "gedeon-events-api/1.0"}
-    
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data:
-            lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
-            GEOCODE_CACHE[address_str] = (lat, lon)
-            time.sleep(0.05)  # 50ms entre requêtes (respect rate limit Nominatim)
-            return lat, lon
-    except Exception:
-        pass
-    
+    headers = {"User-Agent": "GEDEON-Events/1.0 (contact@gedeon.app)"}
+
+    # Retry avec backoff exponentiel
+    for attempt in range(3):
+        try:
+            time.sleep(1.0 + attempt * 2)  # 1s, 3s, 5s entre tentatives
+            r = requests.get(url, params=params, headers=headers, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            if data:
+                lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
+                GEOCODE_CACHE[address_str] = (lat, lon)
+                return lat, lon
+            break  # Pas de données mais pas d'erreur
+        except Exception as e:
+            print(f"   ⚠️ Nominatim tentative {attempt+1}/3: {e}", flush=True)
+            if attempt == 2:
+                break
+
     GEOCODE_CACHE[address_str] = (None, None)
     return None, None
 
@@ -2387,35 +2392,42 @@ JSON uniquement, sans markdown ni explications."""
 @app.route('/api/scanner/geocode', methods=['POST'])
 def geocode_address():
     """
-    Géocode une adresse via Nominatim
+    Géocode une adresse via Nominatim (avec retry)
     """
     try:
         data = request.get_json()
         address = data.get('address', '')
-        
+
         if not address:
             return jsonify({"status": "error", "message": "Adresse manquante"}), 400
-        
+
         url = "https://nominatim.openstreetmap.org/search"
         params = {"q": address, "format": "json", "limit": 1}
-        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
-        
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            results = response.json()
-            if results:
-                return jsonify({
-                    "status": "success",
-                    "latitude": float(results[0]['lat']),
-                    "longitude": float(results[0]['lon']),
-                    "displayName": results[0].get('display_name', '')
-                }), 200
-            else:
-                return jsonify({"status": "error", "message": "Adresse non trouvée"}), 404
-        else:
-            return jsonify({"status": "error", "message": f"Erreur Nominatim: {response.status_code}"}), 500
-            
+        headers = {"User-Agent": "GEDEON-Events/1.0 (contact@gedeon.app)"}
+
+        for attempt in range(3):
+            try:
+                time.sleep(1.0 + attempt * 2)
+                response = requests.get(url, params=params, headers=headers, timeout=15)
+
+                if response.status_code == 200:
+                    results = response.json()
+                    if results:
+                        return jsonify({
+                            "status": "success",
+                            "latitude": float(results[0]['lat']),
+                            "longitude": float(results[0]['lon']),
+                            "displayName": results[0].get('display_name', '')
+                        }), 200
+                    else:
+                        return jsonify({"status": "error", "message": "Adresse non trouvée"}), 404
+            except Exception as e:
+                print(f"⚠️ Geocode API tentative {attempt+1}/3: {e}", flush=True)
+                if attempt == 2:
+                    return jsonify({"status": "error", "message": str(e)}), 500
+
+        return jsonify({"status": "error", "message": "Erreur Nominatim après 3 tentatives"}), 500
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -3074,73 +3086,73 @@ def extract_exif_gps(image_bytes):
 
 def reverse_geocode(lat, lon):
     """
-    Reverse geocode: coordonnées GPS -> ville, pays.
+    Reverse geocode: coordonnées GPS -> ville, pays (avec retry).
     """
-    try:
-        url = "https://nominatim.openstreetmap.org/reverse"
-        params = {"lat": lat, "lon": lon, "format": "json", "addressdetails": 1}
-        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {"lat": lat, "lon": lon, "format": "json", "addressdetails": 1}
+    headers = {"User-Agent": "GEDEON-Events/1.0 (contact@gedeon.app)"}
 
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+    for attempt in range(3):
+        try:
+            time.sleep(1.0 + attempt * 2)
+            response = requests.get(url, params=params, headers=headers, timeout=15)
 
-        if response.status_code == 200:
-            result = response.json()
-            address = result.get('address', {})
+            if response.status_code == 200:
+                result = response.json()
+                address = result.get('address', {})
 
-            city = (address.get('city') or address.get('town') or
-                    address.get('village') or address.get('municipality') or
-                    address.get('county'))
+                city = (address.get('city') or address.get('town') or
+                        address.get('village') or address.get('municipality') or
+                        address.get('county'))
 
-            return {'city': city, 'country': address.get('country')}
-
-    except Exception as e:
-        print(f"⚠️ Erreur reverse geocode: {e}")
+                return {'city': city, 'country': address.get('country')}
+            break
+        except Exception as e:
+            print(f"⚠️ Reverse geocode tentative {attempt+1}/3: {e}", flush=True)
 
     return None
 
 
 def geocode_for_city_country(query):
     """
-    Geocode une adresse/lieu et retourne city, country, lat, lon.
-    Utilise Nominatim avec addressdetails pour obtenir la ville et le pays.
+    Geocode une adresse/lieu et retourne city, country, lat, lon (avec retry).
     """
-    try:
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {
-            "q": query,
-            "format": "json",
-            "limit": 1,
-            "addressdetails": 1  # Important: pour avoir city/country
-        }
-        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": query,
+        "format": "json",
+        "limit": 1,
+        "addressdetails": 1
+    }
+    headers = {"User-Agent": "GEDEON-Events/1.0 (contact@gedeon.app)"}
 
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+    for attempt in range(3):
+        try:
+            time.sleep(1.0 + attempt * 2)
+            response = requests.get(url, params=params, headers=headers, timeout=15)
 
-        if response.status_code == 200:
-            results = response.json()
-            if results:
-                result = results[0]
-                address = result.get('address', {})
+            if response.status_code == 200:
+                results = response.json()
+                if results:
+                    result = results[0]
+                    address = result.get('address', {})
 
-                # Extraire la ville (plusieurs champs possibles)
-                city = (address.get('city') or
-                        address.get('town') or
-                        address.get('village') or
-                        address.get('municipality') or
-                        address.get('county'))
+                    city = (address.get('city') or
+                            address.get('town') or
+                            address.get('village') or
+                            address.get('municipality') or
+                            address.get('county'))
 
-                # Extraire le pays
-                country = address.get('country')
-
-                return {
-                    'city': city,
-                    'country': country,
-                    'latitude': float(result['lat']),
-                    'longitude': float(result['lon']),
-                    'display_name': result.get('display_name', '')
-                }
-    except Exception as e:
-        print(f"⚠️ Erreur geocode: {e}")
+                    return {
+                        'city': city,
+                        'country': address.get('country'),
+                        'latitude': float(result['lat']),
+                        'longitude': float(result['lon']),
+                        'display_name': result.get('display_name', '')
+                    }
+            break
+        except Exception as e:
+            print(f"⚠️ Geocode tentative {attempt+1}/3: {e}", flush=True)
 
     return None
 
