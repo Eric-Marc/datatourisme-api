@@ -2172,7 +2172,7 @@ def analyze_poster():
         qr_content = None
         try:
             from pyzbar.pyzbar import decode
-            from PIL import Image
+            from PIL import Image, ImageEnhance
             import io
             import base64 as b64
 
@@ -2180,15 +2180,29 @@ def analyze_poster():
 
             image_bytes = b64.b64decode(base64_image)
             img = Image.open(io.BytesIO(image_bytes))
+            print(f"📱 Image: {img.size}, mode={img.mode}")
 
-            # Décoder les QR codes
+            # Essai 1: Image originale
             decoded = decode(img)
+
+            # Essai 2: En niveaux de gris
+            if not decoded:
+                print(f"📱 Essai en grayscale...")
+                img_gray = img.convert('L')
+                decoded = decode(img_gray)
+
+            # Essai 3: Avec contraste augmenté
+            if not decoded:
+                print(f"📱 Essai avec contraste...")
+                enhancer = ImageEnhance.Contrast(img_gray)
+                img_contrast = enhancer.enhance(2.0)
+                decoded = decode(img_contrast)
 
             if decoded:
                 qr_content = decoded[0].data.decode('utf-8')
                 print(f"📱 QR Code décodé: {qr_content}")
             else:
-                print(f"📱 Aucun QR code détecté")
+                print(f"📱 Aucun QR code détecté après 3 essais")
 
         except Exception as e:
             print(f"⚠️ Erreur recherche QR: {e}")
