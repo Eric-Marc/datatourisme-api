@@ -2168,7 +2168,95 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        prompt = """Analyse cette affiche d'événement en français.
+        # 📱 Décoder le QR code avec OpenCV (upscaling + ROI scan)
+        qr_content = None
+        try:
+            import cv2
+            import numpy as np
+            import base64 as b64
+
+            print(f"📱 Recherche QR code avec OpenCV...", flush=True)
+
+            # Décoder l'image base64 en array OpenCV
+            image_bytes = b64.b64decode(base64_image)
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            H, W = img.shape[:2]
+            print(f"📱 Image: {W}x{H}", flush=True)
+
+            detector = cv2.QRCodeDetector()
+
+            def try_decode(det, img_bgr):
+                """Essaie de décoder un QR code"""
+                try:
+                    ok, decoded, pts, _ = det.detectAndDecodeMulti(img_bgr)
+                    if ok and decoded:
+                        for s in decoded:
+                            if s:
+                                return s
+                except:
+                    pass
+                s, _, _ = det.detectAndDecode(img_bgr)
+                return s if s else None
+
+            # 1) Essais directs avec différentes échelles
+            for scale in (1, 2, 3, 4):
+                im = img if scale == 1 else cv2.resize(
+                    img, (W * scale, H * scale), interpolation=cv2.INTER_CUBIC
+                )
+                result = try_decode(detector, im)
+                if result:
+                    qr_content = result
+                    print(f"📱 QR trouvé (scale={scale}): {qr_content[:80]}...", flush=True)
+                    break
+
+            # 2) Si pas trouvé, scan par régions (ROI)
+            if not qr_content:
+                print(f"📱 Scan par régions ROI...", flush=True)
+                rois = []
+                # Grille 3x3
+                for gy in range(3):
+                    for gx in range(3):
+                        x0, x1 = int(W * gx / 3), int(W * (gx + 1) / 3)
+                        y0, y1 = int(H * gy / 3), int(H * (gy + 1) / 3)
+                        rois.append((x0, y0, x1, y1))
+                # Zones probables (droite/bas)
+                rois += [
+                    (int(W * 0.60), int(H * 0.35), W, int(H * 0.95)),
+                    (int(W * 0.70), int(H * 0.45), W, int(H * 0.90)),
+                ]
+
+                for (x0, y0, x1, y1) in rois:
+                    roi = img[y0:y1, x0:x1]
+                    if roi.size == 0:
+                        continue
+                    for scale in (2, 3, 4):
+                        big = cv2.resize(roi, (roi.shape[1] * scale, roi.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+                        result = try_decode(detector, big)
+                        if result:
+                            qr_content = result
+                            print(f"📱 QR trouvé (ROI scale={scale}): {qr_content[:80]}...", flush=True)
+                            break
+                    if qr_content:
+                        break
+
+            if not qr_content:
+                print(f"📱 Aucun QR code détecté", flush=True)
+
+        except Exception as e:
+            print(f"⚠️ Erreur recherche QR: {e}", flush=True)
+
+        # Construire le prompt avec les infos QR si disponibles
+        qr_info = ""
+        if qr_content:
+            qr_info = f"""INFORMATION IMPORTANTE - URL du QR Code détecté sur l'affiche:
+{qr_content}
+
+Utilise cette URL pour le champ website si aucun autre site n'est mentionné.
+
+"""
+
+        prompt = qr_info + """Analyse cette affiche d'événement en français.
 
 RÈGLES IMPORTANTES:
 - Extrais UNIQUEMENT le texte visible sur l'affiche
