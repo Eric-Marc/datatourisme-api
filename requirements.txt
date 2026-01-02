@@ -7,4 +7,5 @@ sendgrid==6.11.0
 allocine-seances==0.0.13
 Pillow==10.2.0
 pillow-avif-plugin==1.4.3
-pyzbar==0.1.9
+opencv-python-headless==4.9.0.80
+numpy>=1.24.0,<2.0.0
