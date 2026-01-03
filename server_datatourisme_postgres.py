@@ -2187,7 +2187,17 @@ def analyze_poster():
             nparr = np.frombuffer(image_bytes, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             H, W = img.shape[:2]
-            print(f"📱 Image: {W}x{H}", flush=True)
+            print(f"📱 Image originale: {W}x{H}", flush=True)
+
+            # Réduire l'image pour le QR (max 1280px) - économise la mémoire lors de l'upscaling
+            MAX_QR_SIZE = 1280
+            if max(W, H) > MAX_QR_SIZE:
+                scale_down = MAX_QR_SIZE / max(W, H)
+                new_W, new_H = int(W * scale_down), int(H * scale_down)
+                img = cv2.resize(img, (new_W, new_H), interpolation=cv2.INTER_AREA)
+                H, W = new_H, new_W
+                print(f"📱 Image réduite pour QR: {W}x{H}", flush=True)
+            del image_bytes, nparr  # Libérer immédiatement
 
             detector = cv2.QRCodeDetector()
 
@@ -2249,13 +2259,7 @@ def analyze_poster():
                 print(f"📱 Aucun QR code détecté", flush=True)
 
             # Libérer la mémoire OpenCV
-            del img, nparr, detector
-            if 'im' in dir():
-                del im
-            if 'roi' in dir():
-                del roi
-            if 'big' in dir():
-                del big
+            del img, detector
 
         except Exception as e:
             print(f"⚠️ Erreur recherche QR: {e}", flush=True)
