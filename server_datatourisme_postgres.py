@@ -2248,8 +2248,21 @@ def analyze_poster():
             if not qr_content:
                 print(f"📱 Aucun QR code détecté", flush=True)
 
+            # Libérer la mémoire OpenCV
+            del img, nparr, detector
+            if 'im' in dir():
+                del im
+            if 'roi' in dir():
+                del roi
+            if 'big' in dir():
+                del big
+
         except Exception as e:
             print(f"⚠️ Erreur recherche QR: {e}", flush=True)
+
+        # Forcer le garbage collection pour libérer la mémoire
+        import gc
+        gc.collect()
 
         # Construire le prompt avec les infos QR si disponibles
         qr_info = ""
