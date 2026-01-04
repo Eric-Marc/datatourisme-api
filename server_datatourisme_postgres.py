@@ -2366,14 +2366,33 @@ JSON uniquement, sans markdown ni explications."""
                         json_text = re.sub(r',\s*}', '}', json_text)
                         json_text = re.sub(r',\s*]', ']', json_text)
 
+                        # 2. Réparer JSON tronqué (fermer accolades/crochets manquants)
+                        def repair_truncated_json(s):
+                            """Répare un JSON tronqué en fermant les accolades/crochets."""
+                            # Supprimer contenu incomplet après dernière virgule
+                            s = re.sub(r',\s*"[^"]*$', '', s)
+                            s = re.sub(r',\s*$', '', s)
+                            # Compter les ouvertures/fermetures
+                            opens = s.count('{') - s.count('}')
+                            brackets = s.count('[') - s.count(']')
+                            # Fermer les crochets puis accolades
+                            s += ']' * brackets + '}' * opens
+                            return s
+
                         import json
                         try:
                             event_data = json.loads(json_text)
                         except json.JSONDecodeError as je:
-                            # Debug: afficher le JSON problématique
-                            print(f"⚠️ JSON invalide reçu de {model}:")
-                            print(json_text[:500])
-                            raise je
+                            # Tenter de réparer le JSON tronqué
+                            print(f"⚠️ JSON tronqué de {model}, tentative de réparation...", flush=True)
+                            try:
+                                repaired = repair_truncated_json(json_text)
+                                event_data = json.loads(repaired)
+                                print(f"✅ JSON réparé avec succès", flush=True)
+                            except:
+                                print(f"❌ JSON invalide reçu de {model}:")
+                                print(json_text[:500], flush=True)
+                                raise je
 
                         # Post-processing: corriger les accents français
                         event_data = fix_ocr_dict(event_data)
