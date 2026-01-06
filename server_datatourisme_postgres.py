@@ -2168,7 +2168,7 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder les QR codes avec OpenCV (upscaling + ROI scan)
+        # 📱 Décoder les QR codes avec pyzbar uniquement
         # Support pour plusieurs QR codes dans la même image
         qr_contents = []
         found_contents = set()  # Pour éviter les doublons
@@ -2176,8 +2176,9 @@ def analyze_poster():
             import cv2
             import numpy as np
             import base64 as b64
+            from pyzbar import pyzbar
 
-            print(f"📱 Recherche QR codes avec OpenCV...")
+            print(f"📱 Recherche QR codes avec pyzbar...")
 
             # Décoder l'image base64 en array OpenCV
             image_bytes = b64.b64decode(base64_image)
@@ -2186,65 +2187,95 @@ def analyze_poster():
             H, W = img.shape[:2]
             print(f"📱 Image: {W}x{H}")
 
-            detector = cv2.QRCodeDetector()
-
-            def try_decode_all(det, img_bgr):
-                """Décode tous les QR codes trouvés dans l'image"""
+            def try_decode_pyzbar(img_array):
+                """Décode tous les QR codes avec pyzbar"""
                 results = []
                 try:
-                    ok, decoded, pts, _ = det.detectAndDecodeMulti(img_bgr)
-                    if ok and decoded:
-                        for s in decoded:
-                            if s and s not in results:
-                                results.append(s)
+                    decoded = pyzbar.decode(img_array)
+                    for d in decoded:
+                        content = d.data.decode('utf-8', errors='ignore')
+                        if content and content not in found_contents:
+                            found_contents.add(content)
+                            results.append(content)
                 except:
                     pass
-                # Fallback sur detectAndDecode simple
-                if not results:
-                    s, _, _ = det.detectAndDecode(img_bgr)
-                    if s:
-                        results.append(s)
                 return results
 
-            # 1) Essais directs avec différentes échelles
-            for scale in (1, 2, 3, 4):
-                im = img if scale == 1 else cv2.resize(
-                    img, (W * scale, H * scale), interpolation=cv2.INTER_CUBIC
-                )
-                results = try_decode_all(detector, im)
-                for qr in results:
-                    if qr not in found_contents:
-                        found_contents.add(qr)
+            # 1) Scan direct
+            results = try_decode_pyzbar(img)
+            for qr in results:
+                qr_contents.append(qr)
+                print(f"📱 QR trouvé (direct): {qr[:80]}...")
+
+            # 2) Multi-échelle
+            if not qr_contents:
+                for scale in [2, 3, 4, 0.5]:
+                    new_w, new_h = int(W * scale), int(H * scale)
+                    if new_w < 100 or new_h < 100 or new_w > 8000 or new_h > 8000:
+                        continue
+                    interp = cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA
+                    resized = cv2.resize(img, (new_w, new_h), interpolation=interp)
+                    results = try_decode_pyzbar(resized)
+                    for qr in results:
                         qr_contents.append(qr)
                         print(f"📱 QR trouvé (scale={scale}): {qr[:80]}...")
 
-            # 2) Scan par régions (ROI) pour trouver d'autres QR codes
-            print(f"📱 Scan par régions ROI...")
-            rois = []
-            # Grille 3x3
-            for gy in range(3):
-                for gx in range(3):
-                    x0, x1 = int(W * gx / 3), int(W * (gx + 1) / 3)
-                    y0, y1 = int(H * gy / 3), int(H * (gy + 1) / 3)
-                    rois.append((x0, y0, x1, y1))
-            # Zones probables (droite/bas)
-            rois += [
-                (int(W * 0.60), int(H * 0.35), W, int(H * 0.95)),
-                (int(W * 0.70), int(H * 0.45), W, int(H * 0.90)),
-            ]
+            # 3) Prétraitement niveaux de gris
+            if not qr_contents:
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                preprocessed = [
+                    ('gray', gray),
+                    ('otsu', cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
+                    ('adaptive', cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)),
+                    ('clahe', cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(gray)),
+                ]
+                for name, processed in preprocessed:
+                    for scale in [1, 2, 3]:
+                        if scale > 1:
+                            processed_scaled = cv2.resize(processed, (W * scale, H * scale), interpolation=cv2.INTER_CUBIC)
+                        else:
+                            processed_scaled = processed
+                        results = try_decode_pyzbar(processed_scaled)
+                        for qr in results:
+                            qr_contents.append(qr)
+                            print(f"📱 QR trouvé ({name} scale={scale}): {qr[:80]}...")
 
-            for (x0, y0, x1, y1) in rois:
-                roi = img[y0:y1, x0:x1]
-                if roi.size == 0:
-                    continue
-                for scale in (2, 3, 4):
-                    big = cv2.resize(roi, (roi.shape[1] * scale, roi.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
-                    results = try_decode_all(detector, big)
-                    for qr in results:
-                        if qr not in found_contents:
-                            found_contents.add(qr)
+            # 4) Scan par régions ROI
+            if not qr_contents:
+                rois = [
+                    (0, 0, W//2, H//2),              # Haut-gauche
+                    (W//2, 0, W, H//2),              # Haut-droit
+                    (0, H//2, W//2, H),              # Bas-gauche
+                    (W//2, H//2, W, H),              # Bas-droit
+                    (W//3, H//3, 2*W//3, 2*H//3),   # Centre
+                    (int(W*0.6), int(H*0.6), W, H), # Coin bas-droit
+                    (0, int(H*0.6), int(W*0.4), H), # Coin bas-gauche
+                ]
+                for x0, y0, x1, y1 in rois:
+                    roi = img[y0:y1, x0:x1]
+                    if roi.size == 0:
+                        continue
+                    for scale in [2, 3, 4]:
+                        scaled_roi = cv2.resize(roi, (roi.shape[1] * scale, roi.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+                        results = try_decode_pyzbar(scaled_roi)
+                        for qr in results:
                             qr_contents.append(qr)
                             print(f"📱 QR trouvé (ROI scale={scale}): {qr[:80]}...")
+
+            # 5) ROI + prétraitement adaptatif
+            if not qr_contents:
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                for x0, y0, x1, y1 in rois:
+                    roi_gray = gray[y0:y1, x0:x1]
+                    if roi_gray.size == 0:
+                        continue
+                    adaptive = cv2.adaptiveThreshold(roi_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+                    for scale in [2, 3, 4]:
+                        scaled = cv2.resize(adaptive, (adaptive.shape[1] * scale, adaptive.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+                        results = try_decode_pyzbar(scaled)
+                        for qr in results:
+                            qr_contents.append(qr)
+                            print(f"📱 QR trouvé (ROI+adapt scale={scale}): {qr[:80]}...")
 
             if qr_contents:
                 print(f"📱 Total: {len(qr_contents)} QR code(s) détecté(s)")

@@ -1,11 +1,12 @@
 FROM python:3.11-slim
 
-# Libs minimales pour OpenCV headless
+# Libs minimales pour OpenCV headless + zbar pour pyzbar
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
+    libzbar0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
