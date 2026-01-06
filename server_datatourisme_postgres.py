@@ -2168,14 +2168,16 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder le QR code avec OpenCV (upscaling + ROI scan)
-        qr_content = None
+        # 📱 Décoder les QR codes avec OpenCV (upscaling + ROI scan)
+        # Support pour plusieurs QR codes dans la même image
+        qr_contents = []
+        found_contents = set()  # Pour éviter les doublons
         try:
             import cv2
             import numpy as np
             import base64 as b64
 
-            print(f"📱 Recherche QR code avec OpenCV...")
+            print(f"📱 Recherche QR codes avec OpenCV...")
 
             # Décoder l'image base64 en array OpenCV
             image_bytes = b64.b64decode(base64_image)
@@ -2186,61 +2188,67 @@ def analyze_poster():
 
             detector = cv2.QRCodeDetector()
 
-            def try_decode(det, img_bgr):
-                """Essaie de décoder un QR code"""
+            def try_decode_all(det, img_bgr):
+                """Décode tous les QR codes trouvés dans l'image"""
+                results = []
                 try:
                     ok, decoded, pts, _ = det.detectAndDecodeMulti(img_bgr)
                     if ok and decoded:
                         for s in decoded:
-                            if s:
-                                return s
+                            if s and s not in results:
+                                results.append(s)
                 except:
                     pass
-                s, _, _ = det.detectAndDecode(img_bgr)
-                return s if s else None
+                # Fallback sur detectAndDecode simple
+                if not results:
+                    s, _, _ = det.detectAndDecode(img_bgr)
+                    if s:
+                        results.append(s)
+                return results
 
             # 1) Essais directs avec différentes échelles
             for scale in (1, 2, 3, 4):
                 im = img if scale == 1 else cv2.resize(
                     img, (W * scale, H * scale), interpolation=cv2.INTER_CUBIC
                 )
-                result = try_decode(detector, im)
-                if result:
-                    qr_content = result
-                    print(f"📱 QR trouvé (scale={scale}): {qr_content[:80]}...")
-                    break
+                results = try_decode_all(detector, im)
+                for qr in results:
+                    if qr not in found_contents:
+                        found_contents.add(qr)
+                        qr_contents.append(qr)
+                        print(f"📱 QR trouvé (scale={scale}): {qr[:80]}...")
 
-            # 2) Si pas trouvé, scan par régions (ROI)
-            if not qr_content:
-                print(f"📱 Scan par régions ROI...")
-                rois = []
-                # Grille 3x3
-                for gy in range(3):
-                    for gx in range(3):
-                        x0, x1 = int(W * gx / 3), int(W * (gx + 1) / 3)
-                        y0, y1 = int(H * gy / 3), int(H * (gy + 1) / 3)
-                        rois.append((x0, y0, x1, y1))
-                # Zones probables (droite/bas)
-                rois += [
-                    (int(W * 0.60), int(H * 0.35), W, int(H * 0.95)),
-                    (int(W * 0.70), int(H * 0.45), W, int(H * 0.90)),
-                ]
+            # 2) Scan par régions (ROI) pour trouver d'autres QR codes
+            print(f"📱 Scan par régions ROI...")
+            rois = []
+            # Grille 3x3
+            for gy in range(3):
+                for gx in range(3):
+                    x0, x1 = int(W * gx / 3), int(W * (gx + 1) / 3)
+                    y0, y1 = int(H * gy / 3), int(H * (gy + 1) / 3)
+                    rois.append((x0, y0, x1, y1))
+            # Zones probables (droite/bas)
+            rois += [
+                (int(W * 0.60), int(H * 0.35), W, int(H * 0.95)),
+                (int(W * 0.70), int(H * 0.45), W, int(H * 0.90)),
+            ]
 
-                for (x0, y0, x1, y1) in rois:
-                    roi = img[y0:y1, x0:x1]
-                    if roi.size == 0:
-                        continue
-                    for scale in (2, 3, 4):
-                        big = cv2.resize(roi, (roi.shape[1] * scale, roi.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
-                        result = try_decode(detector, big)
-                        if result:
-                            qr_content = result
-                            print(f"📱 QR trouvé (ROI scale={scale}): {qr_content[:80]}...")
-                            break
-                    if qr_content:
-                        break
+            for (x0, y0, x1, y1) in rois:
+                roi = img[y0:y1, x0:x1]
+                if roi.size == 0:
+                    continue
+                for scale in (2, 3, 4):
+                    big = cv2.resize(roi, (roi.shape[1] * scale, roi.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+                    results = try_decode_all(detector, big)
+                    for qr in results:
+                        if qr not in found_contents:
+                            found_contents.add(qr)
+                            qr_contents.append(qr)
+                            print(f"📱 QR trouvé (ROI scale={scale}): {qr[:80]}...")
 
-            if not qr_content:
+            if qr_contents:
+                print(f"📱 Total: {len(qr_contents)} QR code(s) détecté(s)")
+            else:
                 print(f"📱 Aucun QR code détecté")
 
         except Exception as e:
@@ -2248,11 +2256,21 @@ def analyze_poster():
 
         # Construire le prompt avec les infos QR si disponibles
         qr_info = ""
-        if qr_content:
-            qr_info = f"""INFORMATION IMPORTANTE - URL du QR Code détecté sur l'affiche:
-{qr_content}
+        if qr_contents:
+            if len(qr_contents) == 1:
+                qr_info = f"""INFORMATION IMPORTANTE - URL du QR Code détecté sur l'affiche:
+{qr_contents[0]}
 
 Utilise cette URL pour le champ website si aucun autre site n'est mentionné.
+
+"""
+            else:
+                qr_list = "\n".join([f"  {i+1}. {qr}" for i, qr in enumerate(qr_contents)])
+                qr_info = f"""INFORMATION IMPORTANTE - {len(qr_contents)} QR Codes détectés sur l'affiche:
+{qr_list}
+
+Utilise la première URL pour le champ website si aucun autre site n'est mentionné.
+Les autres URLs peuvent contenir des informations complémentaires (billetterie, réseaux sociaux, etc.).
 
 """
 
