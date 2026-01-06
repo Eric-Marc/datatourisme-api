@@ -691,79 +691,123 @@ def calculate_bounding_box(lat, lng, radius_km):
     }
 
 
-def reverse_geocode_nominatim(lat, lon):
+def reverse_geocode_google(lat, lon):
     """
-    Récupère les infos de localisation via Nominatim.
+    Récupère les infos de localisation via Google Geocoding API.
     Retourne: (dept_name, postcode, city)
     """
-    # Cache avec précision à 3 décimales (~100m) au lieu de 2 (~1km)
+    # Cache avec précision à 3 décimales (~100m)
     cache_key = (round(lat, 3), round(lon, 3))
     if cache_key in GEOCODE_CACHE:
         cached = GEOCODE_CACHE[cache_key]
-        # Vérifier que c'est bien un tuple de 3 éléments (pas un ancien format)
         if isinstance(cached, tuple) and len(cached) == 3:
             return cached
-    
-    url = "https://nominatim.openstreetmap.org/reverse"
-    params = {"lat": lat, "lon": lon, "format": "json", "zoom": 10, "addressdetails": 1}
-    headers = {"User-Agent": "gedeon-events-api/1.0"}
-    
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        address = data.get("address", {})
-        
-        postcode = address.get("postcode", "")
-        city = address.get("city") or address.get("town") or address.get("village") or ""
-        county = address.get("county", "")
-        state = address.get("state", "")
-        
-        if city in ["Paris", "Lyon", "Marseille"]:
-            dept_name = city
-        elif county:
-            dept_name = county
-        else:
-            dept_name = state
-        
-        result = (dept_name, postcode, city)
-        GEOCODE_CACHE[cache_key] = result
-        return result
-        
-    except Exception as e:
-        print(f"   ⚠️ Erreur Nominatim reverse: {e}")
+
+    if not GOOGLE_MAPS_API_KEY:
+        print(f"   ⚠️ GOOGLE_MAPS_API_KEY non configurée")
         GEOCODE_CACHE[cache_key] = (None, None, None)
         return (None, None, None)
 
+    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "latlng": f"{lat},{lon}",
+        "key": GOOGLE_MAPS_API_KEY,
+        "language": "fr"
+    }
 
-def geocode_address_nominatim(address_str):
-    """Géocode une adresse texte avec respect du rate limit Nominatim."""
+    try:
+        response = requests.get(url, params=params, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 'OK' and data.get('results'):
+                result = data['results'][0]
+                components = result.get('address_components', [])
+
+                city = None
+                postcode = None
+                dept_name = None
+                state = None
+
+                for comp in components:
+                    types = comp.get('types', [])
+                    if 'postal_code' in types:
+                        postcode = comp.get('long_name', '')
+                    elif 'locality' in types:
+                        city = comp.get('long_name', '')
+                    elif 'administrative_area_level_2' in types:
+                        dept_name = comp.get('long_name', '')
+                    elif 'administrative_area_level_1' in types:
+                        state = comp.get('long_name', '')
+
+                # Fallback pour Paris/Lyon/Marseille
+                if city in ["Paris", "Lyon", "Marseille"]:
+                    dept_name = city
+                elif not dept_name:
+                    dept_name = state
+
+                result_tuple = (dept_name, postcode, city)
+                GEOCODE_CACHE[cache_key] = result_tuple
+                return result_tuple
+
+            elif data.get('status') == 'REQUEST_DENIED':
+                print(f"   ❌ Google Geocoding API: clé invalide ou API non activée")
+
+    except Exception as e:
+        print(f"   ⚠️ Erreur Google reverse geocode: {e}")
+
+    GEOCODE_CACHE[cache_key] = (None, None, None)
+    return (None, None, None)
+
+
+# Alias pour compatibilité
+reverse_geocode_nominatim = reverse_geocode_google
+
+
+def geocode_address_google(address_str):
+    """Géocode une adresse texte via Google Places API."""
     if not address_str:
         return None, None
-    
+
     if address_str in GEOCODE_CACHE:
         cached = GEOCODE_CACHE[address_str]
         if isinstance(cached, tuple) and len(cached) == 2:
             return cached
-    
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"q": address_str, "format": "json", "limit": 1}
-    headers = {"User-Agent": "gedeon-events-api/1.0"}
-    
+
+    if not GOOGLE_MAPS_API_KEY:
+        print(f"   ⚠️ GOOGLE_MAPS_API_KEY non configurée")
+        GEOCODE_CACHE[address_str] = (None, None)
+        return None, None
+
+    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+    params = {
+        "query": address_str,
+        "key": GOOGLE_MAPS_API_KEY,
+        "language": "fr"
+    }
+
     try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data:
-            lat, lon = float(data[0]["lat"]), float(data[0]["lon"])
-            GEOCODE_CACHE[address_str] = (lat, lon)
-            time.sleep(0.05)  # 50ms entre requêtes (respect rate limit Nominatim)
-            return lat, lon
-    except Exception:
-        pass
-    
+        response = requests.get(url, params=params, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 'OK' and data.get('results'):
+                result = data['results'][0]
+                geo = result.get('geometry', {}).get('location', {})
+                lat = geo.get('lat')
+                lng = geo.get('lng')
+                if lat and lng:
+                    GEOCODE_CACHE[address_str] = (lat, lng)
+                    return lat, lng
+            elif data.get('status') == 'REQUEST_DENIED':
+                print(f"   ❌ Google Places API: clé invalide ou API non activée")
+    except Exception as e:
+        print(f"   ⚠️ Erreur Google Places: {e}")
+
     GEOCODE_CACHE[address_str] = (None, None)
     return None, None
+
+
+# Alias pour compatibilité
+geocode_address_nominatim = geocode_address_google
 
 
 def load_cinema_coords_cache():
@@ -2071,6 +2115,38 @@ def health():
 # IMPORTANT: Ne jamais mettre la clé dans le code !
 # Configurer GEMINI_API_KEY dans les variables d'environnement Render
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# Google Maps API (utilise GEMINI_API_KEY par défaut si Maps API activée sur le projet)
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", GEMINI_API_KEY)
+
+# Traduction pays français → anglais pour Google Places
+COUNTRY_TRANSLATIONS = {
+    'france': 'France', 'corée du sud': 'South Korea', 'coree du sud': 'South Korea',
+    'états-unis': 'United States', 'etats-unis': 'United States', 'usa': 'United States',
+    'royaume-uni': 'United Kingdom', 'angleterre': 'United Kingdom', 'pays-bas': 'Netherlands',
+    'allemagne': 'Germany', 'espagne': 'Spain', 'italie': 'Italy', 'japon': 'Japan',
+    'chine': 'China', 'brésil': 'Brazil', 'mexique': 'Mexico', 'russie': 'Russia',
+    'inde': 'India', 'suisse': 'Switzerland', 'belgique': 'Belgium', 'autriche': 'Austria',
+    'pologne': 'Poland', 'suède': 'Sweden', 'norvège': 'Norway', 'danemark': 'Denmark',
+    'finlande': 'Finland', 'grèce': 'Greece', 'turquie': 'Turkey', 'egypte': 'Egypt',
+    'maroc': 'Morocco', 'tunisie': 'Tunisia', 'algérie': 'Algeria', 'canada': 'Canada',
+    'australie': 'Australia', 'portugal': 'Portugal', 'irlande': 'Ireland',
+    'singapour': 'Singapore', 'hong kong': 'Hong Kong', 'taïwan': 'Taiwan', 'taiwan': 'Taiwan',
+    'thaïlande': 'Thailand', 'vietnam': 'Vietnam', 'indonésie': 'Indonesia',
+    'malaisie': 'Malaysia', 'philippines': 'Philippines', 'nouvelle-zélande': 'New Zealand',
+    'argentine': 'Argentina', 'madagascar': 'Madagascar',
+}
+
+def normalize_text_for_geo(text):
+    """Normalise le texte pour comparaison géographique."""
+    import unicodedata
+    if not text:
+        return ""
+    text = text.lower()
+    text = text.replace('œ', 'oe').replace('æ', 'ae').replace('ß', 'ss')
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    return text
+
 # Modèles Gemini par ordre de préférence (Gemini 3 pour meilleure OCR)
 GEMINI_MODELS = [
     "gemini-3-flash-preview",  # Gemini 3 - rapide et précis
@@ -2458,35 +2534,49 @@ JSON uniquement, sans markdown ni explications."""
 @app.route('/api/scanner/geocode', methods=['POST'])
 def geocode_address():
     """
-    Géocode une adresse via Nominatim
+    Géocode une adresse via Google Places API
     """
     try:
         data = request.get_json()
         address = data.get('address', '')
-        
+
         if not address:
             return jsonify({"status": "error", "message": "Adresse manquante"}), 400
-        
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {"q": address, "format": "json", "limit": 1}
-        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
-        
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        
+
+        if not GOOGLE_MAPS_API_KEY:
+            return jsonify({"status": "error", "message": "GOOGLE_MAPS_API_KEY non configurée"}), 500
+
+        url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+        params = {
+            "query": address,
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "fr"
+        }
+
+        response = requests.get(url, params=params, timeout=15)
+
         if response.status_code == 200:
-            results = response.json()
-            if results:
+            data = response.json()
+            if data.get('status') == 'OK' and data.get('results'):
+                result = data['results'][0]
+                geo = result.get('geometry', {}).get('location', {})
                 return jsonify({
                     "status": "success",
-                    "latitude": float(results[0]['lat']),
-                    "longitude": float(results[0]['lon']),
-                    "displayName": results[0].get('display_name', '')
+                    "latitude": geo.get('lat'),
+                    "longitude": geo.get('lng'),
+                    "displayName": result.get('formatted_address', ''),
+                    "placeName": result.get('name', ''),
+                    "placeId": result.get('place_id', '')
                 }), 200
-            else:
+            elif data.get('status') == 'ZERO_RESULTS':
                 return jsonify({"status": "error", "message": "Adresse non trouvée"}), 404
+            elif data.get('status') == 'REQUEST_DENIED':
+                return jsonify({"status": "error", "message": "Google Places API: clé invalide ou API non activée"}), 500
+            else:
+                return jsonify({"status": "error", "message": f"Google Places: {data.get('status')}"}), 500
         else:
-            return jsonify({"status": "error", "message": f"Erreur Nominatim: {response.status_code}"}), 500
-            
+            return jsonify({"status": "error", "message": f"Erreur HTTP: {response.status_code}"}), 500
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -3145,27 +3235,45 @@ def extract_exif_gps(image_bytes):
 
 def reverse_geocode(lat, lon):
     """
-    Reverse geocode: coordonnées GPS -> ville, pays.
+    Reverse geocode: coordonnées GPS -> ville, pays via Google Geocoding API.
     """
-    try:
-        url = "https://nominatim.openstreetmap.org/reverse"
-        params = {"lat": lat, "lon": lon, "format": "json", "addressdetails": 1}
-        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
+    if not GOOGLE_MAPS_API_KEY:
+        print(f"   ⚠️ GOOGLE_MAPS_API_KEY non configurée")
+        return None
 
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+    try:
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "latlng": f"{lat},{lon}",
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "fr"
+        }
+
+        response = requests.get(url, params=params, timeout=15)
 
         if response.status_code == 200:
-            result = response.json()
-            address = result.get('address', {})
+            data = response.json()
+            if data.get('status') == 'OK' and data.get('results'):
+                result = data['results'][0]
+                components = result.get('address_components', [])
 
-            city = (address.get('city') or address.get('town') or
-                    address.get('village') or address.get('municipality') or
-                    address.get('county'))
+                city = None
+                country = None
 
-            return {'city': city, 'country': address.get('country')}
+                for comp in components:
+                    types = comp.get('types', [])
+                    if 'locality' in types:
+                        city = comp.get('long_name', '')
+                    elif 'country' in types:
+                        country = comp.get('long_name', '')
+
+                return {'city': city, 'country': country}
+
+            elif data.get('status') == 'REQUEST_DENIED':
+                print(f"   ❌ Google Geocoding API: clé invalide ou API non activée")
 
     except Exception as e:
-        print(f"⚠️ Erreur reverse geocode: {e}")
+        print(f"⚠️ Erreur reverse geocode Google: {e}")
 
     return None
 
@@ -3173,45 +3281,59 @@ def reverse_geocode(lat, lon):
 def geocode_for_city_country(query):
     """
     Geocode une adresse/lieu et retourne city, country, lat, lon.
-    Utilise Nominatim avec addressdetails pour obtenir la ville et le pays.
+    Utilise Google Places API pour obtenir la ville et le pays.
     """
-    try:
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {
-            "q": query,
-            "format": "json",
-            "limit": 1,
-            "addressdetails": 1  # Important: pour avoir city/country
-        }
-        headers = {"User-Agent": "GEDEON-Scanner/1.0 (contact@gedeon.app)"}
+    if not GOOGLE_MAPS_API_KEY:
+        print(f"   ⚠️ GOOGLE_MAPS_API_KEY non configurée")
+        return None
 
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+    try:
+        url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+        params = {
+            "query": query,
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "fr"
+        }
+
+        response = requests.get(url, params=params, timeout=15)
 
         if response.status_code == 200:
-            results = response.json()
-            if results:
-                result = results[0]
-                address = result.get('address', {})
+            data = response.json()
+            if data.get('status') == 'OK' and data.get('results'):
+                result = data['results'][0]
+                geo = result.get('geometry', {}).get('location', {})
+                lat = geo.get('lat')
+                lng = geo.get('lng')
+                formatted = result.get('formatted_address', '')
+                place_name = result.get('name', '')
 
-                # Extraire la ville (plusieurs champs possibles)
-                city = (address.get('city') or
-                        address.get('town') or
-                        address.get('village') or
-                        address.get('municipality') or
-                        address.get('county'))
+                # Extraire ville/pays depuis l'adresse formatée
+                addr_parts = formatted.split(', ')
+                country = addr_parts[-1] if len(addr_parts) > 0 else None
+                city = None
 
-                # Extraire le pays
-                country = address.get('country')
+                # Chercher la ville dans les parties de l'adresse
+                # (généralement avant le pays et le code postal)
+                for part in addr_parts[:-1]:
+                    # Ignorer les codes postaux
+                    if not part.replace(' ', '').replace('-', '').isdigit():
+                        city = part
+                        break
 
                 return {
                     'city': city,
                     'country': country,
-                    'latitude': float(result['lat']),
-                    'longitude': float(result['lon']),
-                    'display_name': result.get('display_name', '')
+                    'latitude': lat,
+                    'longitude': lng,
+                    'display_name': formatted,
+                    'place_name': place_name
                 }
+
+            elif data.get('status') == 'REQUEST_DENIED':
+                print(f"   ❌ Google Places API: clé invalide ou API non activée")
+
     except Exception as e:
-        print(f"⚠️ Erreur geocode: {e}")
+        print(f"⚠️ Erreur geocode Google: {e}")
 
     return None
 
