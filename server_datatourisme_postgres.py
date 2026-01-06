@@ -2147,13 +2147,14 @@ def normalize_text_for_geo(text):
     text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
     return text
 
-# Modèles Gemini par ordre de préférence (Gemini 3 pour meilleure OCR)
+# Modèles Gemini par ordre de préférence (comme ocr_geo_google.py)
 GEMINI_MODELS = [
-    "gemini-3-flash-preview",  # Gemini 3 - rapide et précis
-    "gemini-3-pro-preview",    # Gemini 3 Pro - plus lent mais précis
-    "gemini-2.5-pro",          # Fallback stable
-    "gemini-2.5-flash"         # Fallback rapide
+    'gemini-3-pro-preview',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest'
 ]
+GEMINI_TEMPERATURE = 0.1
 
 # Corrections OCR françaises courantes
 OCR_FIXES = {
@@ -2403,41 +2404,83 @@ Les autres URLs peuvent contenir des informations complémentaires (billetterie,
 
 """
 
-        prompt = qr_info + """Analyse cette affiche d'événement en français.
+        from datetime import datetime as dt
+        current_date = dt.now().strftime('%Y-%m-%d')
+        current_year = dt.now().year
 
-RÈGLES IMPORTANTES:
-- Extrais UNIQUEMENT le texte visible sur l'affiche
+        prompt = qr_info + f"""Analyse cette image d'événement(s) en français.
+
+DATE ACTUELLE: {current_date}
+
+L'image peut contenir UN ou PLUSIEURS événements (ex: calendrier de festival, liste de matchs, programme).
+
+RÈGLES D'EXTRACTION :
+- Crée un objet distinct dans le tableau 'events' pour chaque événement unique identifié
+- Un événement est distinct dès que le LIEU ou la DATE change
+- Festival de 3 jours avec concerts différents → un objet par concert/jour
+- Calendrier de compétitions sportives → un objet par match
+- Affiche simple avec un seul événement → un seul objet dans le tableau
+
+RÈGLES ANNÉE (si non visible sur l'image) :
+- UTILISE tes connaissances pour déduire l'année à partir du contexte
+- Exemples: Masters Augusta + avril = année du Masters, Roland Garros + mai = année de l'édition
+- Si tu reconnais un événement récurrent, déduis l'année à partir des dates caractéristiques
+- En dernier recours seulement: si le mois/jour est futur → {current_year}, sinon → {current_year + 1}
+
+RÈGLES DE VALIDATION CROISÉE (TRÈS IMPORTANT) :
+- Utilise TOUS les éléments visibles pour valider le lieu et la date exacts
+- Croise le titre, la description, les adresses, noms de rues, codes postaux et le contexte pour affiner la localisation
+- Pour les émissions TV/radio: le lieu est celui mentionné dans le CONTENU (sujet traité), PAS la chaîne TV
+- Exemple: émission Capital sur M6 parlant du "parking A.Briand" à Sète → la ville est Sète, PAS "France" ou "M6"
+- Cherche les indices de localisation: noms de rues, places, monuments, codes postaux, départements
+- Si aucune ville précise n'est visible, utilise null plutôt qu'un lieu générique comme "France"
+
+RÈGLES GÉNÉRALES :
+- Extrais UNIQUEMENT le texte visible sur l'image
 - TOUJOURS utiliser les accents français corrects: Noël, Décembre, Février, Théâtre, Opéra, Événement, Congrès, Entrée, Marché, Fête
 - Ne devine pas, n'invente pas de texte
-- Ignore les logos et éléments décoratifs
+- Analyse les logos et associe au 'sponsors'
 - Si un texte est illisible, utilise null
+- Ajoute un champ 'tags schema.org' basé sur www.schema.org/event
 
 Retourne UNIQUEMENT un JSON valide avec cette structure:
-{
-    "title": "Titre de l'événement (avec accents corrects)",
-    "category": "Concert|Théâtre|Atelier|Conférence|Sport|Exposition|Festival|Marché|Fête|Autre",
-    "startDate": "YYYY-MM-DD ou texte brut si format différent",
-    "startTime": "HH:MM ou null",
-    "endDate": "YYYY-MM-DD ou null",
-    "endTime": "HH:MM ou null",
-    "location": {
-        "venueName": "Nom du lieu",
-        "address": "Adresse ou null",
-        "city": "Ville",
-        "country": "Pays (France par défaut si non précisé)"
-    },
-    "organizer": {
-        "name": "Nom ou null"
-    },
-    "website": "URL du site web ou null",
-    "pricing": {
-        "isFree": true/false,
-        "priceRange": "10€ - 25€ ou null",
-        "currency": "EUR"
-    },
-    "description": "Résumé court (max 2 phrases) ou null",
-    "tags": ["tag1", "tag2"]
-}
+{{
+    "events": [
+        {{
+            "title": "Titre de l'événement (avec accents corrects)",
+            "category": "Concert|Théâtre|Atelier|Conférence|Sport|Exposition|Festival|Marché|Fête|Autre",
+            "startDateDay": "DD (1-31) ou null",
+            "startDateMonth": "MM (1-12) ou null",
+            "startDateYear": "YYYY ou null",
+            "startTime": "HH:MM ou null",
+            "endDateDay": "DD (1-31) ou null",
+            "endDateMonth": "MM (1-12) ou null",
+            "endDateYear": "YYYY ou null",
+            "endTime": "HH:MM ou null",
+            "location": {{
+                "venueName": "Nom du lieu",
+                "address": "Adresse ou null",
+                "postalCode": "Code postal (ex: 75001, 30301, SW1A 1AA) ou null",
+                "city": "Ville",
+                "state": "État/Région/Département (obligatoire pour USA, Canada, Allemagne)",
+                "country": "Pays (France par défaut si non précisé)"
+            }},
+            "organizer": {{
+                "name": "Nom ou null"
+            }},
+            "website": "URL du site web ou null",
+            "pricing": {{
+                "isFree": true/false,
+                "priceRange": "10€ - 25€ ou null",
+                "currency": "EUR"
+            }},
+            "description": "Résumé court (max 2 phrases) ou null",
+            "tags": ["tag1", "tag2"],
+            "tags schema.org": ["MusicEvent", "SportsEvent", "etc."],
+            "sponsors": ["sponsor1", "sponsor2"]
+        }}
+    ]
+}}
 
 JSON uniquement, sans markdown ni explications."""
 
@@ -2461,8 +2504,9 @@ JSON uniquement, sans markdown ni explications."""
                         ]
                     }],
                     "generationConfig": {
-                        "temperature": 0.1,
-                        "maxOutputTokens": 4096
+                        "temperature": GEMINI_TEMPERATURE,
+                        "maxOutputTokens": 8192,
+                        "mediaResolution": "MEDIA_RESOLUTION_MEDIUM"
                     }
                 }
 
