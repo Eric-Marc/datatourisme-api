@@ -3687,101 +3687,156 @@ zip_generation_status = {"status": "idle", "progress": 0, "total": 0, "error": N
 # Variable globale pour le statut de la migration
 migration_status = {"status": "idle", "progress": 0, "total": 0, "migrated": 0, "skipped": 0, "error": None}
 
-@app.route('/api/diagnostic/migrate-images/start')
-def start_image_migration():
+@app.route('/api/diagnostic/migrate-images/batch')
+def migrate_images_batch():
     """
-    Migre les images du disque vers PostgreSQL (en arrière-plan).
+    Migre un batch de 100 images du disque vers PostgreSQL.
+    Appeler plusieurs fois jusqu'à ce que remaining = 0.
     """
-    import threading
-    global migration_status
+    import base64
+    from datetime import datetime
 
-    if migration_status["status"] == "running":
-        return jsonify({"message": "Migration déjà en cours", "status": migration_status})
+    BATCH_SIZE = 100
 
-    def migrate():
-        global migration_status
-        import base64
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-        try:
-            migration_status = {"status": "running", "progress": 0, "total": 0, "migrated": 0, "skipped": 0, "error": None}
+        # Compter le total restant
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM scanned_events
+            WHERE image_path IS NOT NULL
+            AND (image_data IS NULL OR image_data = '')
+        """)
+        remaining = cur.fetchone()[0]
 
-            conn = get_db_connection()
-            cur = conn.cursor()
-
-            # Récupérer les événements avec image_path mais sans image_data
-            cur.execute("""
-                SELECT id, image_path
-                FROM scanned_events
-                WHERE image_path IS NOT NULL
-                AND (image_data IS NULL OR image_data = '')
-            """)
-            events = cur.fetchall()
-            migration_status["total"] = len(events)
-
-            scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
-
-            for i, row in enumerate(events):
-                event_id = row[0] if isinstance(row, tuple) else row['id']
-                image_path = row[1] if isinstance(row, tuple) else row['image_path']
-
-                filename = os.path.basename(image_path)
-                filepath = os.path.join(scans_dir, filename)
-
-                if os.path.exists(filepath):
-                    try:
-                        with open(filepath, 'rb') as f:
-                            image_bytes = f.read()
-
-                        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-
-                        # Déterminer le type MIME
-                        ext = os.path.splitext(filename)[1].lower()
-                        mime_types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
-                        mime_type = mime_types.get(ext, 'image/jpeg')
-
-                        cur.execute("""
-                            UPDATE scanned_events
-                            SET image_data = %s, image_mime = %s
-                            WHERE id = %s
-                        """, (image_base64, mime_type, event_id))
-
-                        migration_status["migrated"] += 1
-
-                    except Exception as e:
-                        print(f"❌ Erreur migration {event_id}: {e}")
-                        migration_status["skipped"] += 1
-                else:
-                    migration_status["skipped"] += 1
-
-                migration_status["progress"] = i + 1
-
-                # Commit toutes les 50 images
-                if (i + 1) % 50 == 0:
-                    conn.commit()
-
-            # Commit final
-            conn.commit()
+        if remaining == 0:
             cur.close()
             conn.close()
+            print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] Migration terminée - plus d'images à migrer")
+            return jsonify({
+                "status": "done",
+                "message": "Toutes les images sont migrées",
+                "remaining": 0
+            })
 
-            migration_status["status"] = "done"
+        print(f"🔄 [{datetime.now().strftime('%H:%M:%S')}] Début batch - {remaining} images restantes")
 
-        except Exception as e:
-            migration_status["status"] = "error"
-            migration_status["error"] = str(e)
+        # Récupérer un batch
+        cur.execute("""
+            SELECT id, image_path
+            FROM scanned_events
+            WHERE image_path IS NOT NULL
+            AND (image_data IS NULL OR image_data = '')
+            LIMIT %s
+        """, (BATCH_SIZE,))
+        events = cur.fetchall()
 
-    thread = threading.Thread(target=migrate)
-    thread.start()
+        scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+        migrated = 0
+        skipped = 0
 
-    return jsonify({"message": "Migration démarrée", "status": migration_status})
+        for row in events:
+            event_id = row[0] if isinstance(row, tuple) else row['id']
+            image_path = row[1] if isinstance(row, tuple) else row['image_path']
+
+            filename = os.path.basename(image_path)
+            filepath = os.path.join(scans_dir, filename)
+
+            if os.path.exists(filepath):
+                try:
+                    with open(filepath, 'rb') as f:
+                        image_bytes = f.read()
+
+                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+                    ext = os.path.splitext(filename)[1].lower()
+                    mime_types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+                    mime_type = mime_types.get(ext, 'image/jpeg')
+
+                    cur.execute("""
+                        UPDATE scanned_events
+                        SET image_data = %s, image_mime = %s
+                        WHERE id = %s
+                    """, (image_base64, mime_type, event_id))
+
+                    migrated += 1
+
+                except Exception as e:
+                    print(f"   ❌ Erreur {event_id}: {e}")
+                    # Marquer comme traité pour éviter de réessayer
+                    cur.execute("""
+                        UPDATE scanned_events
+                        SET image_data = 'ERROR', image_mime = %s
+                        WHERE id = %s
+                    """, (str(e)[:50], event_id))
+                    skipped += 1
+            else:
+                # Fichier absent - marquer comme traité
+                cur.execute("""
+                    UPDATE scanned_events
+                    SET image_data = 'MISSING', image_mime = 'file_not_found'
+                    WHERE id = %s
+                """, (event_id,))
+                skipped += 1
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        new_remaining = remaining - len(events)
+        print(f"   ✅ Batch terminé: {migrated} migrées, {skipped} ignorées, {new_remaining} restantes")
+
+        return jsonify({
+            "status": "batch_done",
+            "batch_size": len(events),
+            "migrated": migrated,
+            "skipped": skipped,
+            "remaining": new_remaining,
+            "message": f"Batch terminé. Encore {new_remaining} à migrer." if new_remaining > 0 else "Migration terminée!"
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"   ❌ Erreur batch: {e}")
+        return jsonify({"status": "error", "error": str(e), "traceback": traceback.format_exc()}), 500
 
 
 @app.route('/api/diagnostic/migrate-images/status')
 def migration_status_endpoint():
     """
-    Vérifie le statut de la migration.
+    Vérifie combien d'images restent à migrer.
     """
-    return jsonify(migration_status)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN image_data IS NOT NULL AND image_data != '' AND image_data != 'MISSING' AND image_data != 'ERROR' THEN 1 END) as migrated,
+                COUNT(CASE WHEN image_data = 'MISSING' THEN 1 END) as missing,
+                COUNT(CASE WHEN image_data = 'ERROR' THEN 1 END) as errors,
+                COUNT(CASE WHEN image_data IS NULL OR image_data = '' THEN 1 END) as remaining
+            FROM scanned_events
+            WHERE image_path IS NOT NULL
+        """)
+        row = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "total_with_path": row[0],
+            "migrated": row[1],
+            "missing_files": row[2],
+            "errors": row[3],
+            "remaining": row[4]
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/diagnostic/all-images/start')
 def start_zip_generation():
