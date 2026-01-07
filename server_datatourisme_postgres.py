@@ -3681,6 +3681,46 @@ def serve_media(filepath):
         max_age=31536000  # Cache for 1 year
     )
 
+@app.route('/api/diagnostic/all-images/download')
+def download_all_images():
+    """
+    Télécharge toutes les images existantes dans un ZIP.
+    """
+    import zipfile
+    import io
+
+    try:
+        scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+        if not os.path.exists(scans_dir):
+            return jsonify({"error": "Scans directory not found"}), 404
+
+        files = os.listdir(scans_dir)
+        if not files:
+            return jsonify({"message": "Aucun fichier"}), 200
+
+        # Créer le ZIP en mémoire
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for filename in files:
+                filepath = os.path.join(scans_dir, filename)
+                if os.path.isfile(filepath):
+                    zf.write(filepath, filename)
+
+        zip_buffer.seek(0)
+
+        from flask import send_file
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='all_images.zip'
+        )
+
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+
 @app.route('/api/diagnostic/orphan-files/download')
 def download_orphan_files():
     """
