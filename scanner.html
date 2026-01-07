@@ -519,7 +519,7 @@
         function handleImageFile(file) {
             if (file.size > 10*1024*1024) { showError('Max 10 MB'); return; }
             const reader = new FileReader();
-            reader.onload = e => { previewImg.src = e.target.result; imagePreview.classList.remove('hidden'); dropZone.classList.add('hidden'); analyzeImage(e.target.result, file.type); };
+            reader.onload = e => { previewImg.src = e.target.result; imagePreview.classList.remove('hidden'); dropZone.classList.add('hidden'); analyzeImage(e.target.result, file.type, file.name); };
             reader.readAsDataURL(file);
         }
         
@@ -527,12 +527,16 @@
         function showError(msg) { document.getElementById('error-text').textContent = msg; errorMessage.classList.remove('hidden'); eventContainer.classList.add('hidden'); }
         
         // === ANALYSE ===
-        async function analyzeImage(dataUrl, mimeType) {
+        async function analyzeImage(dataUrl, mimeType, imageName = null) {
             eventContainer.classList.add('hidden'); errorMessage.classList.add('hidden');
             skeletonLoader.classList.remove('hidden'); processingOverlay.classList.remove('hidden');
             try {
                 const base64 = dataUrl.split(',')[1];
-                const res = await fetch(`${SERVER_URL}/api/scanner/analyze`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({image: base64, mimeType}) });
+                const res = await fetch(`${SERVER_URL}/api/scanner/analyze`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({image: base64, mimeType, imageName})
+                });
                 const result = await res.json();
                 if (result.status === 'success') { currentEventData = result.data; displayEventData(result.data); }
                 else { throw new Error(result.message || 'Erreur'); }
@@ -559,37 +563,38 @@
             console.log('📊 displayEventData called with:', data);
             currentEventData = data;
 
-            // Handle new schema: {events: [{qr_code, ocr, geolocation, exif_gps}, ...]}
-            if (data.events && Array.isArray(data.events)) {
-                // Nouveau format: extraire et fusionner les champs ocr avec qr_code/geolocation/exif_gps
-                eventsData = data.events.map(evt => {
-                    if (evt.ocr) {
-                        // Nouveau format avec ocr wrapper
-                        return {
-                            ...evt.ocr,
-                            qr_code: evt.qr_code,
-                            geolocation: evt.geolocation,
-                            exif_gps: evt.exif_gps
-                        };
-                    } else {
-                        // Ancien format direct
-                        return evt;
-                    }
-                });
-                console.log('✅ Found events array:', eventsData.length, 'event(s)');
-            } else if (data.title) {
-                // Legacy single event format
-                eventsData = [data];
-                console.log('✅ Legacy single event format');
+            // Fonction pour extraire les champs d'un événement
+            function extractEvent(evt) {
+                if (evt.ocr) {
+                    // Nouveau format: {image, qr_code, ocr, geolocation, exif_gps}
+                    return {
+                        ...evt.ocr,
+                        image: evt.image,
+                        qr_code: evt.qr_code,
+                        geolocation: evt.geolocation,
+                        exif_gps: evt.exif_gps
+                    };
+                }
+                return evt; // Ancien format direct
+            }
+
+            // Gérer les différents formats de réponse
+            if (Array.isArray(data)) {
+                // Multi-événements: [{image, qr_code, ocr, ...}, ...]
+                eventsData = data.map(extractEvent);
+                console.log('✅ Array format:', eventsData.length, 'event(s)');
             } else if (data.ocr) {
-                // Single event with new schema
-                eventsData = [{
-                    ...data.ocr,
-                    qr_code: data.qr_code,
-                    geolocation: data.geolocation,
-                    exif_gps: data.exif_gps
-                }];
-                console.log('✅ Single event with new schema');
+                // Single event: {image, qr_code, ocr, geolocation, exif_gps}
+                eventsData = [extractEvent(data)];
+                console.log('✅ Single event format');
+            } else if (data.events && Array.isArray(data.events)) {
+                // Legacy: {events: [...]}
+                eventsData = data.events.map(extractEvent);
+                console.log('✅ Legacy events array:', eventsData.length, 'event(s)');
+            } else if (data.title) {
+                // Very old format: {title, category, ...}
+                eventsData = [data];
+                console.log('✅ Legacy direct format');
             } else {
                 eventsData = [];
                 console.log('⚠️ No events found in data');

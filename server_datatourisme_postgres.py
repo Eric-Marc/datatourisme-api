@@ -2635,25 +2635,31 @@ JSON uniquement, sans markdown ni explications."""
                             print(f"⚠️ Pas de GPS EXIF: {e}")
 
                         # Construire la réponse selon le schéma demandé
+                        # Format: {image, qr_code, ocr, geolocation, exif_gps}
                         events = event_data.get('events', [])
                         qr_code = qr_contents[0] if qr_contents else None
+                        image_name = data.get('imageName')  # Nom du fichier envoyé par le client
 
                         result_events = []
                         for i, evt in enumerate(events):
                             result_events.append({
-                                "qr_code": qr_code if i == 0 else None,  # QR code seulement pour le premier événement
+                                "image": image_name,
+                                "qr_code": qr_code if i == 0 else None,
                                 "ocr": evt,
-                                "geolocation": None,  # À remplir via /api/scanner/geocode
+                                "geolocation": None,
                                 "exif_gps": exif_gps
                             })
 
                         print(f"✅ Gemini: Analyse réussie avec {model} ({len(events)} événement(s))")
 
+                        # Retourner un seul objet si 1 événement, sinon un tableau
+                        response_data = result_events[0] if len(result_events) == 1 else result_events
+
                         return jsonify({
                             "status": "success",
-                            "data": {"events": result_events},
+                            "data": response_data,
                             "model": model,
-                            "qr_codes": qr_contents  # Liste complète des QR codes pour référence
+                            "qr_codes": qr_contents
                         }), 200
                 else:
                     last_error = f"HTTP {response.status_code}: {response.text[:200]}"
