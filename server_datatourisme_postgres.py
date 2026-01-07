@@ -3681,6 +3681,60 @@ def serve_media(filepath):
         max_age=31536000  # Cache for 1 year
     )
 
+@app.route('/api/diagnostic/orphan-files/download')
+def download_orphan_files():
+    """
+    Télécharge tous les fichiers orphelins dans un ZIP.
+    """
+    import zipfile
+    import io
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT image_path FROM scanned_events WHERE image_path IS NOT NULL")
+        db_paths = set()
+        for row in cur.fetchall():
+            path = row[0]
+            if path.startswith('uploads/'):
+                path = path[8:]
+            db_paths.add(os.path.basename(path))
+
+        cur.close()
+        conn.close()
+
+        scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+        if not os.path.exists(scans_dir):
+            return jsonify({"error": "Scans directory not found"}), 404
+
+        disk_files = set(os.listdir(scans_dir))
+        orphans = disk_files - db_paths
+
+        if not orphans:
+            return jsonify({"message": "Aucun fichier orphelin"}), 200
+
+        # Créer le ZIP en mémoire
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for filename in orphans:
+                filepath = os.path.join(scans_dir, filename)
+                zf.write(filepath, filename)
+
+        zip_buffer.seek(0)
+
+        from flask import send_file
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='orphan_images.zip'
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/diagnostic/orphan-files')
 def list_orphan_files():
     """
