@@ -2147,9 +2147,9 @@ def normalize_text_for_geo(text):
     text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
     return text
 
-# Modèles Gemini par ordre de préférence (Gemini 3.0 Pro en premier)
+# Modèles Gemini par ordre de préférence (Gemini 3 Pro en premier)
 GEMINI_MODELS = [
-    'gemini-3.0-pro',
+    'gemini-3-pro-preview',
     'gemini-2.0-flash-exp',
     'gemini-1.5-flash-latest',
     'gemini-1.5-pro-latest'
