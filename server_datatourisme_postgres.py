@@ -3681,6 +3681,61 @@ def serve_media(filepath):
         max_age=31536000  # Cache for 1 year
     )
 
+@app.route('/api/diagnostic/orphan-files')
+def list_orphan_files():
+    """
+    Liste les fichiers sur disque sans événement en DB.
+    Ces fichiers peuvent être récupérés via /media/scans/{filename}
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Récupérer tous les image_path de la DB
+        cur.execute("SELECT image_path FROM scanned_events WHERE image_path IS NOT NULL")
+        db_paths = set()
+        for row in cur.fetchall():
+            path = row[0]
+            if path.startswith('uploads/'):
+                path = path[8:]  # Remove 'uploads/' prefix
+            db_paths.add(os.path.basename(path))
+
+        cur.close()
+        conn.close()
+
+        # Lister les fichiers sur disque
+        scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+        if not os.path.exists(scans_dir):
+            return jsonify({"error": "Scans directory not found"}), 404
+
+        disk_files = set(os.listdir(scans_dir))
+
+        # Trouver les orphelins
+        orphans = disk_files - db_paths
+
+        # Construire la liste avec URLs et tailles
+        orphan_list = []
+        total_size = 0
+        for filename in sorted(orphans):
+            filepath = os.path.join(scans_dir, filename)
+            size = os.path.getsize(filepath)
+            total_size += size
+            orphan_list.append({
+                "filename": filename,
+                "url": f"/media/scans/{filename}",
+                "size_kb": round(size / 1024, 1)
+            })
+
+        return jsonify({
+            "count": len(orphan_list),
+            "total_size_mb": round(total_size / (1024*1024), 2),
+            "files": orphan_list
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/diagnostic/disk-files')
 def check_disk_files():
     """
