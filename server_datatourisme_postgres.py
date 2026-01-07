@@ -3684,6 +3684,105 @@ def serve_media(filepath):
 # Variable globale pour le statut du ZIP
 zip_generation_status = {"status": "idle", "progress": 0, "total": 0, "error": None}
 
+# Variable globale pour le statut de la migration
+migration_status = {"status": "idle", "progress": 0, "total": 0, "migrated": 0, "skipped": 0, "error": None}
+
+@app.route('/api/diagnostic/migrate-images/start')
+def start_image_migration():
+    """
+    Migre les images du disque vers PostgreSQL (en arrière-plan).
+    """
+    import threading
+    global migration_status
+
+    if migration_status["status"] == "running":
+        return jsonify({"message": "Migration déjà en cours", "status": migration_status})
+
+    def migrate():
+        global migration_status
+        import base64
+
+        try:
+            migration_status = {"status": "running", "progress": 0, "total": 0, "migrated": 0, "skipped": 0, "error": None}
+
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Récupérer les événements avec image_path mais sans image_data
+            cur.execute("""
+                SELECT id, image_path
+                FROM scanned_events
+                WHERE image_path IS NOT NULL
+                AND (image_data IS NULL OR image_data = '')
+            """)
+            events = cur.fetchall()
+            migration_status["total"] = len(events)
+
+            scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+
+            for i, row in enumerate(events):
+                event_id = row[0] if isinstance(row, tuple) else row['id']
+                image_path = row[1] if isinstance(row, tuple) else row['image_path']
+
+                filename = os.path.basename(image_path)
+                filepath = os.path.join(scans_dir, filename)
+
+                if os.path.exists(filepath):
+                    try:
+                        with open(filepath, 'rb') as f:
+                            image_bytes = f.read()
+
+                        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+                        # Déterminer le type MIME
+                        ext = os.path.splitext(filename)[1].lower()
+                        mime_types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+                        mime_type = mime_types.get(ext, 'image/jpeg')
+
+                        cur.execute("""
+                            UPDATE scanned_events
+                            SET image_data = %s, image_mime = %s
+                            WHERE id = %s
+                        """, (image_base64, mime_type, event_id))
+
+                        migration_status["migrated"] += 1
+
+                    except Exception as e:
+                        print(f"❌ Erreur migration {event_id}: {e}")
+                        migration_status["skipped"] += 1
+                else:
+                    migration_status["skipped"] += 1
+
+                migration_status["progress"] = i + 1
+
+                # Commit toutes les 50 images
+                if (i + 1) % 50 == 0:
+                    conn.commit()
+
+            # Commit final
+            conn.commit()
+            cur.close()
+            conn.close()
+
+            migration_status["status"] = "done"
+
+        except Exception as e:
+            migration_status["status"] = "error"
+            migration_status["error"] = str(e)
+
+    thread = threading.Thread(target=migrate)
+    thread.start()
+
+    return jsonify({"message": "Migration démarrée", "status": migration_status})
+
+
+@app.route('/api/diagnostic/migrate-images/status')
+def migration_status_endpoint():
+    """
+    Vérifie le statut de la migration.
+    """
+    return jsonify(migration_status)
+
 @app.route('/api/diagnostic/all-images/start')
 def start_zip_generation():
     """
