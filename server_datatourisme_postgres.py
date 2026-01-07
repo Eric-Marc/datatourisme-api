@@ -3693,9 +3693,9 @@ def check_disk_files():
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
         cur.execute("""
-            SELECT s.image_path, s.title, u.pseudo
+            SELECT s.image_path, s.title, COALESCE(u.pseudo, 'inconnu') as pseudo
             FROM scanned_events s
-            JOIN users u ON s.user_id = u.id
+            LEFT JOIN users u ON s.user_id = u.id
             WHERE s.image_path IS NOT NULL
         """)
 

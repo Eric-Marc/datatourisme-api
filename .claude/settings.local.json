@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git restore:*)",
+      "Bash(git checkout:*)",
+      "Bash(cat:*)",
+      "Bash(python:*)",
+      "Bash(git fetch:*)",
+      "Bash(chmod:*)",
+      "Bash(python3:*)",
+      "Bash(echo:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git config:*)",
+      "Bash(git remote:*)",
+      "Bash(env)",
+      "Bash(gh auth status:*)",
+      "Bash(git revert:*)",
+      "Bash(pip install:*)",
+      "Bash(DATABASE_URL=\"postgresql://data_tourisme_user:B2zwMxZNbbU3LHKFFQrtIiY1VABoEuEo@dpg-d4hngejuibrs73do1jf0-a.frankfurt-postgres.render.com/data_tourisme\" python3:*)",
+      "Bash(curl:*)",
+      "Bash(find:*)",
+      "Bash(claude auth whoami:*)",
+      "Bash(git rev-parse:*)",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebSearch",
+      "Bash(DATABASE_URL=\"postgresql://data_tourisme_user:B2zwMxZNbbU3LHKFFQrtIiY1VABoEuEo@dpg-d4hngejuibrs73do1jf0-a.frankfurt-postgres.render.com/data_tourisme\" timeout 120 python3:*)",
+      "Bash(tee:*)"
+    ]
+  }
+}

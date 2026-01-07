@@ -12051,6 +12051,15 @@
     "source": "DataGouv"
   },
   {
+    "id": "G0FRW",
+    "name": "Quai des Lumières",
+    "address": "Quai Voltaire 34110 Frontignan",
+    "dept": "34",
+    "lat": 43.4421581,
+    "lon": 3.7548259,
+    "source": "AlloCiné"
+  },
+  {
     "id": "W3424",
     "name": "Impérial",
     "address": "24 avenue Charcot 34240 Lamalou-les-Bains",
