@@ -2596,12 +2596,64 @@ JSON uniquement, sans markdown ni explications."""
                         # Post-processing: corriger les accents français
                         event_data = fix_ocr_dict(event_data)
 
-                        print(f"✅ Gemini: Analyse réussie avec {model} ({len(event_data.get('events', []))} événement(s))")
+                        # Extraire GPS EXIF si disponible
+                        exif_gps = None
+                        try:
+                            from PIL import Image
+                            from PIL.ExifTags import TAGS, GPSTAGS
+                            import io
+
+                            img_bytes = b64.b64decode(base64_image)
+                            pil_img = Image.open(io.BytesIO(img_bytes))
+                            exif_data = pil_img._getexif()
+
+                            if exif_data:
+                                gps_info = {}
+                                for tag_id, value in exif_data.items():
+                                    tag = TAGS.get(tag_id, tag_id)
+                                    if tag == 'GPSInfo':
+                                        for gps_tag_id, gps_value in value.items():
+                                            gps_tag = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                                            gps_info[gps_tag] = gps_value
+
+                                if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
+                                    def convert_to_degrees(value):
+                                        d, m, s = value
+                                        return float(d) + float(m)/60 + float(s)/3600
+
+                                    lat = convert_to_degrees(gps_info['GPSLatitude'])
+                                    lon = convert_to_degrees(gps_info['GPSLongitude'])
+
+                                    if gps_info.get('GPSLatitudeRef') == 'S':
+                                        lat = -lat
+                                    if gps_info.get('GPSLongitudeRef') == 'W':
+                                        lon = -lon
+
+                                    exif_gps = {"lat": lat, "lon": lon}
+                                    print(f"📍 EXIF GPS: {lat:.6f}, {lon:.6f}")
+                        except Exception as e:
+                            print(f"⚠️ Pas de GPS EXIF: {e}")
+
+                        # Construire la réponse selon le schéma demandé
+                        events = event_data.get('events', [])
+                        qr_code = qr_contents[0] if qr_contents else None
+
+                        result_events = []
+                        for i, evt in enumerate(events):
+                            result_events.append({
+                                "qr_code": qr_code if i == 0 else None,  # QR code seulement pour le premier événement
+                                "ocr": evt,
+                                "geolocation": None,  # À remplir via /api/scanner/geocode
+                                "exif_gps": exif_gps
+                            })
+
+                        print(f"✅ Gemini: Analyse réussie avec {model} ({len(events)} événement(s))")
 
                         return jsonify({
                             "status": "success",
-                            "data": event_data,
-                            "model": model
+                            "data": {"events": result_events},
+                            "model": model,
+                            "qr_codes": qr_contents  # Liste complète des QR codes pour référence
                         }), 200
                 else:
                     last_error = f"HTTP {response.status_code}: {response.text[:200]}"
@@ -2625,52 +2677,75 @@ JSON uniquement, sans markdown ni explications."""
 
 
 @app.route('/api/scanner/geocode', methods=['POST'])
-def geocode_address():
+def geocode_address_endpoint():
     """
-    Géocode une adresse via Google Places API
+    Géocode une adresse via Google Places API (version avancée).
+    Accepte soit 'address' (string) soit les composants séparés.
     """
     try:
         data = request.get_json()
+
+        # Mode simple: juste une adresse string
         address = data.get('address', '')
 
-        if not address:
+        # Mode avancé: composants séparés
+        venue = data.get('venue') or data.get('venueName')
+        address_field = data.get('addressField')
+        city = data.get('city')
+        state = data.get('state')
+        postalCode = data.get('postalCode')
+        country = data.get('country')
+
+        if not address and not venue and not city:
             return jsonify({"status": "error", "message": "Adresse manquante"}), 400
 
         if not GOOGLE_MAPS_API_KEY:
             return jsonify({"status": "error", "message": "GOOGLE_MAPS_API_KEY non configurée"}), 500
 
-        url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-        params = {
-            "query": address,
-            "key": GOOGLE_MAPS_API_KEY,
-            "language": "fr"
-        }
+        # Utiliser geocode_google_places si composants fournis
+        if venue or city:
+            result = geocode_google_places(
+                venue=venue,
+                address=address_field,
+                city=city,
+                state=state,
+                postalCode=postalCode,
+                country=country
+            )
 
-        response = requests.get(url, params=params, timeout=15)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 'OK' and data.get('results'):
-                result = data['results'][0]
-                geo = result.get('geometry', {}).get('location', {})
+            if result:
                 return jsonify({
                     "status": "success",
-                    "latitude": geo.get('lat'),
-                    "longitude": geo.get('lng'),
-                    "displayName": result.get('formatted_address', ''),
-                    "placeName": result.get('name', ''),
-                    "placeId": result.get('place_id', '')
+                    "latitude": result.get('latitude'),
+                    "longitude": result.get('longitude'),
+                    "displayName": result.get('display_name', ''),
+                    "placeName": result.get('place_name', ''),
+                    "placeId": result.get('place_id', ''),
+                    "city": result.get('city'),
+                    "country": result.get('country'),
+                    "source": result.get('source', 'google_places')
                 }), 200
-            elif data.get('status') == 'ZERO_RESULTS':
-                return jsonify({"status": "error", "message": "Adresse non trouvée"}), 404
-            elif data.get('status') == 'REQUEST_DENIED':
-                return jsonify({"status": "error", "message": "Google Places API: clé invalide ou API non activée"}), 500
             else:
-                return jsonify({"status": "error", "message": f"Google Places: {data.get('status')}"}), 500
+                return jsonify({"status": "error", "message": "Adresse non trouvée"}), 404
+
+        # Mode simple: recherche avec la string complète
+        result = geocode_google_places(venue=address, city=None, country=None)
+
+        if result:
+            return jsonify({
+                "status": "success",
+                "latitude": result.get('latitude'),
+                "longitude": result.get('longitude'),
+                "displayName": result.get('display_name', ''),
+                "placeName": result.get('place_name', ''),
+                "placeId": result.get('place_id', ''),
+                "source": result.get('source', 'google_places')
+            }), 200
         else:
-            return jsonify({"status": "error", "message": f"Erreur HTTP: {response.status_code}"}), 500
+            return jsonify({"status": "error", "message": "Adresse non trouvée"}), 404
 
     except Exception as e:
+        print(f"❌ Erreur geocode endpoint: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -3371,62 +3446,238 @@ def reverse_geocode(lat, lon):
     return None
 
 
+def geocode_google_places(venue=None, address=None, city=None, state=None, postalCode=None, country=None, exif_lat=None, exif_lon=None):
+    """
+    Géocode une adresse via Google Places API (Text Search).
+    Version complète avec multiple stratégies de recherche.
+    """
+    print(f"\n{'='*60}")
+    print("📍 GEOLOCALISATION (Google Places)")
+    print(f"{'='*60}")
+
+    if not GOOGLE_MAPS_API_KEY:
+        print("   ❌ GOOGLE_MAPS_API_KEY non définie")
+        if exif_lat and exif_lon:
+            print(f"   🔄 Utilisation GPS EXIF")
+            return {
+                'latitude': exif_lat, 'longitude': exif_lon,
+                'display_name': 'GPS EXIF (pas de clé API)', 'source': 'exif'
+            }
+        return None
+
+    # Traduire pays français -> anglais
+    if country:
+        country = COUNTRY_TRANSLATIONS.get(country.lower(), country)
+
+    if not venue and not address and not city:
+        print("   ⚠️ Pas d'adresse à géocoder")
+        if exif_lat and exif_lon:
+            return {
+                'latitude': exif_lat, 'longitude': exif_lon,
+                'display_name': 'GPS EXIF (aucune adresse)', 'source': 'exif'
+            }
+        return None
+
+    # Construire les requêtes de recherche (du plus précis au moins précis)
+    queries = []
+
+    # Nettoyer l'adresse des indicateurs d'étage
+    addr_clean = ""
+    if address:
+        addr_clean = re.sub(r'\b[B]?\d+F?\b', '', address, flags=re.IGNORECASE).strip()
+
+    # PRIORITÉ 1: venue + address + city + country
+    if venue and city:
+        parts = [venue]
+        if addr_clean:
+            parts.append(addr_clean)
+        parts.append(city)
+        if state:
+            parts.append(state)
+        if country:
+            parts.append(country)
+        queries.append(', '.join(parts))
+
+    # PRIORITÉ 2: venue + city + country
+    if venue and city:
+        parts = [venue, city]
+        if country:
+            parts.append(country)
+        queries.append(', '.join(parts))
+
+    # PRIORITÉ 3: address + city + country
+    if addr_clean and city:
+        parts = [addr_clean, city]
+        if country:
+            parts.append(country)
+        queries.append(', '.join(parts))
+
+    # PRIORITÉ 4: venue + postalCode + country
+    if venue and postalCode:
+        parts = [venue, postalCode]
+        if country:
+            parts.append(country)
+        queries.append(', '.join(parts))
+
+    # PRIORITÉ 5: Premier mot de l'adresse (quartier) + city
+    if address and city:
+        first_word = address.split()[0] if address.split() else None
+        if first_word and len(first_word) > 3 and not first_word[0].isdigit():
+            parts = [first_word, city]
+            if country:
+                parts.append(country)
+            queries.append(', '.join(parts))
+
+    # FALLBACK: city + state + country
+    if city:
+        parts = [city]
+        if state:
+            parts.append(state)
+        if country:
+            parts.append(country)
+        queries.append(', '.join(parts))
+
+    # FALLBACK: postalCode + country
+    if postalCode:
+        parts = [postalCode]
+        if country:
+            parts.append(country)
+        queries.append(', '.join(parts))
+
+    # Dédupliquer
+    queries = list(dict.fromkeys(queries))
+
+    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+
+    for query in queries:
+        print(f"   Essai: {query}")
+
+        params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "fr"}
+
+        try:
+            response = requests.get(url, params=params, timeout=15)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if data.get('status') == 'OK' and data.get('results'):
+                    results = data['results']
+                    print(f"   📊 {len(results)} résultat(s) trouvé(s)")
+
+                    # Filtrer par correspondance ville
+                    candidates = []
+                    for r in results:
+                        name = r.get('name', '')
+                        formatted = r.get('formatted_address', '')
+                        geo = r.get('geometry', {}).get('location', {})
+                        lat = geo.get('lat')
+                        lng = geo.get('lng')
+
+                        if not lat or not lng:
+                            continue
+
+                        # Vérifier correspondance ville
+                        city_match = True
+                        if city:
+                            city_norm = normalize_text_for_geo(city)
+                            formatted_norm = normalize_text_for_geo(formatted)
+                            city_match = city_norm in formatted_norm
+
+                        status = "✓" if city_match else "✗"
+                        display_str = f"{name} - {formatted}" if name else formatted
+                        print(f"      {status} {display_str[:70]}...")
+
+                        if city_match:
+                            candidates.append({
+                                'lat': lat, 'lng': lng, 'name': name,
+                                'formatted': formatted, 'place_id': r.get('place_id'),
+                                'types': r.get('types', []), 'rating': r.get('rating'),
+                                'user_ratings_total': r.get('user_ratings_total')
+                            })
+
+                    if candidates:
+                        # Trier par pertinence
+                        if venue:
+                            venue_norm = normalize_text_for_geo(venue)
+                            generic_words = {'hotel', 'center', 'centre', 'station', 'paris', 'lyon'}
+                            venue_words = [w for w in venue_norm.split() if len(w) > 2 and w not in generic_words]
+
+                            def relevance_score(c):
+                                name_norm = normalize_text_for_geo(c.get('name', ''))
+                                score = 100
+                                if venue_norm in name_norm or name_norm in venue_norm:
+                                    score = 0
+                                for word in venue_words:
+                                    if word in name_norm:
+                                        score = min(score, 10)
+                                    formatted_norm = normalize_text_for_geo(c.get('formatted', ''))
+                                    if word in formatted_norm:
+                                        score = min(score, 20)
+                                return score
+                            candidates.sort(key=relevance_score)
+
+                        best = candidates[0]
+                        print(f"   ✅ Sélectionné: {best['name']}")
+                        print(f"   ✅ Coordonnées: {best['lat']:.6f}, {best['lng']:.6f}")
+
+                        # Extraire ville/pays depuis l'adresse formatée
+                        addr_parts = best['formatted'].split(', ')
+                        geo_country = addr_parts[-1] if len(addr_parts) > 0 else None
+                        geo_city = addr_parts[-3] if len(addr_parts) > 2 else city
+
+                        return {
+                            'latitude': best['lat'], 'longitude': best['lng'],
+                            'display_name': best['formatted'], 'place_name': best['name'],
+                            'source': 'google_places', 'city': geo_city, 'country': geo_country,
+                            'place_id': best['place_id'], 'types': best['types'],
+                            'rating': best.get('rating')
+                        }
+
+                elif data.get('status') == 'REQUEST_DENIED':
+                    print(f"   ❌ Clé API invalide ou Places API non activée")
+                    break
+                elif data.get('status') == 'OVER_QUERY_LIMIT':
+                    print(f"   ❌ Quota API dépassé")
+                    break
+
+        except Exception as e:
+            print(f"   ⚠️ Erreur: {e}")
+
+    # DERNIER RECOURS: EXIF
+    print("   ❌ Échec géocodage Google Places")
+    if exif_lat and exif_lon:
+        print(f"   🔄 Utilisation GPS EXIF: {exif_lat:.6f}, {exif_lon:.6f}")
+        return {
+            'latitude': exif_lat, 'longitude': exif_lon,
+            'display_name': 'GPS EXIF (Google Maps échec)', 'source': 'exif'
+        }
+
+    return None
+
+
 def geocode_for_city_country(query):
     """
     Geocode une adresse/lieu et retourne city, country, lat, lon.
-    Utilise Google Places API pour obtenir la ville et le pays.
+    Wrapper simple autour de geocode_google_places.
     """
-    if not GOOGLE_MAPS_API_KEY:
-        print(f"   ⚠️ GOOGLE_MAPS_API_KEY non configurée")
-        return None
+    # Parser la query pour extraire les composants
+    parts = [p.strip() for p in query.split(',')]
 
-    try:
-        url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-        params = {
-            "query": query,
-            "key": GOOGLE_MAPS_API_KEY,
-            "language": "fr"
+    venue = parts[0] if len(parts) > 0 else None
+    city = parts[1] if len(parts) > 1 else None
+    country = parts[-1] if len(parts) > 2 else None
+
+    result = geocode_google_places(venue=venue, city=city, country=country)
+
+    if result:
+        return {
+            'city': result.get('city'),
+            'country': result.get('country'),
+            'latitude': result.get('latitude'),
+            'longitude': result.get('longitude'),
+            'display_name': result.get('display_name'),
+            'place_name': result.get('place_name')
         }
-
-        response = requests.get(url, params=params, timeout=15)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 'OK' and data.get('results'):
-                result = data['results'][0]
-                geo = result.get('geometry', {}).get('location', {})
-                lat = geo.get('lat')
-                lng = geo.get('lng')
-                formatted = result.get('formatted_address', '')
-                place_name = result.get('name', '')
-
-                # Extraire ville/pays depuis l'adresse formatée
-                addr_parts = formatted.split(', ')
-                country = addr_parts[-1] if len(addr_parts) > 0 else None
-                city = None
-
-                # Chercher la ville dans les parties de l'adresse
-                # (généralement avant le pays et le code postal)
-                for part in addr_parts[:-1]:
-                    # Ignorer les codes postaux
-                    if not part.replace(' ', '').replace('-', '').isdigit():
-                        city = part
-                        break
-
-                return {
-                    'city': city,
-                    'country': country,
-                    'latitude': lat,
-                    'longitude': lng,
-                    'display_name': formatted,
-                    'place_name': place_name
-                }
-
-            elif data.get('status') == 'REQUEST_DENIED':
-                print(f"   ❌ Google Places API: clé invalide ou API non activée")
-
-    except Exception as e:
-        print(f"⚠️ Erreur geocode Google: {e}")
 
     return None
 

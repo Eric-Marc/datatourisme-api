@@ -559,14 +559,37 @@
             console.log('📊 displayEventData called with:', data);
             currentEventData = data;
 
-            // Handle both formats: {events: [...]} or single event object
+            // Handle new schema: {events: [{qr_code, ocr, geolocation, exif_gps}, ...]}
             if (data.events && Array.isArray(data.events)) {
-                eventsData = data.events;
+                // Nouveau format: extraire et fusionner les champs ocr avec qr_code/geolocation/exif_gps
+                eventsData = data.events.map(evt => {
+                    if (evt.ocr) {
+                        // Nouveau format avec ocr wrapper
+                        return {
+                            ...evt.ocr,
+                            qr_code: evt.qr_code,
+                            geolocation: evt.geolocation,
+                            exif_gps: evt.exif_gps
+                        };
+                    } else {
+                        // Ancien format direct
+                        return evt;
+                    }
+                });
                 console.log('✅ Found events array:', eventsData.length, 'event(s)');
             } else if (data.title) {
                 // Legacy single event format
                 eventsData = [data];
                 console.log('✅ Legacy single event format');
+            } else if (data.ocr) {
+                // Single event with new schema
+                eventsData = [{
+                    ...data.ocr,
+                    qr_code: data.qr_code,
+                    geolocation: data.geolocation,
+                    exif_gps: data.exif_gps
+                }];
+                console.log('✅ Single event with new schema');
             } else {
                 eventsData = [];
                 console.log('⚠️ No events found in data');
@@ -616,9 +639,11 @@
             document.getElementById('event-organizer').textContent = d.organizer?.name || '-';
             document.getElementById('event-pricing').textContent = d.pricing?.isFree ? 'Gratuit' : (d.pricing?.priceRange || '-');
 
-            if (d.website) {
-                document.getElementById('event-website').textContent = d.website;
-                document.getElementById('event-website').href = d.website.startsWith('http') ? d.website : 'https://' + d.website;
+            // Website: utiliser qr_code si pas de website explicite
+            const website = d.website || d.qr_code;
+            if (website) {
+                document.getElementById('event-website').textContent = website;
+                document.getElementById('event-website').href = website.startsWith('http') ? website : 'https://' + website;
                 document.getElementById('event-website-container').classList.remove('hidden');
             } else {
                 document.getElementById('event-website-container').classList.add('hidden');
@@ -731,20 +756,38 @@
         async function submitSingleEvent(eventData, isPrivate, btn, silent = false) {
             if (btn) btn.textContent = '⏳ Géocodage...';
 
-            const addr = [eventData.location?.venueName, eventData.location?.address, eventData.location?.city].filter(Boolean).join(', ');
             let lat = null, lon = null;
+            const loc = eventData.location || {};
 
-            if (addr) {
+            // Utiliser le mode avancé avec composants séparés
+            if (loc.venueName || loc.city) {
                 try {
-                    let res = await fetch(`${SERVER_URL}/api/scanner/geocode`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({address: addr}) });
+                    let res = await fetch(`${SERVER_URL}/api/scanner/geocode`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            venue: loc.venueName,
+                            addressField: loc.address,
+                            city: loc.city,
+                            state: loc.state,
+                            postalCode: loc.postalCode,
+                            country: loc.country || 'France'
+                        })
+                    });
                     let geo = await res.json();
-                    if (geo.status === 'success') { lat = geo.latitude; lon = geo.longitude; }
-                    else if (eventData.location?.city) {
-                        res = await fetch(`${SERVER_URL}/api/scanner/geocode`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({address: eventData.location.city}) });
-                        geo = await res.json();
-                        if (geo.status === 'success') { lat = geo.latitude; lon = geo.longitude; }
+                    if (geo.status === 'success') {
+                        lat = geo.latitude;
+                        lon = geo.longitude;
+                        console.log(`📍 Géocodé: ${geo.placeName || geo.displayName}`);
                     }
                 } catch (e) { console.error('Geocode error:', e); }
+            }
+
+            // Fallback: utiliser EXIF GPS si pas de géocodage
+            if (!lat && !lon && eventData.exif_gps) {
+                lat = eventData.exif_gps.lat;
+                lon = eventData.exif_gps.lon;
+                console.log(`📍 EXIF GPS: ${lat}, ${lon}`);
             }
 
             if (btn) btn.textContent = '⏳ Enregistrement...';
@@ -776,7 +819,7 @@
                         description: eventData.description,
                         organizer: eventData.organizer?.name,
                         pricing: eventData.pricing?.isFree ? 'Gratuit' : eventData.pricing?.priceRange,
-                        website: eventData.website,
+                        website: eventData.website || eventData.qr_code,
                         tags: eventData.tags || [],
                         is_private: isPrivate,
                         image: imageData
