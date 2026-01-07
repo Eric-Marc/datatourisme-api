@@ -2147,9 +2147,9 @@ def normalize_text_for_geo(text):
     text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
     return text
 
-# Modèles Gemini par ordre de préférence (comme ocr_geo_google.py)
+# Modèles Gemini par ordre de préférence (Gemini 3.0 Pro en premier)
 GEMINI_MODELS = [
-    'gemini-3-pro-preview',
+    'gemini-3.0-pro',
     'gemini-2.0-flash-exp',
     'gemini-1.5-flash-latest',
     'gemini-1.5-pro-latest'
@@ -2535,19 +2535,68 @@ JSON uniquement, sans markdown ni explications."""
                         json_text = re.sub(r',\s*}', '}', json_text)
                         json_text = re.sub(r',\s*]', ']', json_text)
 
+                        # 2. Réparer JSON tronqué (fermer les accolades/crochets manquants)
+                        def repair_truncated_json(s):
+                            # Compter les accolades/crochets ouverts
+                            open_braces = s.count('{') - s.count('}')
+                            open_brackets = s.count('[') - s.count(']')
+                            # Fermer dans l'ordre inverse
+                            s = s.rstrip()
+                            if s.endswith(','):
+                                s = s[:-1]
+                            s += '}' * open_braces
+                            s += ']' * open_brackets
+                            return s
+
                         import json
                         try:
                             event_data = json.loads(json_text)
                         except json.JSONDecodeError as je:
-                            # Debug: afficher le JSON problématique
-                            print(f"⚠️ JSON invalide reçu de {model}:")
-                            print(json_text[:500])
-                            raise je
+                            # Essayer de réparer le JSON tronqué
+                            print(f"⚠️ JSON tronqué de {model}, tentative de réparation...")
+                            try:
+                                repaired = repair_truncated_json(json_text)
+                                event_data = json.loads(repaired)
+                                print(f"✅ JSON réparé avec succès")
+                            except json.JSONDecodeError:
+                                print(f"❌ JSON invalide reçu de {model}:")
+                                print(json_text[:500])
+                                raise je
+
+                        # Backward compatibility: convertir ancien format vers nouveau
+                        if 'events' not in event_data and 'title' in event_data:
+                            print(f"   🔄 Conversion ancien format → events[]")
+                            old_event = event_data
+
+                            # Convertir startDate/endDate en Day/Month/Year
+                            def parse_date_fields(date_str):
+                                if not date_str:
+                                    return None, None, None
+                                parts = date_str.split('-')
+                                if len(parts) == 3:
+                                    return parts[2], parts[1], parts[0]  # DD, MM, YYYY
+                                return None, None, None
+
+                            if 'startDate' in old_event:
+                                d, m, y = parse_date_fields(old_event.get('startDate'))
+                                old_event['startDateDay'] = d
+                                old_event['startDateMonth'] = m
+                                old_event['startDateYear'] = y
+                                del old_event['startDate']
+
+                            if 'endDate' in old_event:
+                                d, m, y = parse_date_fields(old_event.get('endDate'))
+                                old_event['endDateDay'] = d
+                                old_event['endDateMonth'] = m
+                                old_event['endDateYear'] = y
+                                del old_event['endDate']
+
+                            event_data = {'events': [old_event]}
 
                         # Post-processing: corriger les accents français
                         event_data = fix_ocr_dict(event_data)
 
-                        print(f"✅ Gemini: Analyse réussie avec {model}")
+                        print(f"✅ Gemini: Analyse réussie avec {model} ({len(event_data.get('events', []))} événement(s))")
 
                         return jsonify({
                             "status": "success",
