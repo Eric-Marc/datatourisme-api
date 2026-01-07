@@ -166,10 +166,22 @@
                 </div>
 
                 <div id="event-container" class="hidden animate-fade-in">
+                    <!-- Navigation multi-événements -->
+                    <div id="events-nav" class="hidden bg-white rounded-xl shadow-lg p-3 mb-4 flex items-center justify-between">
+                        <button onclick="prevEvent()" id="prev-event-btn" class="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">← Préc.</button>
+                        <span id="event-counter" class="font-medium text-gray-700">1 / 1</span>
+                        <button onclick="nextEvent()" id="next-event-btn" class="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">Suiv. →</button>
+                    </div>
+
                     <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
                         <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-5 text-white">
-                            <span id="event-category" class="inline-block px-3 py-1 bg-white/20 rounded-full text-sm mb-2">Événement</span>
-                            <h2 id="event-title" class="text-xl font-bold">Titre</h2>
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span id="event-category" class="inline-block px-3 py-1 bg-white/20 rounded-full text-sm mb-2">Événement</span>
+                                    <h2 id="event-title" class="text-xl font-bold">Titre</h2>
+                                </div>
+                                <span id="event-index-badge" class="hidden bg-white/30 px-2 py-1 rounded-full text-sm font-medium">1/2</span>
+                            </div>
                         </div>
                         <div class="p-5 space-y-3 text-sm">
                             <div class="flex gap-3"><span class="text-xl">📅</span><div><p class="text-gray-500">Date</p><p id="event-date" class="text-gray-900">-</p><p id="event-time" class="text-gray-600">-</p></div></div>
@@ -190,6 +202,7 @@
                                 <button id="add-to-gedeon-btn" onclick="addToGedeon()" class="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600">➕ Ajouter à GEDEON</button>
                                 <button onclick="toggleJson()" class="px-4 py-3 bg-gray-200 rounded-xl hover:bg-gray-300">{ }</button>
                             </div>
+                            <button id="add-all-btn" onclick="addAllToGedeon()" class="hidden w-full bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600">➕ Ajouter TOUS les événements</button>
                         </div>
                         <div id="json-viewer" class="hidden border-t"><pre id="json-content" class="p-4 bg-gray-900 text-green-400 text-xs overflow-auto max-h-48"></pre></div>
                     </div>
@@ -208,7 +221,9 @@
 
     <script>
         const SERVER_URL = window.location.origin;
-        let currentEventData = null;
+        let currentEventData = null;  // Raw response data
+        let eventsData = [];          // Array of events
+        let currentEventIndex = 0;    // Currently displayed event index
         let currentUser = null;
 
         // Global file handler for inline onchange (Android compatible)
@@ -525,41 +540,140 @@
             finally { processingOverlay.classList.add('hidden'); skeletonLoader.classList.add('hidden'); }
         }
         
-        function displayEventData(d) {
+        // Format date from Day/Month/Year fields
+        function formatDate(day, month, year) {
+            if (!day && !month && !year) return null;
+            const d = day ? day.toString().padStart(2, '0') : '??';
+            const m = month ? month.toString().padStart(2, '0') : '??';
+            const y = year || '????';
+            return `${d}/${m}/${y}`;
+        }
+
+        // Get ISO date from Day/Month/Year fields
+        function getISODate(day, month, year) {
+            if (!year || !month || !day) return null;
+            return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        }
+
+        function displayEventData(data) {
+            currentEventData = data;
+
+            // Handle both formats: {events: [...]} or single event object
+            if (data.events && Array.isArray(data.events)) {
+                eventsData = data.events;
+            } else if (data.title) {
+                // Legacy single event format
+                eventsData = [data];
+            } else {
+                eventsData = [];
+            }
+
+            currentEventIndex = 0;
+
+            // Show/hide navigation if multiple events
+            const eventsNav = document.getElementById('events-nav');
+            const addAllBtn = document.getElementById('add-all-btn');
+            const indexBadge = document.getElementById('event-index-badge');
+
+            if (eventsData.length > 1) {
+                eventsNav.classList.remove('hidden');
+                addAllBtn.classList.remove('hidden');
+                indexBadge.classList.remove('hidden');
+            } else {
+                eventsNav.classList.add('hidden');
+                addAllBtn.classList.add('hidden');
+                indexBadge.classList.add('hidden');
+            }
+
+            updateEventNavigation();
+            displaySingleEvent(eventsData[0]);
             eventContainer.classList.remove('hidden');
+
+            // Show full JSON in viewer
+            document.getElementById('json-content').textContent = JSON.stringify(data, null, 2);
+        }
+
+        function displaySingleEvent(d) {
+            if (!d) return;
+
             document.getElementById('event-title').textContent = d.title || 'Sans titre';
             document.getElementById('event-category').textContent = d.category || 'Événement';
-            let dateText = d.startDate || '-'; if (d.endDate && d.endDate !== d.startDate) dateText += ` → ${d.endDate}`;
+
+            // Handle new date format (startDateDay/Month/Year) or legacy (startDate)
+            let startDateText = d.startDate || formatDate(d.startDateDay, d.startDateMonth, d.startDateYear) || '-';
+            let endDateText = d.endDate || formatDate(d.endDateDay, d.endDateMonth, d.endDateYear);
+            let dateText = startDateText;
+            if (endDateText && endDateText !== startDateText) dateText += ` → ${endDateText}`;
+
             document.getElementById('event-date').textContent = dateText;
             document.getElementById('event-time').textContent = d.startTime ? (d.startTime + (d.endTime ? ` - ${d.endTime}` : '')) : '-';
             document.getElementById('event-venue').textContent = d.location?.venueName || '-';
-            document.getElementById('event-address').textContent = [d.location?.address, d.location?.city].filter(Boolean).join(', ') || '-';
+            document.getElementById('event-address').textContent = [d.location?.address, d.location?.postalCode, d.location?.city].filter(Boolean).join(', ') || '-';
             document.getElementById('event-organizer').textContent = d.organizer?.name || '-';
             document.getElementById('event-pricing').textContent = d.pricing?.isFree ? 'Gratuit' : (d.pricing?.priceRange || '-');
-            if (d.website) { 
-                document.getElementById('event-website').textContent = d.website; 
+
+            if (d.website) {
+                document.getElementById('event-website').textContent = d.website;
                 document.getElementById('event-website').href = d.website.startsWith('http') ? d.website : 'https://' + d.website;
-                document.getElementById('event-website-container').classList.remove('hidden'); 
+                document.getElementById('event-website-container').classList.remove('hidden');
+            } else {
+                document.getElementById('event-website-container').classList.add('hidden');
             }
-            else { document.getElementById('event-website-container').classList.add('hidden'); }
-            if (d.description) { document.getElementById('event-description').textContent = d.description; document.getElementById('event-description-container').classList.remove('hidden'); }
-            else { document.getElementById('event-description-container').classList.add('hidden'); }
-            if (d.tags && d.tags.length) { document.getElementById('event-tags').innerHTML = d.tags.map(t => `<span class="px-2 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs">${t}</span>`).join(''); document.getElementById('event-tags-container').classList.remove('hidden'); }
-            else { document.getElementById('event-tags-container').classList.add('hidden'); }
-            document.getElementById('json-content').textContent = JSON.stringify(d, null, 2);
+
+            if (d.description) {
+                document.getElementById('event-description').textContent = d.description;
+                document.getElementById('event-description-container').classList.remove('hidden');
+            } else {
+                document.getElementById('event-description-container').classList.add('hidden');
+            }
+
+            if (d.tags && d.tags.length) {
+                document.getElementById('event-tags').innerHTML = d.tags.map(t => `<span class="px-2 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs">${t}</span>`).join('');
+                document.getElementById('event-tags-container').classList.remove('hidden');
+            } else {
+                document.getElementById('event-tags-container').classList.add('hidden');
+            }
+        }
+
+        function updateEventNavigation() {
+            const total = eventsData.length;
+            const current = currentEventIndex + 1;
+
+            document.getElementById('event-counter').textContent = `${current} / ${total}`;
+            document.getElementById('event-index-badge').textContent = `${current}/${total}`;
+            document.getElementById('prev-event-btn').disabled = currentEventIndex === 0;
+            document.getElementById('next-event-btn').disabled = currentEventIndex === total - 1;
+        }
+
+        function prevEvent() {
+            if (currentEventIndex > 0) {
+                currentEventIndex--;
+                displaySingleEvent(eventsData[currentEventIndex]);
+                updateEventNavigation();
+            }
+        }
+
+        function nextEvent() {
+            if (currentEventIndex < eventsData.length - 1) {
+                currentEventIndex++;
+                displaySingleEvent(eventsData[currentEventIndex]);
+                updateEventNavigation();
+            }
         }
         
         function toggleJson() { document.getElementById('json-viewer').classList.toggle('hidden'); }
         
         // === AJOUTER À GEDEON ===
         async function addToGedeon() {
-            if (!currentEventData) return;
+            const eventData = eventsData[currentEventIndex];
+            if (!eventData) return;
 
             // Validation: require at least title, date and location
             const missingFields = [];
-            if (!currentEventData.title) missingFields.push('titre');
-            if (!currentEventData.startDate) missingFields.push('date');
-            if (!currentEventData.location?.city && !currentEventData.location?.venueName && !currentEventData.location?.address) {
+            if (!eventData.title) missingFields.push('titre');
+            const hasDate = eventData.startDate || (eventData.startDateDay && eventData.startDateMonth);
+            if (!hasDate) missingFields.push('date');
+            if (!eventData.location?.city && !eventData.location?.venueName && !eventData.location?.address) {
                 missingFields.push('lieu');
             }
 
@@ -572,11 +686,11 @@
                 showLoginModal();
                 return;
             }
-            
+
             const btn = document.getElementById('add-to-gedeon-btn');
             const isPrivate = document.getElementById('is-private').checked;
             btn.disabled = true; btn.textContent = '⏳ Vérification...';
-            
+
             // 🔐 Vérifier que l'utilisateur est valide côté serveur
             try {
                 const verifyRes = await fetch(`${SERVER_URL}/api/users/verify`, {
@@ -585,14 +699,13 @@
                     body: JSON.stringify({ user_id: currentUser.id, email: currentUser.email })
                 });
                 const verifyData = await verifyRes.json();
-                
+
                 if (verifyData.status !== 'success') {
-                    // Utilisateur invalide → forcer reconnexion
                     localStorage.removeItem('gedeon_user');
                     currentUser = null;
                     document.getElementById('user-pseudo-display').textContent = 'Non connecté';
                     btn.disabled = false; btn.textContent = '➕ Ajouter à GEDEON';
-                    
+
                     if (verifyData.code === 'EMAIL_NOT_CONFIRMED') {
                         alert('⚠️ Votre email n\'est pas confirmé. Vérifiez votre boîte mail.');
                     } else {
@@ -607,26 +720,34 @@
                 alert('❌ Erreur de connexion au serveur');
                 return;
             }
-            
-            btn.textContent = '⏳ Géocodage...';
-            
-            const addr = [currentEventData.location?.venueName, currentEventData.location?.address, currentEventData.location?.city].filter(Boolean).join(', ');
+
+            await submitSingleEvent(eventData, isPrivate, btn);
+        }
+
+        async function submitSingleEvent(eventData, isPrivate, btn, silent = false) {
+            if (btn) btn.textContent = '⏳ Géocodage...';
+
+            const addr = [eventData.location?.venueName, eventData.location?.address, eventData.location?.city].filter(Boolean).join(', ');
             let lat = null, lon = null;
-            
+
             if (addr) {
                 try {
                     let res = await fetch(`${SERVER_URL}/api/scanner/geocode`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({address: addr}) });
                     let geo = await res.json();
                     if (geo.status === 'success') { lat = geo.latitude; lon = geo.longitude; }
-                    else if (currentEventData.location?.city) {
-                        res = await fetch(`${SERVER_URL}/api/scanner/geocode`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({address: currentEventData.location.city}) });
+                    else if (eventData.location?.city) {
+                        res = await fetch(`${SERVER_URL}/api/scanner/geocode`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({address: eventData.location.city}) });
                         geo = await res.json();
                         if (geo.status === 'success') { lat = geo.latitude; lon = geo.longitude; }
                     }
                 } catch (e) { console.error('Geocode error:', e); }
             }
-            
-            btn.textContent = '⏳ Enregistrement...';
+
+            if (btn) btn.textContent = '⏳ Enregistrement...';
+
+            // Get ISO dates from new format or use legacy
+            const beginDate = eventData.startDate || getISODate(eventData.startDateDay, eventData.startDateMonth, eventData.startDateYear);
+            const endDate = eventData.endDate || getISODate(eventData.endDateDay, eventData.endDateMonth, eventData.endDateYear);
 
             // Récupérer l'image depuis l'aperçu
             const imageData = document.getElementById('preview-img').src;
@@ -636,35 +757,100 @@
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         user_id: currentUser.id,
-                        title: currentEventData.title,
-                        category: currentEventData.category,
-                        begin: currentEventData.startDate,
-                        end: currentEventData.endDate,
-                        startTime: currentEventData.startTime,
-                        endTime: currentEventData.endTime,
-                        locationName: currentEventData.location?.venueName,
-                        city: currentEventData.location?.city,
-                        country: currentEventData.location?.country || 'France',
-                        address: currentEventData.location?.address,
+                        title: eventData.title,
+                        category: eventData.category,
+                        begin: beginDate,
+                        end: endDate,
+                        startTime: eventData.startTime,
+                        endTime: eventData.endTime,
+                        locationName: eventData.location?.venueName,
+                        city: eventData.location?.city,
+                        country: eventData.location?.country || 'France',
+                        address: eventData.location?.address,
+                        postalCode: eventData.location?.postalCode,
                         latitude: lat, longitude: lon,
-                        description: currentEventData.description,
-                        organizer: currentEventData.organizer?.name,
-                        pricing: currentEventData.pricing?.isFree ? 'Gratuit' : currentEventData.pricing?.priceRange,
-                        website: currentEventData.website,
-                        tags: currentEventData.tags || [],
+                        description: eventData.description,
+                        organizer: eventData.organizer?.name,
+                        pricing: eventData.pricing?.isFree ? 'Gratuit' : eventData.pricing?.priceRange,
+                        website: eventData.website,
+                        tags: eventData.tags || [],
                         is_private: isPrivate,
-                        image: imageData  // Inclure l'image en base64
+                        image: imageData
                     })
                 });
                 const result = await res.json();
+
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '➕ Ajouter à GEDEON';
+                }
+
                 if (result.status === 'success') {
-                    const priv = isPrivate ? ' (privé)' : ' (public)';
-                    if (lat && lon) { if (confirm(`✅ Ajouté${priv} !\n\nVoir la carte ?`)) window.location.href = 'index.html'; }
-                    else { alert(`✅ Ajouté${priv} mais non géolocalisé.`); }
-                } else { alert('❌ ' + (result.message || 'Erreur')); }
-            } catch (e) { alert('❌ Erreur serveur'); }
-            
-            btn.disabled = false; btn.textContent = '➕ Ajouter à GEDEON';
+                    if (!silent) {
+                        const priv = isPrivate ? ' (privé)' : ' (public)';
+                        if (lat && lon) {
+                            if (confirm(`✅ "${eventData.title}" ajouté${priv} !\n\nVoir la carte ?`)) window.location.href = 'index.html';
+                        } else {
+                            alert(`✅ "${eventData.title}" ajouté${priv} mais non géolocalisé.`);
+                        }
+                    }
+                    return true;
+                } else {
+                    if (!silent) alert('❌ ' + (result.message || 'Erreur'));
+                    return false;
+                }
+            } catch (e) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '➕ Ajouter à GEDEON';
+                }
+                if (!silent) alert('❌ Erreur serveur');
+                return false;
+            }
+        }
+
+        async function addAllToGedeon() {
+            if (eventsData.length === 0) return;
+
+            if (!currentUser) {
+                showLoginModal();
+                return;
+            }
+
+            const isPrivate = document.getElementById('is-private').checked;
+            const btn = document.getElementById('add-all-btn');
+            btn.disabled = true;
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (let i = 0; i < eventsData.length; i++) {
+                const event = eventsData[i];
+                btn.textContent = `⏳ ${i + 1}/${eventsData.length}...`;
+
+                // Skip events without required fields
+                const hasDate = event.startDate || (event.startDateDay && event.startDateMonth);
+                if (!event.title || !hasDate) {
+                    failCount++;
+                    continue;
+                }
+
+                const success = await submitSingleEvent(event, isPrivate, null, true);
+                if (success) successCount++;
+                else failCount++;
+            }
+
+            btn.disabled = false;
+            btn.textContent = '➕ Ajouter TOUS les événements';
+
+            const priv = isPrivate ? ' (privés)' : ' (publics)';
+            if (failCount === 0) {
+                if (confirm(`✅ ${successCount} événement(s) ajouté(s)${priv} !\n\nVoir la carte ?`)) {
+                    window.location.href = 'index.html';
+                }
+            } else {
+                alert(`✅ ${successCount} ajouté(s)${priv}\n❌ ${failCount} échec(s) (données manquantes)`);
+            }
         }
         
         // Init
