@@ -3696,10 +3696,11 @@ def download_orphan_files():
         cur.execute("SELECT image_path FROM scanned_events WHERE image_path IS NOT NULL")
         db_paths = set()
         for row in cur.fetchall():
-            path = row[0]
-            if path.startswith('uploads/'):
+            path = row['image_path'] if isinstance(row, dict) else row[0]
+            if path and path.startswith('uploads/'):
                 path = path[8:]
-            db_paths.add(os.path.basename(path))
+            if path:
+                db_paths.add(os.path.basename(path))
 
         cur.close()
         conn.close()
