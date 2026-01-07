@@ -3681,44 +3681,90 @@ def serve_media(filepath):
         max_age=31536000  # Cache for 1 year
     )
 
+# Variable globale pour le statut du ZIP
+zip_generation_status = {"status": "idle", "progress": 0, "total": 0, "error": None}
+
+@app.route('/api/diagnostic/all-images/start')
+def start_zip_generation():
+    """
+    Démarre la génération du ZIP en arrière-plan.
+    """
+    import threading
+    global zip_generation_status
+
+    if zip_generation_status["status"] == "running":
+        return jsonify({"message": "Génération déjà en cours", "status": zip_generation_status})
+
+    def generate_zip():
+        global zip_generation_status
+        import zipfile
+
+        try:
+            zip_generation_status = {"status": "running", "progress": 0, "total": 0, "error": None}
+
+            scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+            if not os.path.exists(scans_dir):
+                zip_generation_status = {"status": "error", "error": "Scans directory not found"}
+                return
+
+            files = [f for f in os.listdir(scans_dir) if os.path.isfile(os.path.join(scans_dir, f))]
+            zip_generation_status["total"] = len(files)
+
+            zip_path = os.path.join(UPLOADS_BASE_DIR, 'all_images.zip')
+
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for i, filename in enumerate(files):
+                    filepath = os.path.join(scans_dir, filename)
+                    zf.write(filepath, filename)
+                    zip_generation_status["progress"] = i + 1
+
+            zip_size = os.path.getsize(zip_path)
+            zip_generation_status = {
+                "status": "done",
+                "progress": len(files),
+                "total": len(files),
+                "size_mb": round(zip_size / (1024*1024), 2),
+                "error": None
+            }
+
+        except Exception as e:
+            zip_generation_status = {"status": "error", "error": str(e)}
+
+    thread = threading.Thread(target=generate_zip)
+    thread.start()
+
+    return jsonify({"message": "Génération démarrée", "status": zip_generation_status})
+
+
+@app.route('/api/diagnostic/all-images/status')
+def zip_generation_status_endpoint():
+    """
+    Vérifie le statut de la génération du ZIP.
+    """
+    return jsonify(zip_generation_status)
+
+
 @app.route('/api/diagnostic/all-images/download')
 def download_all_images():
     """
-    Télécharge toutes les images existantes dans un ZIP.
+    Télécharge le ZIP généré.
     """
-    import zipfile
-    import io
+    from flask import send_file
 
-    try:
-        scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
-        if not os.path.exists(scans_dir):
-            return jsonify({"error": "Scans directory not found"}), 404
+    zip_path = os.path.join(UPLOADS_BASE_DIR, 'all_images.zip')
 
-        files = os.listdir(scans_dir)
-        if not files:
-            return jsonify({"message": "Aucun fichier"}), 200
+    if not os.path.exists(zip_path):
+        return jsonify({
+            "error": "ZIP non généré. Appelez d'abord /api/diagnostic/all-images/start",
+            "status": zip_generation_status
+        }), 404
 
-        # Créer le ZIP en mémoire
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for filename in files:
-                filepath = os.path.join(scans_dir, filename)
-                if os.path.isfile(filepath):
-                    zf.write(filepath, filename)
-
-        zip_buffer.seek(0)
-
-        from flask import send_file
-        return send_file(
-            zip_buffer,
-            mimetype='application/zip',
-            as_attachment=True,
-            download_name='all_images.zip'
-        )
-
-    except Exception as e:
-        import traceback
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+    return send_file(
+        zip_path,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='all_images.zip'
+    )
 
 
 @app.route('/api/diagnostic/orphan-files/download')
