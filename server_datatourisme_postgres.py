@@ -3710,15 +3710,16 @@ def check_disk_files():
 
             full_path = os.path.join(UPLOADS_BASE_DIR, relative_path)
 
+            title = (scan['title'] or 'Sans titre')[:50]
             if os.path.exists(full_path):
                 on_disk.append({
-                    'title': scan['title'][:50],
+                    'title': title,
                     'user': scan['pseudo'],
                     'size': os.path.getsize(full_path)
                 })
             else:
                 missing.append({
-                    'title': scan['title'][:50],
+                    'title': title,
                     'user': scan['pseudo'],
                     'path': full_path
                 })
