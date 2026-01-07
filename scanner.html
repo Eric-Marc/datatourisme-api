@@ -556,16 +556,20 @@
         }
 
         function displayEventData(data) {
+            console.log('📊 displayEventData called with:', data);
             currentEventData = data;
 
             // Handle both formats: {events: [...]} or single event object
             if (data.events && Array.isArray(data.events)) {
                 eventsData = data.events;
+                console.log('✅ Found events array:', eventsData.length, 'event(s)');
             } else if (data.title) {
                 // Legacy single event format
                 eventsData = [data];
+                console.log('✅ Legacy single event format');
             } else {
                 eventsData = [];
+                console.log('⚠️ No events found in data');
             }
 
             currentEventIndex = 0;
