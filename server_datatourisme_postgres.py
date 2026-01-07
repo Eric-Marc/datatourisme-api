@@ -2505,7 +2505,7 @@ JSON uniquement, sans markdown ni explications."""
                     }],
                     "generationConfig": {
                         "temperature": GEMINI_TEMPERATURE,
-                        "maxOutputTokens": 8192,
+                        "maxOutputTokens": 16384,
                         "mediaResolution": "MEDIA_RESOLUTION_MEDIUM"
                     }
                 }
@@ -2537,15 +2537,73 @@ JSON uniquement, sans markdown ni explications."""
 
                         # 2. Réparer JSON tronqué (fermer les accolades/crochets manquants)
                         def repair_truncated_json(s):
-                            # Compter les accolades/crochets ouverts
-                            open_braces = s.count('{') - s.count('}')
-                            open_brackets = s.count('[') - s.count(']')
-                            # Fermer dans l'ordre inverse
+                            """Répare un JSON tronqué de manière robuste."""
                             s = s.rstrip()
-                            if s.endswith(','):
+
+                            # 1. Fermer les chaînes non terminées
+                            in_string = False
+                            escape = False
+                            for c in s:
+                                if escape:
+                                    escape = False
+                                elif c == '\\':
+                                    escape = True
+                                elif c == '"':
+                                    in_string = not in_string
+
+                            if in_string:
+                                # Trouver la dernière virgule ou accolade avant la chaîne tronquée
+                                # et tronquer là pour avoir un JSON valide
+                                last_complete = max(
+                                    s.rfind('",'),
+                                    s.rfind('": '),
+                                    s.rfind('"}'),
+                                    s.rfind('"]'),
+                                    s.rfind(': null'),
+                                    s.rfind(': true'),
+                                    s.rfind(': false')
+                                )
+                                if last_complete > 0:
+                                    # Trouver la fin de cette valeur complète
+                                    if s[last_complete:last_complete+2] == '",':
+                                        s = s[:last_complete+2]
+                                    elif s[last_complete:last_complete+2] == '"}':
+                                        s = s[:last_complete+2]
+                                    elif s[last_complete:last_complete+2] == '"]':
+                                        s = s[:last_complete+2]
+                                    else:
+                                        s = s[:last_complete+1]
+                                else:
+                                    s += '"'
+
+                            # 2. Supprimer les virgules/deux-points en fin
+                            s = s.rstrip()
+                            while s and s[-1] in ',:\n\t ':
                                 s = s[:-1]
-                            s += '}' * open_braces
-                            s += ']' * open_brackets
+
+                            # 3. Compter et fermer les accolades/crochets
+                            stack = []
+                            in_str = False
+                            esc = False
+                            for c in s:
+                                if esc:
+                                    esc = False
+                                elif c == '\\':
+                                    esc = True
+                                elif c == '"':
+                                    in_str = not in_str
+                                elif not in_str:
+                                    if c == '{':
+                                        stack.append('}')
+                                    elif c == '[':
+                                        stack.append(']')
+                                    elif c in '}]' and stack:
+                                        stack.pop()
+
+                            # Fermer dans l'ordre inverse
+                            while stack:
+                                s += stack.pop()
+
                             return s
 
                         import json
