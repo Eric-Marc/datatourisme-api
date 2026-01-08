@@ -3963,14 +3963,13 @@ def add_scanned_event():
             else:
                 print(f"⚠️ Geocode non trouvé pour aucune requête")
 
-        # Gérer l'image si fournie
-        image_path = None
-        image_data_base64 = None  # Pour stockage en DB
+        # Gérer l'image si fournie (stockage PostgreSQL uniquement, pas de disque)
+        image_path = None  # Pas de stockage sur disque pour gedeon-docker-ocr
+        image_data_base64 = None
         image_mime = None
         if data.get('image'):
             try:
                 import base64
-                import os
 
                 # Extraire les données base64
                 image_data_raw = data['image']
@@ -3991,7 +3990,7 @@ def add_scanned_event():
                 else:
                     image_data_base64 = image_data_raw
 
-                # Décoder le base64
+                # Décoder le base64 pour extraction EXIF
                 image_bytes = base64.b64decode(image_data_base64)
 
                 # 📍 FALLBACK: Extraire GPS des métadonnées EXIF
@@ -4017,52 +4016,15 @@ def add_scanned_event():
                                 data['country'] = country
                             print(f"✅ EXIF fallback réussi: {city}, {country}")
 
-                # Créer le nom de fichier avec l'uid
-                uploads_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
-
-                # Debug: show actual path
-                print(f"🔍 DEBUG: uploads_dir = {uploads_dir}")
-                print(f"🔍 DEBUG: __file__ = {__file__}")
-
-                os.makedirs(uploads_dir, exist_ok=True)
-
-                # Déterminer l'extension (jpeg par défaut)
-                extension = 'jpg'
-                if image_data_raw.startswith('data:image/png'):
-                    extension = 'png'
-                elif image_data_raw.startswith('data:image/webp'):
-                    extension = 'webp'
-                elif image_data_raw.startswith('data:image/gif'):
-                    extension = 'gif'
-
-                filename = f"{uid}.{extension}"
-                filepath = os.path.join(uploads_dir, filename)
-
-                print(f"🔍 DEBUG: filepath = {filepath}")
-
-                # Sauvegarder l'image
-                with open(filepath, 'wb') as f:
-                    f.write(image_bytes)
-
-                # Verify file was written
-                if os.path.exists(filepath):
-                    file_size = os.path.getsize(filepath)
-                    print(f"✅ File written: {filepath} ({file_size} bytes)")
-                else:
-                    print(f"❌ File NOT found after write: {filepath}")
-
-                # Stocker le chemin relatif
-                image_path = f"uploads/scans/{filename}"
-
-                print(f"💾 Image sauvegardée: {image_path}")
+                print(f"💾 Image stockée en base uniquement: {image_mime}, {len(image_data_base64)} chars")
 
             except Exception as e:
-                print(f"⚠️  Erreur sauvegarde image: {e}")
+                print(f"⚠️  Erreur traitement image: {e}")
                 # Continue sans l'image si erreur
 
-        # Insérer l'événement (avec image sur disque ET en base64 dans PostgreSQL)
+        # Insérer l'événement (image en base64 dans PostgreSQL uniquement)
         print(f"🔍 INSERT: city={data.get('city')}, country={data.get('country')}, lat={data.get('latitude')}, lon={data.get('longitude')}")
-        print(f"💾 Image: path={image_path}, mime={image_mime}, data_len={len(image_data_base64) if image_data_base64 else 0}")
+        print(f"💾 Image: mime={image_mime}, data_len={len(image_data_base64) if image_data_base64 else 0}")
         cur.execute("""
             INSERT INTO scanned_events (
                 user_id, uid, title, category, begin_date, end_date,
