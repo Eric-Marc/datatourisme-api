@@ -3719,13 +3719,23 @@ migration_status = {"status": "idle", "progress": 0, "total": 0, "migrated": 0, 
 @app.route('/api/diagnostic/migrate-images/batch')
 def migrate_images_batch():
     """
-    Migre un batch de 100 images du disque vers PostgreSQL.
+    Migre un batch d'images du disque vers PostgreSQL.
+    - batch_size: nombre d'images par batch (défaut: 20, max: 50)
+    - Non-bloquant: petite pause entre chaque image
     Appeler plusieurs fois jusqu'à ce que remaining = 0.
     """
     import base64
     from datetime import datetime
+    import time
 
-    BATCH_SIZE = 100
+    # Paramètres (limités pour ne pas perturber le service)
+    batch_size = min(request.args.get('batch', 20, type=int), 50)
+
+    print(f"\n{'='*60}")
+    print(f"🔄 MIGRATION IMAGES → POSTGRESQL")
+    print(f"   Heure: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"   Batch size: {batch_size}")
+    print(f"{'='*60}")
 
     try:
         conn = get_db_connection()
@@ -3733,55 +3743,64 @@ def migrate_images_batch():
 
         # Compter le total restant
         cur.execute("""
-            SELECT COUNT(*)
+            SELECT COUNT(*) as count
             FROM scanned_events
             WHERE image_path IS NOT NULL
             AND (image_data IS NULL OR image_data = '')
         """)
-        remaining = cur.fetchone()[0]
+        remaining = cur.fetchone()['count']
 
         if remaining == 0:
             cur.close()
             conn.close()
-            print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] Migration terminée - plus d'images à migrer")
+            print(f"✅ Migration terminée - plus d'images à migrer")
+            print(f"{'='*60}\n")
             return jsonify({
                 "status": "done",
                 "message": "Toutes les images sont migrées",
                 "remaining": 0
             })
 
-        print(f"🔄 [{datetime.now().strftime('%H:%M:%S')}] Début batch - {remaining} images restantes")
+        print(f"📊 Images restantes à migrer: {remaining}")
 
         # Récupérer un batch
         cur.execute("""
-            SELECT id, image_path
+            SELECT id, image_path, title
             FROM scanned_events
             WHERE image_path IS NOT NULL
             AND (image_data IS NULL OR image_data = '')
+            ORDER BY id
             LIMIT %s
-        """, (BATCH_SIZE,))
+        """, (batch_size,))
         events = cur.fetchall()
 
         scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
+        print(f"📁 Répertoire scans: {scans_dir}")
+
         migrated = 0
         skipped = 0
+        missing = 0
 
-        for row in events:
-            event_id = row[0] if isinstance(row, tuple) else row['id']
-            image_path = row[1] if isinstance(row, tuple) else row['image_path']
+        for i, row in enumerate(events):
+            event_id = row['id']
+            image_path = row['image_path']
+            title = (row['title'] or 'Sans titre')[:30]
 
             filename = os.path.basename(image_path)
             filepath = os.path.join(scans_dir, filename)
 
+            print(f"   [{i+1}/{len(events)}] ID {event_id}: {title}...")
+
             if os.path.exists(filepath):
                 try:
+                    file_size = os.path.getsize(filepath)
                     with open(filepath, 'rb') as f:
                         image_bytes = f.read()
 
                     image_base64 = base64.b64encode(image_bytes).decode('utf-8')
 
                     ext = os.path.splitext(filename)[1].lower()
-                    mime_types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp'}
+                    mime_types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp'}
                     mime_type = mime_types.get(ext, 'image/jpeg')
 
                     cur.execute("""
@@ -3791,10 +3810,10 @@ def migrate_images_batch():
                     """, (image_base64, mime_type, event_id))
 
                     migrated += 1
+                    print(f"      ✅ OK ({file_size} bytes → {len(image_base64)} chars, {mime_type})")
 
                 except Exception as e:
-                    print(f"   ❌ Erreur {event_id}: {e}")
-                    # Marquer comme traité pour éviter de réessayer
+                    print(f"      ❌ ERREUR: {e}")
                     cur.execute("""
                         UPDATE scanned_events
                         SET image_data = 'ERROR', image_mime = %s
@@ -3802,33 +3821,46 @@ def migrate_images_batch():
                     """, (str(e)[:50], event_id))
                     skipped += 1
             else:
-                # Fichier absent - marquer comme traité
+                print(f"      ⚠️  FICHIER ABSENT: {filepath}")
                 cur.execute("""
                     UPDATE scanned_events
                     SET image_data = 'MISSING', image_mime = 'file_not_found'
                     WHERE id = %s
                 """, (event_id,))
-                skipped += 1
+                missing += 1
+
+            # Petite pause pour ne pas surcharger (50ms)
+            time.sleep(0.05)
 
         conn.commit()
         cur.close()
         conn.close()
 
         new_remaining = remaining - len(events)
-        print(f"   ✅ Batch terminé: {migrated} migrées, {skipped} ignorées, {new_remaining} restantes")
+
+        print(f"\n{'─'*60}")
+        print(f"📊 RÉSUMÉ BATCH:")
+        print(f"   ✅ Migrées: {migrated}")
+        print(f"   ⚠️  Fichiers absents: {missing}")
+        print(f"   ❌ Erreurs: {skipped}")
+        print(f"   🔄 Restant: {new_remaining}")
+        print(f"{'='*60}\n")
 
         return jsonify({
             "status": "batch_done",
             "batch_size": len(events),
             "migrated": migrated,
-            "skipped": skipped,
+            "missing": missing,
+            "errors": skipped,
             "remaining": new_remaining,
             "message": f"Batch terminé. Encore {new_remaining} à migrer." if new_remaining > 0 else "Migration terminée!"
         })
 
     except Exception as e:
         import traceback
-        print(f"   ❌ Erreur batch: {e}")
+        print(f"❌ ERREUR CRITIQUE: {e}")
+        print(traceback.format_exc())
+        print(f"{'='*60}\n")
         return jsonify({"status": "error", "error": str(e), "traceback": traceback.format_exc()}), 500
 
 
@@ -3857,11 +3889,11 @@ def migration_status_endpoint():
         conn.close()
 
         return jsonify({
-            "total_with_path": row[0],
-            "migrated": row[1],
-            "missing_files": row[2],
-            "errors": row[3],
-            "remaining": row[4]
+            "total_with_path": row['total'],
+            "migrated": row['migrated'],
+            "missing_files": row['missing'],
+            "errors": row['errors'],
+            "remaining": row['remaining']
         })
 
     except Exception as e:
