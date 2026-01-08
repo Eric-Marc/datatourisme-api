@@ -2153,12 +2153,12 @@ def normalize_text_for_geo(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-# Modèles Gemini par ordre de préférence (Gemini 3 pour meilleure OCR)
+# Modèles Gemini par ordre de préférence
 GEMINI_MODELS = [
-    "gemini-3-flash-preview",  # Gemini 3 - rapide et précis
-    "gemini-3-pro-preview",    # Gemini 3 Pro - plus lent mais précis
-    "gemini-2.5-pro",          # Fallback stable
-    "gemini-2.5-flash"         # Fallback rapide
+    'gemini-3-pro-preview',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest'
 ]
 GEMINI_TEMPERATURE = 0.1
 
