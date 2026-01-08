@@ -2147,12 +2147,12 @@ def normalize_text_for_geo(text):
     text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
     return text
 
-# Modèles Gemini par ordre de préférence (Gemini 3 Pro en premier)
+# Modèles Gemini par ordre de préférence (Gemini 3 pour meilleure OCR)
 GEMINI_MODELS = [
-    'gemini-3-pro-preview',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-pro-latest'
+    "gemini-3-flash-preview",  # Gemini 3 - rapide et précis
+    "gemini-3-pro-preview",    # Gemini 3 Pro - plus lent mais précis
+    "gemini-2.5-pro",          # Fallback stable
+    "gemini-2.5-flash"         # Fallback rapide
 ]
 GEMINI_TEMPERATURE = 0.1
 
@@ -2505,14 +2505,14 @@ JSON uniquement, sans markdown ni explications."""
                     }],
                     "generationConfig": {
                         "temperature": GEMINI_TEMPERATURE,
-                        "maxOutputTokens": 16384,
+                        "maxOutputTokens": 8192*4,
                         "mediaResolution": "MEDIA_RESOLUTION_MEDIUM"
                     }
                 }
 
                 print(f"🤖 Gemini: Tentative avec {model}...")
 
-                response = requests.post(url, json=request_body, timeout=90)
+                response = requests.post(url, json=request_body, timeout=190)
                 
                 if response.status_code == 200:
                     result = response.json()
