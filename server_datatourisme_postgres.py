@@ -3763,17 +3763,18 @@ def migrate_images_batch():
 
         print(f"📊 Images restantes à migrer: {remaining}")
 
-        # Récupérer un batch
+        # Récupérer un batch (plus récents d'abord - plus susceptibles d'exister sur disque)
         cur.execute("""
             SELECT id, image_path, title
             FROM scanned_events
             WHERE image_path IS NOT NULL
             AND (image_data IS NULL OR image_data = '')
-            ORDER BY id
+            ORDER BY id DESC
             LIMIT %s
         """, (batch_size,))
         events = cur.fetchall()
 
+        # Utiliser UPLOADS_BASE_DIR (configuré via PERSISTENT_DISK_PATH)
         scans_dir = os.path.join(UPLOADS_BASE_DIR, 'scans')
         print(f"📁 Répertoire scans: {scans_dir}")
 
