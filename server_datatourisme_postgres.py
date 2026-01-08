@@ -3965,19 +3965,34 @@ def add_scanned_event():
 
         # Gérer l'image si fournie
         image_path = None
+        image_data_base64 = None  # Pour stockage en DB
+        image_mime = None
         if data.get('image'):
             try:
                 import base64
                 import os
 
                 # Extraire les données base64
-                image_data = data['image']
-                if ',' in image_data:
+                image_data_raw = data['image']
+
+                # Déterminer le type MIME
+                if image_data_raw.startswith('data:image/png'):
+                    image_mime = 'image/png'
+                elif image_data_raw.startswith('data:image/webp'):
+                    image_mime = 'image/webp'
+                elif image_data_raw.startswith('data:image/gif'):
+                    image_mime = 'image/gif'
+                else:
+                    image_mime = 'image/jpeg'
+
+                if ',' in image_data_raw:
                     # Format: "data:image/jpeg;base64,/9j/4AAQ..."
-                    image_data = image_data.split(',', 1)[1]
+                    image_data_base64 = image_data_raw.split(',', 1)[1]
+                else:
+                    image_data_base64 = image_data_raw
 
                 # Décoder le base64
-                image_bytes = base64.b64decode(image_data)
+                image_bytes = base64.b64decode(image_data_base64)
 
                 # 📍 FALLBACK: Extraire GPS des métadonnées EXIF
                 # Utilisé SEULEMENT si OCR et geocoding n'ont pas trouvé de localisation
@@ -4013,10 +4028,12 @@ def add_scanned_event():
 
                 # Déterminer l'extension (jpeg par défaut)
                 extension = 'jpg'
-                if data['image'].startswith('data:image/png'):
+                if image_data_raw.startswith('data:image/png'):
                     extension = 'png'
-                elif data['image'].startswith('data:image/webp'):
+                elif image_data_raw.startswith('data:image/webp'):
                     extension = 'webp'
+                elif image_data_raw.startswith('data:image/gif'):
+                    extension = 'gif'
 
                 filename = f"{uid}.{extension}"
                 filepath = os.path.join(uploads_dir, filename)
@@ -4043,16 +4060,17 @@ def add_scanned_event():
                 print(f"⚠️  Erreur sauvegarde image: {e}")
                 # Continue sans l'image si erreur
 
-        # Insérer l'événement
+        # Insérer l'événement (avec image sur disque ET en base64 dans PostgreSQL)
         print(f"🔍 INSERT: city={data.get('city')}, country={data.get('country')}, lat={data.get('latitude')}, lon={data.get('longitude')}")
+        print(f"💾 Image: path={image_path}, mime={image_mime}, data_len={len(image_data_base64) if image_data_base64 else 0}")
         cur.execute("""
             INSERT INTO scanned_events (
                 user_id, uid, title, category, begin_date, end_date,
                 start_time, end_time, location_name, city, country, address,
                 latitude, longitude, description, organizer, pricing,
-                website, tags, is_private, image_path
+                website, tags, is_private, image_path, image_data, image_mime
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             ) RETURNING id, uid, created_at
         """, (
             user_id,
@@ -4075,7 +4093,9 @@ def add_scanned_event():
             data.get('website'),
             data.get('tags', []),
             data.get('is_private', False),
-            image_path
+            image_path,
+            image_data_base64,
+            image_mime
         ))
         
         result = cur.fetchone()
