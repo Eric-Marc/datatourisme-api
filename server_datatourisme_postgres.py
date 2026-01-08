@@ -2136,6 +2136,37 @@ COUNTRY_TRANSLATIONS = {
     'argentine': 'Argentina', 'madagascar': 'Madagascar',
 }
 
+# États US (noms complets et abréviations) - de qr-ocr-google.py
+US_STATES = {
+    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+    'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+    'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+    'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+    'district of columbia': 'DC', 'washington dc': 'DC', 'washington d.c.': 'DC'
+}
+US_STATE_CODES = set(US_STATES.values())
+
+# Provinces canadiennes - de qr-ocr-google.py
+CA_PROVINCES = {
+    'alberta': 'AB', 'british columbia': 'BC', 'colombie-britannique': 'BC', 'manitoba': 'MB',
+    'new brunswick': 'NB', 'nouveau-brunswick': 'NB', 'newfoundland and labrador': 'NL',
+    'terre-neuve-et-labrador': 'NL', 'northwest territories': 'NT', 'territoires du nord-ouest': 'NT',
+    'nova scotia': 'NS', 'nouvelle-écosse': 'NS', 'nunavut': 'NU', 'ontario': 'ON',
+    'prince edward island': 'PE', 'île-du-prince-édouard': 'PE', 'quebec': 'QC', 'québec': 'QC',
+    'saskatchewan': 'SK', 'yukon': 'YT'
+}
+CA_PROVINCE_CODES = set(CA_PROVINCES.values())
+
+# Pays avec états/provinces - de qr-ocr-google.py
+US_COUNTRY_NAMES = {'usa', 'united states', 'united states of america', 'états-unis', 'etats-unis', 'u.s.a.', 'u.s.'}
+CA_COUNTRY_NAMES = {'canada'}
+
 def normalize_text_for_geo(text):
     """Normalise le texte pour comparaison géographique."""
     import unicodedata
@@ -2152,6 +2183,160 @@ def normalize_text_for_geo(text):
     # Normaliser espaces multiples
     text = re.sub(r'\s+', ' ', text).strip()
     return text
+
+
+def parse_google_address(addr_parts):
+    """
+    Parse l'adresse formatée de Google Places selon le pays.
+    Code identique à qr-ocr-google.py
+
+    Formats typiques:
+    - France: "Rue, 34500 Béziers, France"
+    - USA avec zip: "Street, City, CA 90210, USA"
+    - USA sans zip: "Boston, Massachusetts, États-Unis"
+    - UK: "Street, City, SW1A 1AA, UK"
+    - Germany: "Street, 12345 Berlin, Germany"
+    - Canada: "Street, City, ON M5V 1J2, Canada"
+    """
+    result = {'zipcode': None, 'city': None, 'state': None, 'country': None}
+
+    if not addr_parts:
+        return result
+
+    # Le pays est toujours le dernier élément
+    result['country'] = addr_parts[-1] if addr_parts else None
+    country_lower = result['country'].lower() if result['country'] else ''
+
+    if len(addr_parts) < 2:
+        return result
+
+    # Analyser l'avant-dernier élément
+    second_last = addr_parts[-2]
+    second_last_lower = second_last.lower()
+
+    # Pattern France/Allemagne: "34500 Béziers" ou "12345 Berlin"
+    match_eu = re.match(r'^(\d{4,5})\s+(.+)$', second_last)
+    if match_eu:
+        result['zipcode'] = match_eu.group(1)
+        result['city'] = match_eu.group(2)
+        return result
+
+    # Pattern USA avec zip: "CA 90210"
+    match_usa_zip = re.match(r'^([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$', second_last)
+    if match_usa_zip:
+        result['state'] = match_usa_zip.group(1)
+        result['zipcode'] = match_usa_zip.group(2)
+        if len(addr_parts) > 2:
+            result['city'] = addr_parts[-3]
+        return result
+
+    # Pattern USA sans zip: "City, Massachusetts, États-Unis"
+    if country_lower in US_COUNTRY_NAMES:
+        # Vérifier si second_last est un état US
+        if second_last_lower in US_STATES:
+            result['state'] = US_STATES[second_last_lower]
+            if len(addr_parts) > 2:
+                result['city'] = addr_parts[-3]
+            else:
+                result['city'] = second_last  # L'état est aussi la ville (ex: "New York, New York, USA")
+            return result
+        elif second_last.upper() in US_STATE_CODES:
+            result['state'] = second_last.upper()
+            if len(addr_parts) > 2:
+                result['city'] = addr_parts[-3]
+            return result
+
+    # Pattern Canada avec zip: "ON M5V 1J2"
+    match_ca = re.match(r'^([A-Z]{2})\s+([A-Z]\d[A-Z]\s*\d[A-Z]\d)$', second_last.upper())
+    if match_ca:
+        result['state'] = match_ca.group(1)
+        result['zipcode'] = match_ca.group(2)
+        if len(addr_parts) > 2:
+            result['city'] = addr_parts[-3]
+        return result
+
+    # Pattern Canada sans zip: "City, Ontario, Canada"
+    if country_lower in CA_COUNTRY_NAMES:
+        if second_last_lower in CA_PROVINCES:
+            result['state'] = CA_PROVINCES[second_last_lower]
+            if len(addr_parts) > 2:
+                result['city'] = addr_parts[-3]
+            return result
+        elif second_last.upper() in CA_PROVINCE_CODES:
+            result['state'] = second_last.upper()
+            if len(addr_parts) > 2:
+                result['city'] = addr_parts[-3]
+            return result
+
+    # Pattern UK: "SW1A 1AA" (code postal UK)
+    match_uk = re.match(r'^([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})$', second_last.upper())
+    if match_uk:
+        result['zipcode'] = second_last.upper()
+        if len(addr_parts) > 2:
+            result['city'] = addr_parts[-3]
+        return result
+
+    # Pas de code postal reconnu - l'avant-dernier est probablement la ville
+    result['city'] = second_last
+
+    # Vérifier si le 3ème depuis la fin contient un code postal
+    if len(addr_parts) > 2:
+        third_last = addr_parts[-3]
+        # Chercher un code postal dans ce segment
+        zip_match = re.search(r'\b(\d{4,5})\b', third_last)
+        if zip_match:
+            result['zipcode'] = zip_match.group(1)
+
+    return result
+
+
+def is_valid_url(url):
+    """
+    Vérifie si c'est une URL valide.
+    Code identique à qr-ocr-google.py
+    """
+    if not url or not isinstance(url, str):
+        return False
+    url = url.strip()
+    # Doit contenir un point et ressembler à une URL
+    if '.' not in url:
+        return False
+    # Ne doit pas être juste des chiffres
+    if url.replace(' ', '').replace('-', '').isdigit():
+        return False
+    # Doit commencer par http ou contenir un domaine reconnaissable
+    if url.startswith(('http://', 'https://', 'www.')):
+        return True
+    # Vérifier les TLDs communs
+    common_tlds = ['.com', '.fr', '.org', '.net', '.eu', '.io', '.co', '.info', '.be', '.ch', '.ca', '.de', '.uk']
+    return any(tld in url.lower() for tld in common_tlds)
+
+
+def match_qr_to_event(event_title, qr_list):
+    """
+    Trouve le QR code correspondant à l'événement.
+    Code identique à qr-ocr-google.py
+    """
+    if not qr_list or not event_title:
+        return qr_list[0] if qr_list else None
+
+    # Normaliser le titre pour comparaison
+    title_norm = normalize_text_for_geo(event_title)
+    title_words = [w for w in title_norm.split() if len(w) > 2]
+
+    for qr_url in qr_list:
+        url_norm = normalize_text_for_geo(qr_url)
+        # Chercher si le titre (ou ses mots principaux) apparaît dans l'URL
+        if title_norm.replace(' ', '-') in url_norm or title_norm.replace(' ', '') in url_norm:
+            return qr_url
+        # Vérifier les mots du titre dans l'URL
+        matches = sum(1 for word in title_words if word in url_norm)
+        if matches >= 2 or (len(title_words) == 1 and matches == 1):
+            return qr_url
+
+    # Pas de correspondance trouvée
+    return None
+
 
 # Modèles Gemini par ordre de préférence
 GEMINI_MODELS = [
@@ -2252,7 +2437,46 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Détection QR Code (pyzbar - identique à qr_reader_google.py)
+        # 1. 📷 EXTRACTION GPS EXIF (identique à qr-ocr-google.py - AVANT QR et OCR)
+        print("\n📷 EXTRACTION GPS EXIF")
+        exif_gps = None
+        try:
+            from PIL import Image
+            from PIL.ExifTags import TAGS, GPSTAGS
+            import io
+
+            img_bytes = base64.b64decode(base64_image)
+            pil_img = Image.open(io.BytesIO(img_bytes))
+            exif_data = pil_img._getexif()
+
+            if exif_data:
+                gps_info = {}
+                for tag_id, value in exif_data.items():
+                    tag = TAGS.get(tag_id, tag_id)
+                    if tag == 'GPSInfo':
+                        for gps_tag_id, gps_value in value.items():
+                            gps_tag = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                            gps_info[gps_tag] = gps_value
+
+                if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
+                    def convert_to_degrees(value):
+                        return float(value[0]) + float(value[1])/60 + float(value[2])/3600
+
+                    lat = convert_to_degrees(gps_info['GPSLatitude'])
+                    lon = convert_to_degrees(gps_info['GPSLongitude'])
+                    if gps_info.get('GPSLatitudeRef') == 'S': lat = -lat
+                    if gps_info.get('GPSLongitudeRef') == 'W': lon = -lon
+
+                    exif_gps = {"lat": lat, "lon": lon}
+                    print(f"   ✅ GPS: {lat:.6f}, {lon:.6f}")
+                else:
+                    print("   ⚠️ Pas de GPS EXIF")
+            else:
+                print("   ⚠️ Pas de GPS EXIF")
+        except Exception as e:
+            print(f"   ⚠️ Erreur EXIF: {e}")
+
+        # 2. 📱 Détection QR Code (pyzbar - identique à qr-ocr-google.py)
         qr_results = []
         found_contents = set()
         try:
@@ -2393,13 +2617,13 @@ def analyze_poster():
                                 qr_results.extend(results)
                                 print(f"         ✅ {len(results)} QR trouvé(s) (ROI+adapt scale={scale})")
 
-                # Résumé
-                print("-"*60)
+                # Résumé (identique à qr-ocr-google.py)
+                print("\n" + "-"*60)
                 if qr_results:
                     print(f"   📊 TOTAL: {len(qr_results)} QR code(s) détecté(s)")
                     for i, qr in enumerate(qr_results, 1):
                         content = qr['content']
-                        print(f"   [{i}] {content[:100]}{'...' if len(content) > 100 else ''}")
+                        print(f"   [{i}] {qr['type']}: {content[:80]}{'...' if len(content) > 80 else ''}")
                 else:
                     print("   ⚠️ Aucun QR code détecté")
 
@@ -2408,6 +2632,11 @@ def analyze_poster():
 
         # Convertir qr_results en qr_contents (liste de strings) pour le prompt
         qr_contents = [qr['content'] for qr in qr_results]
+
+        # 3. 🤖 OCR GEMINI VISION (identique à qr-ocr-google.py)
+        print("\n" + "="*60)
+        print("🤖 OCR GEMINI VISION")
+        print("="*60)
 
         # Construire le prompt avec les infos QR si disponibles
         qr_info = ""
@@ -2425,7 +2654,6 @@ Utilise cette URL pour le champ website si aucun autre site n'est mentionné.
 {qr_list}
 
 Utilise la première URL pour le champ website si aucun autre site n'est mentionné.
-Les autres URLs peuvent contenir des informations complémentaires (billetterie, réseaux sociaux, etc.).
 
 """
 
@@ -2485,7 +2713,7 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
             "location": {{
                 "venueName": "Nom du lieu",
                 "address": "Adresse ou null",
-                "postalCode": "Code postal (ex: 75001, 30301, SW1A 1AA) ou null",
+                "zipcode": "Code postal (ex: 75001, 30301, SW1A 1AA) ou null",
                 "city": "Ville",
                 "state": "État/Région/Département (obligatoire pour USA, Canada, Allemagne)",
                 "country": "Pays (France par défaut si non précisé)"
@@ -2529,12 +2757,12 @@ JSON uniquement, sans markdown ni explications."""
                     }],
                     "generationConfig": {
                         "temperature": GEMINI_TEMPERATURE,
-                        "maxOutputTokens": 8192*4,
+                        "maxOutputTokens": 32768,
                         "mediaResolution": "MEDIA_RESOLUTION_MEDIUM"
                     }
                 }
 
-                response = requests.post(url, json=request_body, timeout=190)
+                response = requests.post(url, json=request_body, timeout=120)
 
                 if response.status_code == 200:
                     result = response.json()
@@ -2562,101 +2790,75 @@ JSON uniquement, sans markdown ni explications."""
                         # Post-processing: corriger les accents français
                         data = fix_ocr_dict(data)
 
-                        # Extraire GPS EXIF si disponible
-                        exif_gps = None
-                        try:
-                            from PIL import Image
-                            from PIL.ExifTags import TAGS, GPSTAGS
-                            import io
+                        # exif_gps déjà extrait au début (avant QR detection)
 
-                            img_bytes = b64.b64decode(base64_image)
-                            pil_img = Image.open(io.BytesIO(img_bytes))
-                            exif_data = pil_img._getexif()
-
-                            if exif_data:
-                                gps_info = {}
-                                for tag_id, value in exif_data.items():
-                                    tag = TAGS.get(tag_id, tag_id)
-                                    if tag == 'GPSInfo':
-                                        for gps_tag_id, gps_value in value.items():
-                                            gps_tag = GPSTAGS.get(gps_tag_id, gps_tag_id)
-                                            gps_info[gps_tag] = gps_value
-
-                                if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
-                                    def convert_to_degrees(value):
-                                        d, m, s = value
-                                        return float(d) + float(m)/60 + float(s)/3600
-
-                                    lat = convert_to_degrees(gps_info['GPSLatitude'])
-                                    lon = convert_to_degrees(gps_info['GPSLongitude'])
-
-                                    if gps_info.get('GPSLatitudeRef') == 'S':
-                                        lat = -lat
-                                    if gps_info.get('GPSLongitudeRef') == 'W':
-                                        lon = -lon
-
-                                    exif_gps = {"lat": lat, "lon": lon}
-                                    print(f"📍 EXIF GPS: {lat:.6f}, {lon:.6f}")
-                        except Exception as e:
-                            print(f"⚠️ Pas de GPS EXIF: {e}")
-
-                        # Construire la réponse selon le schéma demandé
-                        # Format: {image, qr_code, ocr, geolocation, exif_gps}
+                        # 4. Extraire événements (identique à qr-ocr-google.py)
                         events = data.get('events', [])
-                        qr_code = qr_contents[0] if qr_contents else None
+                        if not events and data.get('title'):
+                            events = [data]
 
-                        result_events = []
-                        geo_cache = {}  # Cache pour éviter les appels redondants
+                        # 4b. Valider les champs (identique à qr-ocr-google.py)
+                        for evt in events:
+                            website = evt.get('website')
+                            if website and not is_valid_url(website):
+                                print(f"   ⚠️ Website invalide ignoré: '{website}'")
+                                evt['website'] = None
 
-                        for i, evt in enumerate(events):
-                            # Extraire les infos de localisation pour géocodage
+                        # 5. Géolocaliser chaque événement (identique à qr-ocr-google.py)
+                        exif_lat = exif_gps.get('lat') if exif_gps else None
+                        exif_lon = exif_gps.get('lon') if exif_gps else None
+
+                        geo_cache = {}
+                        for evt in events:
                             loc = evt.get('location', {})
-                            venue = loc.get('venueName', '')
-                            address = loc.get('address', '')
-                            city = loc.get('city', '')
-                            state = loc.get('state', '')
-                            postalCode = loc.get('postalCode', '')
-                            country = loc.get('country', '')
-
-                            # Clé de cache pour éviter les requêtes dupliquées
-                            cache_key = f"{venue}|{address}|{city}|{state}|{postalCode}|{country}"
+                            cache_key = f"{loc.get('venueName')}|{loc.get('city')}|{loc.get('country')}"
 
                             if cache_key in geo_cache:
                                 geo_data = geo_cache[cache_key]
                             else:
-                                # Appeler geocode_google_places comme le script Python
-                                exif_lat = exif_gps.get('lat') if exif_gps else None
-                                exif_lon = exif_gps.get('lon') if exif_gps else None
-
                                 geo_data = geocode_google_places(
-                                    venue=venue,
-                                    address=address,
-                                    city=city,
-                                    state=state,
-                                    postalCode=postalCode,
-                                    country=country,
-                                    exif_lat=exif_lat,
-                                    exif_lon=exif_lon
+                                    loc.get('venueName'), address=loc.get('address'),
+                                    city=loc.get('city'), state=loc.get('state'),
+                                    zipcode=loc.get('zipcode'), country=loc.get('country'),
+                                    exif_lat=exif_lat, exif_lon=exif_lon
                                 )
                                 geo_cache[cache_key] = geo_data
 
-                            # Enrichir les tags avec ville et pays (comme le script Python)
-                            tags = evt.get('tags', [])
-                            if city and city not in tags:
-                                tags.append(city)
-                            if country and country not in tags:
-                                tags.append(country)
-                            evt['tags'] = tags
+                            evt['geolocation'] = geo_data
+
+                        # 6. Résumé (identique à qr-ocr-google.py)
+                        print("\n" + "="*60)
+                        print(f"📋 RÉSULTAT: {len(events)} événement(s)")
+                        print("="*60)
+
+                        for idx, evt in enumerate(events, 1):
+                            print(f"\n   [{idx}] {evt.get('title', 'N/A')}")
+                            print(f"       Catégorie: {evt.get('category')}")
+                            day, month, year = evt.get('startDateDay'), evt.get('startDateMonth'), evt.get('startDateYear')
+                            print(f"       Date: {day}/{month}/{year} {evt.get('startTime', '')}")
+                            loc = evt.get('location', {})
+                            print(f"       Lieu: {loc.get('venueName')}, {loc.get('city')}")
+                            geo = evt.get('geolocation')
+                            if geo:
+                                print(f"       GPS: {geo['latitude']:.6f}, {geo['longitude']:.6f} ({geo['source']})")
+
+                        # 7. Export JSON (identique à qr-ocr-google.py)
+                        result_events = []
+                        for i, evt in enumerate(events, 1):
+                            geo = evt.pop('geolocation', None)
+
+                            # Matcher le QR code à cet événement spécifique
+                            matched_qr = match_qr_to_event(evt.get('title'), qr_contents)
 
                             result_events.append({
                                 "image": image_name,
-                                "qr_code": qr_code if i == 0 else None,
+                                "qr_code": matched_qr,
                                 "ocr": evt,
-                                "geolocation": geo_data,
-                                "exif_gps": exif_gps
+                                "geolocation": geo,
+                                "exif_gps": {'lat': exif_lat, 'lon': exif_lon} if exif_lat else None
                             })
 
-                        print(f"✅ Gemini: Analyse réussie avec {model} ({len(events)} événement(s))")
+                        print(f"\n✅ Gemini: Analyse réussie avec {model} ({len(events)} événement(s))")
 
                         # Retourner un seul objet si 1 événement, sinon un tableau
                         response_data = result_events[0] if len(result_events) == 1 else result_events
@@ -2703,7 +2905,7 @@ def geocode_address_endpoint():
         address_field = data.get('addressField')
         city = data.get('city')
         state = data.get('state')
-        postalCode = data.get('postalCode')
+        zipcode = data.get('zipcode') or data.get('postalCode')  # Support ancien nom
         country = data.get('country')
 
         if not address and not venue and not city:
@@ -2719,7 +2921,7 @@ def geocode_address_endpoint():
                 address=address_field,
                 city=city,
                 state=state,
-                postalCode=postalCode,
+                zipcode=zipcode,
                 country=country
             )
 
@@ -3465,251 +3667,207 @@ def reverse_geocode(lat, lon):
     return None
 
 
-def geocode_google_places(venue=None, address=None, city=None, state=None, postalCode=None, country=None, exif_lat=None, exif_lon=None):
+def geocode_google_places(venue=None, address=None, city=None, state=None, zipcode=None, country=None, exif_lat=None, exif_lon=None):
     """
     Géocode une adresse via Google Places API (Text Search).
-    Version complète avec multiple stratégies de recherche.
+    Code identique à qr-ocr-google.py
     """
-    print(f"\n{'='*60}")
+    print("\n" + "="*60)
     print("📍 GEOLOCALISATION (Google Places)")
-    print(f"{'='*60}")
+    print("="*60)
+
+    # Log des paramètres d'entrée
+    print(f"   📥 Entrée:")
+    print(f"      venue: {venue}")
+    print(f"      address: {address}")
+    print(f"      city: {city}")
+    print(f"      state: {state}")
+    print(f"      zipcode: {zipcode}")
+    print(f"      country: {country}")
+    if exif_lat and exif_lon:
+        print(f"      exif_gps: {exif_lat:.6f}, {exif_lon:.6f}")
 
     if not GOOGLE_MAPS_API_KEY:
         print("   ❌ GOOGLE_MAPS_API_KEY non définie")
         if exif_lat and exif_lon:
-            print(f"   🔄 Utilisation GPS EXIF")
-            return {
-                'latitude': exif_lat, 'longitude': exif_lon,
-                'display_name': 'GPS EXIF (pas de clé API)', 'source': 'exif'
-            }
+            return {'latitude': exif_lat, 'longitude': exif_lon, 'display_name': 'GPS EXIF', 'source': 'exif'}
         return None
 
-    # Traduire pays français -> anglais
     if country:
+        original_country = country
         country = COUNTRY_TRANSLATIONS.get(country.lower(), country)
+        if country != original_country:
+            print(f"   🌍 Pays traduit: {original_country} → {country}")
 
     if not venue and not address and not city:
         print("   ⚠️ Pas d'adresse à géocoder")
         if exif_lat and exif_lon:
-            return {
-                'latitude': exif_lat, 'longitude': exif_lon,
-                'display_name': 'GPS EXIF (aucune adresse)', 'source': 'exif'
-            }
+            return {'latitude': exif_lat, 'longitude': exif_lon, 'display_name': 'GPS EXIF', 'source': 'exif'}
         return None
 
-    # Construire les requêtes de recherche (du plus précis au moins précis)
+    # Construire les requêtes
     queries = []
+    addr_clean = re.sub(r'\b[B]?\d+F?\b', '', address, flags=re.IGNORECASE).strip() if address else ""
+    if addr_clean and addr_clean != address:
+        print(f"   🧹 Adresse nettoyée: '{address}' → '{addr_clean}'")
 
-    # Nettoyer l'adresse des indicateurs d'étage
-    addr_clean = ""
-    if address:
-        addr_clean = re.sub(r'\b[B]?\d+F?\b', '', address, flags=re.IGNORECASE).strip()
-
-    # PRIORITÉ 1: venue + address + city + country
+    # PRIORITÉ 1-5
     if venue and city:
         parts = [venue]
-        if addr_clean:
-            parts.append(addr_clean)
+        if addr_clean: parts.append(addr_clean)
         parts.append(city)
-        if state:
-            parts.append(state)
-        if country:
-            parts.append(country)
+        if state: parts.append(state)
+        if country: parts.append(country)
         queries.append(', '.join(parts))
 
-    # PRIORITÉ 2: venue + city + country
     if venue and city:
         parts = [venue, city]
-        if country:
-            parts.append(country)
+        if country: parts.append(country)
         queries.append(', '.join(parts))
 
-    # PRIORITÉ 3: address + city + country
     if addr_clean and city:
         parts = [addr_clean, city]
-        if country:
-            parts.append(country)
+        if country: parts.append(country)
         queries.append(', '.join(parts))
 
-    # PRIORITÉ 4: venue + postalCode + country
-    if venue and postalCode:
-        parts = [venue, postalCode]
-        if country:
-            parts.append(country)
+    if venue and zipcode:
+        parts = [venue, zipcode]
+        if country: parts.append(country)
         queries.append(', '.join(parts))
 
-    # PRIORITÉ 5: Premier mot de l'adresse (quartier) + city
     if address and city:
         first_word = address.split()[0] if address.split() else None
         if first_word and len(first_word) > 3 and not first_word[0].isdigit():
             parts = [first_word, city]
-            if country:
-                parts.append(country)
+            if country: parts.append(country)
             queries.append(', '.join(parts))
 
-    # FALLBACK: city + state + country
+    # FALLBACK
     if city:
         parts = [city]
-        if state:
-            parts.append(state)
-        if country:
-            parts.append(country)
+        if state: parts.append(state)
+        if country: parts.append(country)
         queries.append(', '.join(parts))
 
-    # FALLBACK: postalCode + country
-    if postalCode:
-        parts = [postalCode]
-        if country:
-            parts.append(country)
+    if zipcode:
+        parts = [zipcode]
+        if country: parts.append(country)
         queries.append(', '.join(parts))
 
-    # Dédupliquer
     queries = list(dict.fromkeys(queries))
-
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 
-    for query in queries:
-        print(f"   Essai: {query}")
+    # Log des requêtes à essayer
+    print(f"\n   📋 {len(queries)} requête(s) à essayer:")
+    for i, q in enumerate(queries, 1):
+        print(f"      [{i}] {q}")
 
+    for query_idx, query in enumerate(queries, 1):
+        print(f"\n   🔍 Requête [{query_idx}/{len(queries)}]: {query}")
         params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "fr"}
 
         try:
             response = requests.get(url, params=params, timeout=15)
+            print(f"      HTTP {response.status_code}")
 
             if response.status_code == 200:
                 data = response.json()
+                print(f"      Status API: {data.get('status')}")
 
                 if data.get('status') == 'OK' and data.get('results'):
                     results = data['results']
-                    print(f"   📊 {len(results)} résultat(s) trouvé(s)")
+                    print(f"      📊 {len(results)} résultat(s) brut(s)")
 
-                    # Filtrer par correspondance ville
+                    # Log tous les résultats bruts
+                    for idx, r in enumerate(results[:5], 1):  # Max 5 pour lisibilité
+                        print(f"         [{idx}] {r.get('name', 'N/A')}")
+                        print(f"             📍 {r.get('formatted_address', 'N/A')}")
+
                     candidates = []
                     for r in results:
                         name = r.get('name', '')
                         formatted = r.get('formatted_address', '')
                         geo = r.get('geometry', {}).get('location', {})
-                        lat = geo.get('lat')
-                        lng = geo.get('lng')
+                        lat, lng = geo.get('lat'), geo.get('lng')
+                        if not lat or not lng: continue
 
-                        if not lat or not lng:
-                            continue
-
-                        # Vérifier correspondance ville
                         city_match = True
                         if city:
                             city_norm = normalize_text_for_geo(city)
                             formatted_norm = normalize_text_for_geo(formatted)
                             city_match = city_norm in formatted_norm
-
-                        status = "✓" if city_match else "✗"
-                        display_str = f"{name} - {formatted}" if name else formatted
-                        print(f"      {status} {display_str[:70]}...")
+                            if not city_match:
+                                print(f"         ❌ '{name}' exclu: ville '{city_norm}' non trouvée dans '{formatted_norm}'")
 
                         if city_match:
                             candidates.append({
-                                'lat': lat,
-                                'lng': lng,
-                                'name': name,
-                                'formatted': formatted,
-                                'place_id': r.get('place_id'),
-                                'types': r.get('types', []),
-                                'business_status': r.get('business_status'),
-                                'rating': r.get('rating'),
-                                'user_ratings_total': r.get('user_ratings_total')
+                                'lat': lat, 'lng': lng, 'name': name, 'formatted': formatted,
+                                'place_id': r.get('place_id'), 'types': r.get('types', []),
+                                'rating': r.get('rating'), 'user_ratings_total': r.get('user_ratings_total')
                             })
 
+                    print(f"      ✅ {len(candidates)} candidat(s) après filtrage ville")
+
                     if candidates:
-                        # Trier par pertinence
                         if venue:
                             venue_norm = normalize_text_for_geo(venue)
-                            generic_words = {'busan', 'seoul', 'tokyo', 'paris', 'hotel', 'center', 'centre', 'station'}
-                            venue_words = [w for w in venue_norm.split() if len(w) > 2 and w not in generic_words]
-
+                            print(f"      🎯 Tri par pertinence (venue: '{venue_norm}')")
                             def relevance_score(c):
-                                name = c.get('name', '')
-                                name_norm = normalize_text_for_geo(name)
-                                # Aussi vérifier dans le nom original (pour caractères coréens/chinois)
-                                name_original = name.lower()
-
-                                score = 100  # Score par défaut (pire)
-
-                                # Match exact ou quasi-exact
-                                if venue_norm in name_norm or name_norm in venue_norm:
-                                    score = 0
-
-                                # Vérifier si le nom du venue apparaît dans le nom original (ex: DUEX)
-                                for word in venue_words:
-                                    if word in name_norm or word in name_original:
-                                        score = min(score, 10)  # Bon score
-                                    # Aussi vérifier dans l'adresse formatée
-                                    formatted_norm = normalize_text_for_geo(c.get('formatted', ''))
-                                    if word in formatted_norm:
-                                        score = min(score, 20)
-
-                                return score
+                                name_norm = normalize_text_for_geo(c.get('name', ''))
+                                if venue_norm in name_norm or name_norm in venue_norm: return 0
+                                return 100
                             candidates.sort(key=relevance_score)
 
-                        best = candidates[0]
-                        print(f"   ✅ Sélectionné: {best['name']}")
-                        print(f"   ✅ Coordonnées: {best['lat']:.6f}, {best['lng']:.6f}")
-                        print(f"   📍 {best['formatted']}")
-                        if best.get('rating'):
-                            print(f"   ⭐ Note: {best['rating']}/5 ({best.get('user_ratings_total', 0)} avis)")
+                            # Log du classement
+                            for idx, c in enumerate(candidates[:3], 1):
+                                score = relevance_score(c)
+                                print(f"         [{idx}] score={score} | {c['name']}")
 
-                        # Extraire ville/état/pays depuis l'adresse formatée
+                        best = candidates[0]
+                        print(f"\n   🏆 SÉLECTIONNÉ: {best['name']}")
+                        print(f"      📍 {best['formatted']}")
+                        print(f"      🌐 {best['lat']:.6f}, {best['lng']:.6f}")
+
+                        # Parser l'adresse formatée avec parse_google_address
                         addr_parts = best['formatted'].split(', ')
-                        geo_country = addr_parts[-1] if len(addr_parts) > 0 else None
-                        geo_state = addr_parts[-2] if len(addr_parts) > 1 else None
-                        geo_city = addr_parts[-3] if len(addr_parts) > 2 else None
+                        print(f"      📦 Parsing: {addr_parts}")
+                        parsed = parse_google_address(addr_parts)
+                        print(f"      📤 Résultat parsing: {parsed}")
 
                         return {
-                            'latitude': best['lat'],
-                            'longitude': best['lng'],
-                            'display_name': best['formatted'],
-                            'place_name': best['name'],
+                            'latitude': best['lat'], 'longitude': best['lng'],
+                            'display_name': best['formatted'], 'place_name': best['name'],
                             'source': 'google_places',
-                            'city': geo_city,
-                            'state': geo_state,
-                            'country': geo_country,
-                            'place_id': best['place_id'],
-                            'types': best['types'],
-                            'rating': best.get('rating'),
-                            'user_ratings_total': best.get('user_ratings_total')
+                            'zipcode': parsed.get('zipcode'),
+                            'city': parsed.get('city'),
+                            'state': parsed.get('state'),
+                            'country': parsed.get('country'),
+                            'place_id': best['place_id'], 'types': best['types'],
+                            'rating': best.get('rating')
                         }
 
                 elif data.get('status') == 'ZERO_RESULTS':
-                    print(f"   ⚠️ Aucun résultat")
-                elif data.get('status') == 'REQUEST_DENIED':
-                    print(f"   ❌ Clé API invalide ou Places API non activée")
-                    print(f"      {data.get('error_message', '')}")
-                    print(f"      Activer: https://console.cloud.google.com/apis/library/places-backend.googleapis.com")
+                    print(f"      ⚠️ Aucun résultat pour cette requête")
+                elif data.get('status') in ['REQUEST_DENIED', 'OVER_QUERY_LIMIT']:
+                    print(f"      ❌ API Error: {data.get('status')}")
+                    if data.get('error_message'):
+                        print(f"         Message: {data.get('error_message')}")
                     break
-                elif data.get('status') == 'OVER_QUERY_LIMIT':
-                    print(f"   ❌ Quota API dépassé")
-                    break
-                elif data.get('status') == 'INVALID_REQUEST':
-                    print(f"   ⚠️ Requête invalide: {data.get('error_message', '')}")
                 else:
-                    print(f"   ⚠️ Status: {data.get('status')}")
-
+                    print(f"      ⚠️ Status inconnu: {data.get('status')}")
             else:
-                print(f"   ⚠️ Erreur HTTP {response.status_code}")
+                print(f"      ❌ HTTP Error: {response.status_code}")
+                print(f"         {response.text[:200]}")
 
+        except requests.exceptions.Timeout:
+            print(f"      ⏱️ Timeout après 15s")
         except Exception as e:
-            print(f"   ⚠️ Erreur: {e}")
+            print(f"      ⚠️ Exception: {type(e).__name__}: {e}")
 
-    # DERNIER RECOURS: EXIF
-    print("   ❌ Échec géocodage Google Places")
+    print("\n   ❌ Échec géocodage - aucune requête n'a abouti")
     if exif_lat and exif_lon:
-        print(f"   🔄 Utilisation GPS EXIF en dernier recours: {exif_lat:.6f}, {exif_lon:.6f}")
-        return {
-            'latitude': exif_lat,
-            'longitude': exif_lon,
-            'display_name': 'GPS EXIF (Google Maps échec)',
-            'source': 'exif'
-        }
-
+        print(f"   📍 Fallback sur GPS EXIF: {exif_lat:.6f}, {exif_lon:.6f}")
+        return {'latitude': exif_lat, 'longitude': exif_lon, 'display_name': 'GPS EXIF', 'source': 'exif'}
     return None
 
 
