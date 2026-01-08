@@ -3341,11 +3341,20 @@ def get_scanned_events():
         conn = get_db_connection()
         cur = conn.cursor()
         
+        # Colonnes à sélectionner (exclut image_data pour éviter timeout)
+        scan_columns = """
+            s.id, s.user_id, s.uid, s.title, s.category,
+            s.begin_date, s.end_date, s.start_time, s.end_time,
+            s.location_name, s.city, s.address, s.latitude, s.longitude,
+            s.description, s.organizer, s.pricing, s.tags,
+            s.is_private, s.created_at, s.website, s.image_path, s.country, s.image_mime
+        """
+
         if user_id and mine_only:
             # L'utilisateur veut voir TOUS les publics + SES privés
-            cur.execute("""
+            cur.execute(f"""
                 WITH numbered_scans AS (
-                    SELECT s.*, u.pseudo as user_pseudo,
+                    SELECT {scan_columns}, u.pseudo as user_pseudo,
                            ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.created_at ASC) as scan_number,
                            COUNT(*) OVER (PARTITION BY s.user_id) as total_scans
                     FROM scanned_events s
@@ -3358,9 +3367,9 @@ def get_scanned_events():
             """, (user_id,))
         elif user_id:
             # Voir les événements d'un utilisateur spécifique (publics uniquement)
-            cur.execute("""
+            cur.execute(f"""
                 WITH numbered_scans AS (
-                    SELECT s.*, u.pseudo as user_pseudo,
+                    SELECT {scan_columns}, u.pseudo as user_pseudo,
                            ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.created_at ASC) as scan_number,
                            COUNT(*) OVER (PARTITION BY s.user_id) as total_scans
                     FROM scanned_events s
@@ -3372,9 +3381,9 @@ def get_scanned_events():
             """, (user_id,))
         else:
             # Tous les événements publics
-            cur.execute("""
+            cur.execute(f"""
                 WITH numbered_scans AS (
-                    SELECT s.*, u.pseudo as user_pseudo,
+                    SELECT {scan_columns}, u.pseudo as user_pseudo,
                            ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.created_at ASC) as scan_number,
                            COUNT(*) OVER (PARTITION BY s.user_id) as total_scans
                     FROM scanned_events s
