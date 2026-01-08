@@ -2210,13 +2210,14 @@ def analyze_poster():
                 "message": "GEMINI_API_KEY non configurée. Ajoutez-la dans les variables d'environnement Render."
             }), 500
         
-        data = request.get_json()
-        
-        if not data:
+        request_data = request.get_json()
+
+        if not request_data:
             return jsonify({"status": "error", "message": "Données manquantes"}), 400
-        
-        base64_image = data.get('image')
-        mime_type = data.get('mimeType', 'image/jpeg')
+
+        base64_image = request_data.get('image')
+        mime_type = request_data.get('mimeType', 'image/jpeg')
+        image_name = request_data.get('imageName')  # Nom du fichier envoyé par le client
 
         if not base64_image:
             return jsonify({"status": "error", "message": "Image manquante"}), 400
@@ -2251,144 +2252,162 @@ def analyze_poster():
                 print(f"⚠️ Erreur conversion image: {e}")
                 return jsonify({"status": "error", "message": f"Format image non supporté: {mime_type}"}), 400
 
-        # 📱 Décoder les QR codes avec pyzbar uniquement
-        # Support pour plusieurs QR codes dans la même image
-        qr_contents = []
-        found_contents = set()  # Pour éviter les doublons
+        # 📱 Détection QR Code (pyzbar - identique à qr_reader_google.py)
+        qr_results = []
+        found_contents = set()
         try:
             import cv2
             import numpy as np
             import base64 as b64
             from pyzbar import pyzbar
 
-            print(f"{'='*60}")
-            print(f"📱 DETECTION QR CODE (pyzbar)")
-            print(f"{'='*60}")
+            print("\n" + "="*60)
+            print("📱 DETECTION QR CODE (pyzbar)")
+            print("="*60)
 
             # Décoder l'image base64 en array OpenCV
             image_bytes = b64.b64decode(base64_image)
             nparr = np.frombuffer(image_bytes, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            H, W = img.shape[:2]
-            print(f"   Image: {W}x{H}")
 
-            def try_decode_pyzbar(img_array):
-                """Décode tous les QR codes avec pyzbar"""
-                results = []
-                try:
-                    decoded = pyzbar.decode(img_array)
-                    for d in decoded:
-                        content = d.data.decode('utf-8', errors='ignore')
-                        if content and content not in found_contents:
-                            found_contents.add(content)
-                            results.append({'content': content, 'type': d.type})
-                except:
-                    pass
-                return results
-
-            # 1) Scan direct
-            print(f"   [1/5] Scan direct...")
-            results = try_decode_pyzbar(img)
-            if results:
-                print(f"         ✅ {len(results)} QR trouvé(s)")
-                for r in results:
-                    qr_contents.append(r['content'])
-                    print(f"             Type: {r['type']} | Contenu: {r['content'][:80]}{'...' if len(r['content']) > 80 else ''}")
-
-            # 2) Multi-échelle
-            if not qr_contents:
-                print(f"   [2/5] Scan multi-échelle...")
-                for scale in [2, 3, 4, 0.5]:
-                    new_w, new_h = int(W * scale), int(H * scale)
-                    if new_w < 100 or new_h < 100 or new_w > 8000 or new_h > 8000:
-                        continue
-                    interp = cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA
-                    resized = cv2.resize(img, (new_w, new_h), interpolation=interp)
-                    results = try_decode_pyzbar(resized)
-                    if results:
-                        print(f"         ✅ {len(results)} QR trouvé(s) (scale={scale})")
-                        for r in results:
-                            qr_contents.append(r['content'])
-                            print(f"             Type: {r['type']} | Contenu: {r['content'][:80]}{'...' if len(r['content']) > 80 else ''}")
-
-            # 3) Prétraitement niveaux de gris
-            if not qr_contents:
-                print(f"   [3/5] Prétraitement niveaux de gris...")
-                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                preprocessed = [
-                    ('gray', gray),
-                    ('otsu', cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
-                    ('adaptive', cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)),
-                    ('clahe', cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(gray)),
-                ]
-                for name, processed in preprocessed:
-                    for scale in [1, 2, 3]:
-                        if scale > 1:
-                            processed_scaled = cv2.resize(processed, (W * scale, H * scale), interpolation=cv2.INTER_CUBIC)
-                        else:
-                            processed_scaled = processed
-                        results = try_decode_pyzbar(processed_scaled)
-                        if results:
-                            print(f"         ✅ {len(results)} QR trouvé(s) ({name}, scale={scale})")
-                            for r in results:
-                                qr_contents.append(r['content'])
-                                print(f"             Type: {r['type']} | Contenu: {r['content'][:80]}{'...' if len(r['content']) > 80 else ''}")
-
-            # 4) Scan par régions ROI
-            if not qr_contents:
-                print(f"   [4/5] Scan par régions ROI...")
-                rois = [
-                    (0, 0, W//2, H//2, "haut-gauche"),
-                    (W//2, 0, W, H//2, "haut-droit"),
-                    (0, H//2, W//2, H, "bas-gauche"),
-                    (W//2, H//2, W, H, "bas-droit"),
-                    (W//3, H//3, 2*W//3, 2*H//3, "centre"),
-                    (int(W*0.6), int(H*0.6), W, H, "coin-bas-droit"),
-                    (0, int(H*0.6), int(W*0.4), H, "coin-bas-gauche"),
-                ]
-                for x0, y0, x1, y1, roi_name in rois:
-                    roi = img[y0:y1, x0:x1]
-                    if roi.size == 0:
-                        continue
-                    for scale in [2, 3, 4]:
-                        scaled_roi = cv2.resize(roi, (roi.shape[1] * scale, roi.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
-                        results = try_decode_pyzbar(scaled_roi)
-                        if results:
-                            print(f"         ✅ {len(results)} QR trouvé(s) (ROI {roi_name}, scale={scale})")
-                            for r in results:
-                                qr_contents.append(r['content'])
-                                print(f"             Type: {r['type']} | Contenu: {r['content'][:80]}{'...' if len(r['content']) > 80 else ''}")
-
-            # 5) ROI + prétraitement adaptatif
-            if not qr_contents:
-                print(f"   [5/5] ROI + prétraitement adaptatif...")
-                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                for x0, y0, x1, y1, roi_name in rois:
-                    roi_gray = gray[y0:y1, x0:x1]
-                    if roi_gray.size == 0:
-                        continue
-                    adaptive = cv2.adaptiveThreshold(roi_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-                    for scale in [2, 3, 4]:
-                        scaled = cv2.resize(adaptive, (adaptive.shape[1] * scale, adaptive.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
-                        results = try_decode_pyzbar(scaled)
-                        if results:
-                            print(f"         ✅ {len(results)} QR trouvé(s) (ROI {roi_name}+adapt, scale={scale})")
-                            for r in results:
-                                qr_contents.append(r['content'])
-                                print(f"             Type: {r['type']} | Contenu: {r['content'][:80]}{'...' if len(r['content']) > 80 else ''}")
-
-            # Résumé
-            print(f"   {'-'*56}")
-            if qr_contents:
-                print(f"   📊 TOTAL: {len(qr_contents)} QR code(s) détecté(s)")
-                for i, content in enumerate(qr_contents, 1):
-                    print(f"   [{i}] {content[:100]}{'...' if len(content) > 100 else ''}")
+            if img is None:
+                print("   ❌ Impossible de décoder l'image")
             else:
-                print(f"   ⚠️ Aucun QR code détecté")
-            print(f"{'='*60}")
+                H, W = img.shape[:2]
+                print(f"   Image: {W}x{H}")
+
+                def try_decode(img_array, scale=1, offset_x=0, offset_y=0, method_suffix=""):
+                    """Décode avec pyzbar et retourne les résultats."""
+                    results = []
+                    try:
+                        decoded = pyzbar.decode(img_array)
+                        for d in decoded:
+                            content = d.data.decode('utf-8', errors='ignore')
+                            if content and content not in found_contents:
+                                found_contents.add(content)
+                                rect = d.rect
+                                position = {
+                                    'x': int((rect.left + offset_x) / scale),
+                                    'y': int((rect.top + offset_y) / scale),
+                                    'width': int(rect.width / scale),
+                                    'height': int(rect.height / scale)
+                                }
+                                results.append({
+                                    'content': content,
+                                    'method': f'pyzbar{method_suffix}',
+                                    'position': position,
+                                    'type': d.type
+                                })
+                    except Exception as e:
+                        pass
+                    return results
+
+                # 1. Scan direct
+                print("   [1/5] Scan direct...")
+                results = try_decode(img)
+                if results:
+                    qr_results.extend(results)
+                    print(f"         ✅ {len(results)} QR trouvé(s)")
+
+                # 2. Multi-échelle
+                if not qr_results:
+                    print("   [2/5] Scan multi-échelle...")
+                    for scale in [2, 3, 4, 0.5]:
+                        new_w, new_h = int(W * scale), int(H * scale)
+                        if new_w < 100 or new_h < 100 or new_w > 8000 or new_h > 8000:
+                            continue
+
+                        interp = cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA
+                        resized = cv2.resize(img, (new_w, new_h), interpolation=interp)
+                        results = try_decode(resized, scale=scale, method_suffix=f"_scale{scale}")
+                        if results:
+                            qr_results.extend(results)
+                            print(f"         ✅ {len(results)} QR trouvé(s) (scale={scale})")
+
+                # 3. Prétraitement niveaux de gris
+                if not qr_results:
+                    print("   [3/5] Prétraitement niveaux de gris...")
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+                    preprocessed = [
+                        ('gray', gray),
+                        ('otsu', cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
+                        ('adaptive', cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)),
+                        ('clahe', cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(gray)),
+                    ]
+
+                    for name, processed in preprocessed:
+                        for scale in [1, 2, 3]:
+                            if scale > 1:
+                                processed_scaled = cv2.resize(processed, (W * scale, H * scale), interpolation=cv2.INTER_CUBIC)
+                            else:
+                                processed_scaled = processed
+
+                            results = try_decode(processed_scaled, scale=scale, method_suffix=f"_{name}_s{scale}")
+                            if results:
+                                qr_results.extend(results)
+                                print(f"         ✅ {len(results)} QR trouvé(s) ({name}, scale={scale})")
+
+                # 4. Scan par régions ROI
+                if not qr_results:
+                    print("   [4/5] Scan par régions ROI...")
+                    rois = [
+                        (0, 0, W//2, H//2),             # Haut-gauche
+                        (W//2, 0, W, H//2),              # Haut-droit
+                        (0, H//2, W//2, H),              # Bas-gauche
+                        (W//2, H//2, W, H),              # Bas-droit
+                        (W//3, H//3, 2*W//3, 2*H//3),   # Centre
+                        (int(W*0.6), int(H*0.6), W, H), # Coin bas-droit
+                        (0, int(H*0.6), int(W*0.4), H), # Coin bas-gauche
+                    ]
+
+                    for x0, y0, x1, y1 in rois:
+                        roi = img[y0:y1, x0:x1]
+                        if roi.size == 0:
+                            continue
+
+                        for scale in [2, 3, 4]:
+                            scaled_roi = cv2.resize(roi, (roi.shape[1] * scale, roi.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+                            results = try_decode(scaled_roi, scale=scale, offset_x=x0, offset_y=y0, method_suffix=f"_roi_s{scale}")
+                            if results:
+                                qr_results.extend(results)
+                                print(f"         ✅ {len(results)} QR trouvé(s) (ROI scale={scale})")
+
+                # 5. Combinaison ROI + prétraitement
+                if not qr_results:
+                    print("   [5/5] ROI + prétraitement...")
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+                    for x0, y0, x1, y1 in rois:
+                        roi_gray = gray[y0:y1, x0:x1]
+                        if roi_gray.size == 0:
+                            continue
+
+                        # Binarisation adaptative sur ROI
+                        adaptive = cv2.adaptiveThreshold(roi_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+
+                        for scale in [2, 3, 4]:
+                            scaled = cv2.resize(adaptive, (adaptive.shape[1] * scale, adaptive.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+                            results = try_decode(scaled, scale=scale, offset_x=x0, offset_y=y0, method_suffix=f"_roi_adapt_s{scale}")
+                            if results:
+                                qr_results.extend(results)
+                                print(f"         ✅ {len(results)} QR trouvé(s) (ROI+adapt scale={scale})")
+
+                # Résumé
+                print("-"*60)
+                if qr_results:
+                    print(f"   📊 TOTAL: {len(qr_results)} QR code(s) détecté(s)")
+                    for i, qr in enumerate(qr_results, 1):
+                        content = qr['content']
+                        print(f"   [{i}] {content[:100]}{'...' if len(content) > 100 else ''}")
+                else:
+                    print("   ⚠️ Aucun QR code détecté")
 
         except Exception as e:
             print(f"⚠️ Erreur recherche QR: {e}")
+
+        # Convertir qr_results en qr_contents (liste de strings) pour le prompt
+        qr_contents = [qr['content'] for qr in qr_results]
 
         # Construire le prompt avec les infos QR si disponibles
         qr_info = ""
@@ -2490,13 +2509,12 @@ Retourne UNIQUEMENT un JSON valide avec cette structure:
 
 JSON uniquement, sans markdown ni explications."""
 
-        # Essayer plusieurs modèles
-        last_error = None
-        
         for model in GEMINI_MODELS:
             try:
+                print(f"   Tentative avec {model}...")
+
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
-                
+
                 request_body = {
                     "contents": [{
                         "parts": [
@@ -2516,149 +2534,33 @@ JSON uniquement, sans markdown ni explications."""
                     }
                 }
 
-                print(f"🤖 Gemini: Tentative avec {model}...")
-
                 response = requests.post(url, json=request_body, timeout=190)
-                
+
                 if response.status_code == 200:
                     result = response.json()
                     text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
-                    
+
                     if text:
-                        # Nettoyer le JSON
                         json_text = text.strip()
                         if json_text.startswith('```'):
                             json_text = json_text.replace('```json', '').replace('```', '').strip()
 
-                        # Extraire seulement le JSON (entre { et })
-                        import re
                         json_match = re.search(r'\{[\s\S]*\}', json_text)
                         if json_match:
                             json_text = json_match.group()
 
-                        # Corriger les problèmes courants de JSON
-                        # 1. Trailing commas avant } ou ]
                         json_text = re.sub(r',\s*}', '}', json_text)
                         json_text = re.sub(r',\s*]', ']', json_text)
 
-                        # 2. Réparer JSON tronqué (fermer les accolades/crochets manquants)
-                        def repair_truncated_json(s):
-                            """Répare un JSON tronqué de manière robuste."""
-                            s = s.rstrip()
-
-                            # 1. Fermer les chaînes non terminées
-                            in_string = False
-                            escape = False
-                            for c in s:
-                                if escape:
-                                    escape = False
-                                elif c == '\\':
-                                    escape = True
-                                elif c == '"':
-                                    in_string = not in_string
-
-                            if in_string:
-                                # Trouver la dernière virgule ou accolade avant la chaîne tronquée
-                                # et tronquer là pour avoir un JSON valide
-                                last_complete = max(
-                                    s.rfind('",'),
-                                    s.rfind('": '),
-                                    s.rfind('"}'),
-                                    s.rfind('"]'),
-                                    s.rfind(': null'),
-                                    s.rfind(': true'),
-                                    s.rfind(': false')
-                                )
-                                if last_complete > 0:
-                                    # Trouver la fin de cette valeur complète
-                                    if s[last_complete:last_complete+2] == '",':
-                                        s = s[:last_complete+2]
-                                    elif s[last_complete:last_complete+2] == '"}':
-                                        s = s[:last_complete+2]
-                                    elif s[last_complete:last_complete+2] == '"]':
-                                        s = s[:last_complete+2]
-                                    else:
-                                        s = s[:last_complete+1]
-                                else:
-                                    s += '"'
-
-                            # 2. Supprimer les virgules/deux-points en fin
-                            s = s.rstrip()
-                            while s and s[-1] in ',:\n\t ':
-                                s = s[:-1]
-
-                            # 3. Compter et fermer les accolades/crochets
-                            stack = []
-                            in_str = False
-                            esc = False
-                            for c in s:
-                                if esc:
-                                    esc = False
-                                elif c == '\\':
-                                    esc = True
-                                elif c == '"':
-                                    in_str = not in_str
-                                elif not in_str:
-                                    if c == '{':
-                                        stack.append('}')
-                                    elif c == '[':
-                                        stack.append(']')
-                                    elif c in '}]' and stack:
-                                        stack.pop()
-
-                            # Fermer dans l'ordre inverse
-                            while stack:
-                                s += stack.pop()
-
-                            return s
-
-                        import json
                         try:
-                            event_data = json.loads(json_text)
-                        except json.JSONDecodeError as je:
-                            # Essayer de réparer le JSON tronqué
-                            print(f"⚠️ JSON tronqué de {model}, tentative de réparation...")
-                            try:
-                                repaired = repair_truncated_json(json_text)
-                                event_data = json.loads(repaired)
-                                print(f"✅ JSON réparé avec succès")
-                            except json.JSONDecodeError:
-                                print(f"❌ JSON invalide reçu de {model}:")
-                                print(json_text[:500])
-                                raise je
-
-                        # Backward compatibility: convertir ancien format vers nouveau
-                        if 'events' not in event_data and 'title' in event_data:
-                            print(f"   🔄 Conversion ancien format → events[]")
-                            old_event = event_data
-
-                            # Convertir startDate/endDate en Day/Month/Year
-                            def parse_date_fields(date_str):
-                                if not date_str:
-                                    return None, None, None
-                                parts = date_str.split('-')
-                                if len(parts) == 3:
-                                    return parts[2], parts[1], parts[0]  # DD, MM, YYYY
-                                return None, None, None
-
-                            if 'startDate' in old_event:
-                                d, m, y = parse_date_fields(old_event.get('startDate'))
-                                old_event['startDateDay'] = d
-                                old_event['startDateMonth'] = m
-                                old_event['startDateYear'] = y
-                                del old_event['startDate']
-
-                            if 'endDate' in old_event:
-                                d, m, y = parse_date_fields(old_event.get('endDate'))
-                                old_event['endDateDay'] = d
-                                old_event['endDateMonth'] = m
-                                old_event['endDateYear'] = y
-                                del old_event['endDate']
-
-                            event_data = {'events': [old_event]}
+                            data = json.loads(json_text)
+                            print(f"   ✅ Analyse réussie avec {model}")
+                        except json.JSONDecodeError as e:
+                            print(f"   ⚠️ JSON invalide: {e}")
+                            continue
 
                         # Post-processing: corriger les accents français
-                        event_data = fix_ocr_dict(event_data)
+                        data = fix_ocr_dict(data)
 
                         # Extraire GPS EXIF si disponible
                         exif_gps = None
@@ -2700,17 +2602,57 @@ JSON uniquement, sans markdown ni explications."""
 
                         # Construire la réponse selon le schéma demandé
                         # Format: {image, qr_code, ocr, geolocation, exif_gps}
-                        events = event_data.get('events', [])
+                        events = data.get('events', [])
                         qr_code = qr_contents[0] if qr_contents else None
-                        image_name = data.get('imageName')  # Nom du fichier envoyé par le client
 
                         result_events = []
+                        geo_cache = {}  # Cache pour éviter les appels redondants
+
                         for i, evt in enumerate(events):
+                            # Extraire les infos de localisation pour géocodage
+                            loc = evt.get('location', {})
+                            venue = loc.get('venueName', '')
+                            address = loc.get('address', '')
+                            city = loc.get('city', '')
+                            state = loc.get('state', '')
+                            postalCode = loc.get('postalCode', '')
+                            country = loc.get('country', '')
+
+                            # Clé de cache pour éviter les requêtes dupliquées
+                            cache_key = f"{venue}|{address}|{city}|{state}|{postalCode}|{country}"
+
+                            if cache_key in geo_cache:
+                                geo_data = geo_cache[cache_key]
+                            else:
+                                # Appeler geocode_google_places comme le script Python
+                                exif_lat = exif_gps.get('lat') if exif_gps else None
+                                exif_lon = exif_gps.get('lon') if exif_gps else None
+
+                                geo_data = geocode_google_places(
+                                    venue=venue,
+                                    address=address,
+                                    city=city,
+                                    state=state,
+                                    postalCode=postalCode,
+                                    country=country,
+                                    exif_lat=exif_lat,
+                                    exif_lon=exif_lon
+                                )
+                                geo_cache[cache_key] = geo_data
+
+                            # Enrichir les tags avec ville et pays (comme le script Python)
+                            tags = evt.get('tags', [])
+                            if city and city not in tags:
+                                tags.append(city)
+                            if country and country not in tags:
+                                tags.append(country)
+                            evt['tags'] = tags
+
                             result_events.append({
                                 "image": image_name,
                                 "qr_code": qr_code if i == 0 else None,
                                 "ocr": evt,
-                                "geolocation": None,
+                                "geolocation": geo_data,
                                 "exif_gps": exif_gps
                             })
 
@@ -2726,17 +2668,15 @@ JSON uniquement, sans markdown ni explications."""
                             "qr_codes": qr_contents
                         }), 200
                 else:
-                    last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-                    print(f"⚠️ Gemini {model}: {last_error}")
-                    
+                    print(f"   ⚠️ Erreur {response.status_code}: {response.text[:200]}")
+
             except Exception as e:
-                last_error = str(e)
-                print(f"⚠️ Gemini {model} erreur: {e}")
-                continue
-        
+                print(f"   ⚠️ Erreur {model}: {e}")
+
+        print("   ❌ Tous les modèles ont échoué")
         return jsonify({
             "status": "error",
-            "message": f"Tous les modèles ont échoué. Dernière erreur: {last_error}"
+            "message": "Tous les modèles ont échoué"
         }), 500
         
     except Exception as e:
@@ -3668,9 +3608,14 @@ def geocode_google_places(venue=None, address=None, city=None, state=None, posta
 
                         if city_match:
                             candidates.append({
-                                'lat': lat, 'lng': lng, 'name': name,
-                                'formatted': formatted, 'place_id': r.get('place_id'),
-                                'types': r.get('types', []), 'rating': r.get('rating'),
+                                'lat': lat,
+                                'lng': lng,
+                                'name': name,
+                                'formatted': formatted,
+                                'place_id': r.get('place_id'),
+                                'types': r.get('types', []),
+                                'business_status': r.get('business_status'),
+                                'rating': r.get('rating'),
                                 'user_ratings_total': r.get('user_ratings_total')
                             })
 
@@ -3678,46 +3623,78 @@ def geocode_google_places(venue=None, address=None, city=None, state=None, posta
                         # Trier par pertinence
                         if venue:
                             venue_norm = normalize_text_for_geo(venue)
-                            generic_words = {'hotel', 'center', 'centre', 'station', 'paris', 'lyon'}
+                            generic_words = {'busan', 'seoul', 'tokyo', 'paris', 'hotel', 'center', 'centre', 'station'}
                             venue_words = [w for w in venue_norm.split() if len(w) > 2 and w not in generic_words]
 
                             def relevance_score(c):
-                                name_norm = normalize_text_for_geo(c.get('name', ''))
-                                score = 100
+                                name = c.get('name', '')
+                                name_norm = normalize_text_for_geo(name)
+                                # Aussi vérifier dans le nom original (pour caractères coréens/chinois)
+                                name_original = name.lower()
+
+                                score = 100  # Score par défaut (pire)
+
+                                # Match exact ou quasi-exact
                                 if venue_norm in name_norm or name_norm in venue_norm:
                                     score = 0
+
+                                # Vérifier si le nom du venue apparaît dans le nom original (ex: DUEX)
                                 for word in venue_words:
-                                    if word in name_norm:
-                                        score = min(score, 10)
+                                    if word in name_norm or word in name_original:
+                                        score = min(score, 10)  # Bon score
+                                    # Aussi vérifier dans l'adresse formatée
                                     formatted_norm = normalize_text_for_geo(c.get('formatted', ''))
                                     if word in formatted_norm:
                                         score = min(score, 20)
+
                                 return score
                             candidates.sort(key=relevance_score)
 
                         best = candidates[0]
                         print(f"   ✅ Sélectionné: {best['name']}")
                         print(f"   ✅ Coordonnées: {best['lat']:.6f}, {best['lng']:.6f}")
+                        print(f"   📍 {best['formatted']}")
+                        if best.get('rating'):
+                            print(f"   ⭐ Note: {best['rating']}/5 ({best.get('user_ratings_total', 0)} avis)")
 
-                        # Extraire ville/pays depuis l'adresse formatée
+                        # Extraire ville/état/pays depuis l'adresse formatée
                         addr_parts = best['formatted'].split(', ')
                         geo_country = addr_parts[-1] if len(addr_parts) > 0 else None
-                        geo_city = addr_parts[-3] if len(addr_parts) > 2 else city
+                        geo_state = addr_parts[-2] if len(addr_parts) > 1 else None
+                        geo_city = addr_parts[-3] if len(addr_parts) > 2 else None
 
                         return {
-                            'latitude': best['lat'], 'longitude': best['lng'],
-                            'display_name': best['formatted'], 'place_name': best['name'],
-                            'source': 'google_places', 'city': geo_city, 'country': geo_country,
-                            'place_id': best['place_id'], 'types': best['types'],
-                            'rating': best.get('rating')
+                            'latitude': best['lat'],
+                            'longitude': best['lng'],
+                            'display_name': best['formatted'],
+                            'place_name': best['name'],
+                            'source': 'google_places',
+                            'city': geo_city,
+                            'state': geo_state,
+                            'country': geo_country,
+                            'place_id': best['place_id'],
+                            'types': best['types'],
+                            'rating': best.get('rating'),
+                            'user_ratings_total': best.get('user_ratings_total')
                         }
 
+                elif data.get('status') == 'ZERO_RESULTS':
+                    print(f"   ⚠️ Aucun résultat")
                 elif data.get('status') == 'REQUEST_DENIED':
                     print(f"   ❌ Clé API invalide ou Places API non activée")
+                    print(f"      {data.get('error_message', '')}")
+                    print(f"      Activer: https://console.cloud.google.com/apis/library/places-backend.googleapis.com")
                     break
                 elif data.get('status') == 'OVER_QUERY_LIMIT':
                     print(f"   ❌ Quota API dépassé")
                     break
+                elif data.get('status') == 'INVALID_REQUEST':
+                    print(f"   ⚠️ Requête invalide: {data.get('error_message', '')}")
+                else:
+                    print(f"   ⚠️ Status: {data.get('status')}")
+
+            else:
+                print(f"   ⚠️ Erreur HTTP {response.status_code}")
 
         except Exception as e:
             print(f"   ⚠️ Erreur: {e}")
@@ -3725,10 +3702,12 @@ def geocode_google_places(venue=None, address=None, city=None, state=None, posta
     # DERNIER RECOURS: EXIF
     print("   ❌ Échec géocodage Google Places")
     if exif_lat and exif_lon:
-        print(f"   🔄 Utilisation GPS EXIF: {exif_lat:.6f}, {exif_lon:.6f}")
+        print(f"   🔄 Utilisation GPS EXIF en dernier recours: {exif_lat:.6f}, {exif_lon:.6f}")
         return {
-            'latitude': exif_lat, 'longitude': exif_lon,
-            'display_name': 'GPS EXIF (Google Maps échec)', 'source': 'exif'
+            'latitude': exif_lat,
+            'longitude': exif_lon,
+            'display_name': 'GPS EXIF (Google Maps échec)',
+            'source': 'exif'
         }
 
     return None
