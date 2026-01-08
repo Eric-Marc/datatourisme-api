@@ -2139,12 +2139,18 @@ COUNTRY_TRANSLATIONS = {
 def normalize_text_for_geo(text):
     """Normalise le texte pour comparaison géographique."""
     import unicodedata
+    import re
     if not text:
         return ""
     text = text.lower()
     text = text.replace('œ', 'oe').replace('æ', 'ae').replace('ß', 'ss')
+    # Normaliser tirets et apostrophes (multiples variantes Unicode)
+    text = text.replace('-', ' ').replace('–', ' ').replace('—', ' ')  # tirets
+    text = text.replace("'", ' ').replace("'", ' ').replace("'", ' ').replace("`", ' ')  # apostrophes
     text = unicodedata.normalize('NFD', text)
     text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    # Normaliser espaces multiples
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 # Modèles Gemini par ordre de préférence (Gemini 3 pour meilleure OCR)
