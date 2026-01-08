@@ -181,6 +181,7 @@ def get_allocine_dept_id_dynamic(dept_name):
 # ============================================================================
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+app.json.sort_keys = False  # Préserver l'ordre des clés JSON (comme qr-ocr-google.py)
 CORS(app)
 
 # Note: /media/ prefix is used instead of /uploads/ to avoid Render route interception
