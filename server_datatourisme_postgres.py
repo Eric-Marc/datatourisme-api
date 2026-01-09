@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 GEDEON API - VERSION OPTIMISÉE v2
+🚀 GEDEON API - V_qr_multi_1
 
 Optimisations :
 1. DATAtourisme + OpenAgenda en PARALLÈLE
@@ -4451,7 +4451,7 @@ def check_disk_files():
 # ============================================================================
 
 print("=" * 70)
-print("🚀 GEDEON API - VERSION AVEC SCANNER")
+print("🚀 GEDEON API - V_qr_multi_1")
 print("=" * 70)
 
 # Initialiser les tables users et scanned_events (migrations incluses)
