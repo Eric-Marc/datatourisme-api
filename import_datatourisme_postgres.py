@@ -376,7 +376,7 @@ def get_nearby_events():
                     longitude,
                     adresse as address,
                     commune as city,
-                    code_postal as "postalCode",
+                    code_postal as zipcode,
                     contacts,
                     ST_Distance(
                         geom::geography,

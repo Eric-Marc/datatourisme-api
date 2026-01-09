@@ -867,7 +867,7 @@ def fetch_datatourisme_events(center_lat, center_lon, radius_km, days_ahead):
             SELECT uri as uid, nom as title, description,
                    date_debut as begin, date_fin as end,
                    latitude, longitude, adresse as address, commune as city,
-                   code_postal as "postalCode", contacts,
+                   code_postal as zipcode, contacts,
                    ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography) / 1000 as "distanceKm"
             FROM nearby_events
             ORDER BY "distanceKm", date_debut
@@ -2906,7 +2906,7 @@ def geocode_address_endpoint():
         address_field = data.get('addressField')
         city = data.get('city')
         state = data.get('state')
-        zipcode = data.get('zipcode') or data.get('postalCode')  # Support ancien nom
+        zipcode = data.get('zipcode')  # Standard field name
         country = data.get('country')
 
         if not address and not venue and not city:

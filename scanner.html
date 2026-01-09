@@ -640,7 +640,7 @@
             document.getElementById('event-date').textContent = dateText;
             document.getElementById('event-time').textContent = d.startTime ? (d.startTime + (d.endTime ? ` - ${d.endTime}` : '')) : '-';
             document.getElementById('event-venue').textContent = d.location?.venueName || '-';
-            document.getElementById('event-address').textContent = [d.location?.address, d.location?.postalCode, d.location?.city].filter(Boolean).join(', ') || '-';
+            document.getElementById('event-address').textContent = [d.location?.address, d.location?.zipcode, d.location?.city].filter(Boolean).join(', ') || '-';
             document.getElementById('event-organizer').textContent = d.organizer?.name || '-';
             document.getElementById('event-pricing').textContent = d.pricing?.isFree ? 'Gratuit' : (d.pricing?.priceRange || '-');
 
@@ -764,8 +764,14 @@
             let lat = null, lon = null;
             const loc = eventData.location || {};
 
-            // Utiliser le mode avancé avec composants séparés
-            if (loc.venueName || loc.city) {
+            // 1. Utiliser la géolocalisation déjà fournie par le serveur
+            if (eventData.geolocation && eventData.geolocation.latitude && eventData.geolocation.longitude) {
+                lat = eventData.geolocation.latitude;
+                lon = eventData.geolocation.longitude;
+                console.log(`📍 Géolocalisation serveur: ${lat}, ${lon}`);
+            }
+            // 2. Sinon, géocoder avec composants séparés
+            else if (loc.venueName || loc.city) {
                 try {
                     let res = await fetch(`${SERVER_URL}/api/scanner/geocode`, {
                         method: 'POST',
@@ -775,7 +781,7 @@
                             addressField: loc.address,
                             city: loc.city,
                             state: loc.state,
-                            postalCode: loc.postalCode,
+                            zipcode: loc.zipcode,
                             country: loc.country || 'France'
                         })
                     });
@@ -788,7 +794,7 @@
                 } catch (e) { console.error('Geocode error:', e); }
             }
 
-            // Fallback: utiliser EXIF GPS si pas de géocodage
+            // 3. Fallback: utiliser EXIF GPS
             if (!lat && !lon && eventData.exif_gps) {
                 lat = eventData.exif_gps.lat;
                 lon = eventData.exif_gps.lon;
@@ -819,7 +825,7 @@
                         city: eventData.location?.city,
                         country: eventData.location?.country || 'France',
                         address: eventData.location?.address,
-                        postalCode: eventData.location?.postalCode,
+                        zipcode: eventData.location?.zipcode,
                         latitude: lat, longitude: lon,
                         description: eventData.description,
                         organizer: eventData.organizer?.name,
@@ -848,16 +854,18 @@
                     }
                     return true;
                 } else {
-                    if (!silent) alert('❌ ' + (result.message || 'Erreur'));
-                    return false;
+                    const errMsg = result.message || 'Erreur';
+                    if (!silent) alert('❌ ' + errMsg);
+                    return errMsg;  // Return error message for batch processing
                 }
             } catch (e) {
                 if (btn) {
                     btn.disabled = false;
                     btn.textContent = '➕ Ajouter à GEDEON';
                 }
-                if (!silent) alert('❌ Erreur serveur');
-                return false;
+                const errMsg = 'Erreur serveur';
+                if (!silent) alert('❌ ' + errMsg);
+                return errMsg;  // Return error message for batch processing
             }
         }
 
@@ -875,6 +883,7 @@
 
             let successCount = 0;
             let failCount = 0;
+            let failReasons = [];
 
             for (let i = 0; i < eventsData.length; i++) {
                 const event = eventsData[i];
@@ -884,12 +893,17 @@
                 const hasDate = event.startDate || (event.startDateDay && event.startDateMonth);
                 if (!event.title || !hasDate) {
                     failCount++;
+                    failReasons.push(`#${i+1}: données manquantes`);
                     continue;
                 }
 
-                const success = await submitSingleEvent(event, isPrivate, null, true);
-                if (success) successCount++;
-                else failCount++;
+                const result = await submitSingleEvent(event, isPrivate, null, true);
+                if (result === true) {
+                    successCount++;
+                } else {
+                    failCount++;
+                    failReasons.push(`#${i+1}: ${result || 'erreur'}`);
+                }
             }
 
             btn.disabled = false;
@@ -901,7 +915,9 @@
                     window.location.href = 'index.html';
                 }
             } else {
-                alert(`✅ ${successCount} ajouté(s)${priv}\n❌ ${failCount} échec(s) (données manquantes)`);
+                const reasons = failReasons.slice(0, 3).join('\n');
+                const more = failReasons.length > 3 ? `\n... et ${failReasons.length - 3} autres` : '';
+                alert(`✅ ${successCount} ajouté(s)${priv}\n❌ ${failCount} échec(s):\n${reasons}${more}`);
             }
         }
         
