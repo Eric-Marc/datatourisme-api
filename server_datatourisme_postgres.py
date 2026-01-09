@@ -181,7 +181,7 @@ def get_allocine_dept_id_dynamic(dept_name):
 # ============================================================================
 
 app = Flask(__name__, static_folder='.', static_url_path='')
-app.json.sort_keys = False  # Préserver l'ordre des clés JSON (comme qr-ocr-google.py)
+app.config['JSON_SORT_KEYS'] = False  # Préserver l'ordre des clés JSON
 CORS(app)
 
 # Note: /media/ prefix is used instead of /uploads/ to avoid Render route interception
@@ -2339,12 +2339,11 @@ def match_qr_to_event(event_title, qr_list):
     return None
 
 
-# Modèles Gemini par ordre de préférence
+# Modèles Gemini par ordre de préférence (2025)
 GEMINI_MODELS = [
     'gemini-3-pro-preview',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-pro-latest'
+    'gemini-2.5-flash',
+    'gemini-2.0-flash'
 ]
 GEMINI_TEMPERATURE = 0.1
 
@@ -2758,7 +2757,7 @@ JSON uniquement, sans markdown ni explications."""
                     }],
                     "generationConfig": {
                         "temperature": GEMINI_TEMPERATURE,
-                        "maxOutputTokens": 32768,
+                        "maxOutputTokens": 65536,
                         "mediaResolution": "MEDIA_RESOLUTION_MEDIUM"
                     }
                 }

@@ -846,7 +846,10 @@
                 if (result.status === 'success') {
                     if (!silent) {
                         const priv = isPrivate ? ' (privé)' : ' (public)';
-                        if (lat && lon) {
+                        // Si plusieurs événements, ne pas proposer d'aller à la carte
+                        if (eventsData.length > 1) {
+                            alert(`✅ "${eventData.title}" ajouté${priv} !`);
+                        } else if (lat && lon) {
                             if (confirm(`✅ "${eventData.title}" ajouté${priv} !\n\nVoir la carte ?`)) window.location.href = 'index.html';
                         } else {
                             alert(`✅ "${eventData.title}" ajouté${priv} mais non géolocalisé.`);
