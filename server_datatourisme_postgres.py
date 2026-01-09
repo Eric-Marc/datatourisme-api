@@ -3986,46 +3986,38 @@ def add_scanned_event():
             conn.close()
             return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
         
-        # Vérifier si cet événement existe déjà (hash exact)
-        cur.execute("SELECT id FROM scanned_events WHERE uid = %s", (uid,))
-        if cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify({"status": "error", "message": "Cet événement a déjà été scanné (identique)"}), 409
-        
-        # 🔍 DÉTECTION INTELLIGENTE DE DOUBLONS
+        # 🔄 DÉTECTION ET REMPLACEMENT DES DOUBLONS (V_qr_multi_1)
         # Chercher des événements similaires (même titre + même ville/GPS)
+        # Si trouvé: REMPLACER l'ancien par le nouveau
         new_title = data.get('title', '')
         new_city = data.get('city', '')
         new_lat = data.get('latitude')
         new_lon = data.get('longitude')
-        
+        existing_id_to_replace = None
+
         cur.execute("""
-            SELECT id, title, city, latitude, longitude 
+            SELECT id, title, city, latitude, longitude
             FROM scanned_events
         """)
         existing_events = cur.fetchall()
-        
+
         for existing in existing_events:
             # Comparer les titres
             title_match = normalize_title(new_title) == normalize_title(existing['title'])
             title_sim = title_similarity(new_title, existing['title'])
-            
+
             if not title_match and title_sim < 80:
                 continue  # Titres trop différents
-            
+
             # Comparer la localisation
             same_city = (new_city or '').lower() == (existing['city'] or '').lower() if new_city and existing['city'] else False
             distance = haversine_km(new_lat, new_lon, existing['latitude'], existing['longitude'])
             close_location = distance is not None and distance < 1  # < 1km
-            
+
             if same_city or close_location:
-                cur.close()
-                conn.close()
-                return jsonify({
-                    "status": "error", 
-                    "message": f"Un événement similaire existe déjà : '{existing['title']}' (ID={existing['id']})"
-                }), 409
+                existing_id_to_replace = existing['id']
+                print(f"🔄 Événement similaire trouvé (ID={existing_id_to_replace}), sera remplacé")
+                break
         
         # Parser les dates
         begin_date = None
@@ -4165,54 +4157,98 @@ def add_scanned_event():
                 print(f"⚠️  Erreur traitement image: {e}")
                 # Continue sans l'image si erreur
 
-        # Insérer l'événement (image en base64 dans PostgreSQL uniquement)
-        print(f"🔍 INSERT: city={data.get('city')}, country={data.get('country')}, lat={data.get('latitude')}, lon={data.get('longitude')}")
+        # 🔄 UPSERT: Remplacer si doublon, sinon insérer
+        print(f"🔍 city={data.get('city')}, country={data.get('country')}, lat={data.get('latitude')}, lon={data.get('longitude')}")
         print(f"💾 Image: mime={image_mime}, data_len={len(image_data_base64) if image_data_base64 else 0}")
-        cur.execute("""
-            INSERT INTO scanned_events (
-                user_id, uid, title, category, begin_date, end_date,
-                start_time, end_time, location_name, city, country, address,
-                latitude, longitude, description, organizer, pricing,
-                website, tags, is_private, image_path, image_data, image_mime
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            ) RETURNING id, uid, created_at
-        """, (
-            user_id,
-            uid,
-            data.get('title'),
-            data.get('category'),
-            begin_date,
-            end_date,
-            data.get('startTime'),
-            data.get('endTime'),
-            data.get('locationName'),
-            data.get('city'),
-            data.get('country'),
-            data.get('address'),
-            data.get('latitude'),
-            data.get('longitude'),
-            data.get('description'),
-            data.get('organizer'),
-            data.get('pricing'),
-            data.get('website'),
-            data.get('tags', []),
-            data.get('is_private', False),
-            image_path,
-            image_data_base64,
-            image_mime
-        ))
-        
+
+        if existing_id_to_replace:
+            # 🔄 UPDATE: Remplacer l'événement existant
+            print(f"🔄 UPDATE événement ID={existing_id_to_replace}")
+            cur.execute("""
+                UPDATE scanned_events SET
+                    uid = %s, title = %s, category = %s, begin_date = %s, end_date = %s,
+                    start_time = %s, end_time = %s, location_name = %s, city = %s, country = %s,
+                    address = %s, latitude = %s, longitude = %s, description = %s, organizer = %s,
+                    pricing = %s, website = %s, tags = %s, is_private = %s,
+                    image_path = %s, image_data = %s, image_mime = %s
+                WHERE id = %s
+                RETURNING id, uid, created_at
+            """, (
+                uid,
+                data.get('title'),
+                data.get('category'),
+                begin_date,
+                end_date,
+                data.get('startTime'),
+                data.get('endTime'),
+                data.get('locationName'),
+                data.get('city'),
+                data.get('country'),
+                data.get('address'),
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('description'),
+                data.get('organizer'),
+                data.get('pricing'),
+                data.get('website'),
+                data.get('tags', []),
+                data.get('is_private', False),
+                image_path,
+                image_data_base64,
+                image_mime,
+                existing_id_to_replace
+            ))
+            action = "remplacé"
+        else:
+            # ➕ INSERT: Nouvel événement
+            print(f"➕ INSERT nouvel événement")
+            cur.execute("""
+                INSERT INTO scanned_events (
+                    user_id, uid, title, category, begin_date, end_date,
+                    start_time, end_time, location_name, city, country, address,
+                    latitude, longitude, description, organizer, pricing,
+                    website, tags, is_private, image_path, image_data, image_mime
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                ) RETURNING id, uid, created_at
+            """, (
+                user_id,
+                uid,
+                data.get('title'),
+                data.get('category'),
+                begin_date,
+                end_date,
+                data.get('startTime'),
+                data.get('endTime'),
+                data.get('locationName'),
+                data.get('city'),
+                data.get('country'),
+                data.get('address'),
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('description'),
+                data.get('organizer'),
+                data.get('pricing'),
+                data.get('website'),
+                data.get('tags', []),
+                data.get('is_private', False),
+                image_path,
+                image_data_base64,
+                image_mime
+            ))
+            action = "ajouté"
+
         result = cur.fetchone()
         conn.commit()
-        
+
         cur.close()
         conn.close()
-        
-        print(f"📷 Événement scanné ajouté: {data.get('title')} par user {user_id}")
-        
+
+        print(f"📷 Événement {action}: {data.get('title')} par user {user_id}")
+
         return jsonify({
             "status": "success",
+            "action": action,
             "event": {
                 "id": result['id'],
                 "uid": result['uid'],
