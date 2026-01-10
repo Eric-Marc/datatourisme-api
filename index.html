@@ -949,8 +949,8 @@
                     <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
                     <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
                     <button onclick="goToScanner()" class="scanner-btn" title="Scanner une affiche">📷</button>
-                    <button id="btnMyScans" onclick="toggleMyScans()" title="Mes scans uniquement" style="background:#f97316;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;opacity:0.6;">MyScans</button>
-                    <span class="version-info">V_qr_multi_1.2 • 10/01/2026</span>
+                    <button id="btnMyScans" onclick="toggleMyScans()" title="Mes scans uniquement" style="background:#f97316;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;opacity:0.6;">MyScans (0)</button>
+                    <span class="version-info">V_qr_multi_1.3 • 10/01/2026</span>
                 </div>
                 <div class="status" id="status">Maintenez appuyé sur la carte</div>
             </div>
@@ -1704,6 +1704,14 @@
         // 📷 TOGGLE SCANNÉS - Comportement identique aux autres toggles
         async function toggleScanned() {
             console.log('toggleScanned() appelé, exclusiveMode:', exclusiveMode, 'showScanned:', showScanned);
+
+            // Désactiver le filtre MyScans quand on clique sur Scannés
+            if (myScansOnly) {
+                myScansOnly = false;
+                var btn = document.getElementById('btnMyScans');
+                btn.style.opacity = '0.6';
+                btn.style.boxShadow = 'none';
+            }
 
             // Si on n'a pas encore chargé les données scannées, les charger d'abord
             if (scannedEventsData.length === 0) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 GEDEON API - V_qr_multi_1.2
+🚀 GEDEON API - V_qr_multi_1.3
 
 Optimisations :
 1. DATAtourisme + OpenAgenda en PARALLÈLE
@@ -3986,7 +3986,7 @@ def add_scanned_event():
             conn.close()
             return jsonify({"status": "error", "message": "Utilisateur non trouvé"}), 404
         
-        # 🔄 DÉTECTION ET REMPLACEMENT DES DOUBLONS (V_qr_multi_1.2)
+        # 🔄 DÉTECTION ET REMPLACEMENT DES DOUBLONS (V_qr_multi_1.3)
         # Chercher des événements similaires (même titre + même ville/GPS)
         # Si trouvé: REMPLACER l'ancien par le nouveau
         new_title = data.get('title', '')
@@ -4487,7 +4487,7 @@ def check_disk_files():
 # ============================================================================
 
 print("=" * 70)
-print("🚀 GEDEON API - V_qr_multi_1.2")
+print("🚀 GEDEON API - V_qr_multi_1.3")
 print("=" * 70)
 
 # Initialiser les tables users et scanned_events (migrations incluses)
