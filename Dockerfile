@@ -18,4 +18,4 @@ COPY . .
 
 EXPOSE 10000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--timeout", "120", "server_datatourisme_postgres:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--timeout", "300", "server_datatourisme_postgres:app"]
