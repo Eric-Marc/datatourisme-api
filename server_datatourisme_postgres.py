@@ -2134,8 +2134,9 @@ COUNTRY_TRANSLATIONS = {
     'singapour': 'Singapore', 'hong kong': 'Hong Kong', 'taïwan': 'Taiwan', 'taiwan': 'Taiwan',
     'thaïlande': 'Thailand', 'vietnam': 'Vietnam', 'indonésie': 'Indonesia',
     'malaisie': 'Malaysia', 'philippines': 'Philippines', 'nouvelle-zélande': 'New Zealand',
-    'argentine': 'Argentina', 'madagascar': 'Madagascar',
+    'argentine': 'Argentina', 'madagascar': 'Madagascar', 'cuba': 'Cuba',
 }
+
 
 # États US (noms complets et abréviations) - de qr-ocr-google.py
 US_STATES = {
@@ -2762,7 +2763,7 @@ JSON uniquement, sans markdown ni explications."""
                     }
                 }
 
-                response = requests.post(url, json=request_body, timeout=180)
+                response = requests.post(url, json=request_body, timeout=300)
 
                 if response.status_code == 200:
                     result = response.json()
@@ -3764,7 +3765,7 @@ def geocode_google_places(venue=None, address=None, city=None, state=None, zipco
 
     for query_idx, query in enumerate(queries, 1):
         print(f"\n   🔍 Requête [{query_idx}/{len(queries)}]: {query}")
-        params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "fr"}
+        params = {"query": query, "key": GOOGLE_MAPS_API_KEY}  # Pas de language = auto-détection
 
         try:
             response = requests.get(url, params=params, timeout=15)
@@ -3795,7 +3796,19 @@ def geocode_google_places(venue=None, address=None, city=None, state=None, zipco
                         if city:
                             city_norm = normalize_text_for_geo(city)
                             formatted_norm = normalize_text_for_geo(formatted)
+                            # Match exact ou fuzzy (pour gérer les traductions: La Habana / La Havane)
                             city_match = city_norm in formatted_norm
+                            if not city_match:
+                                # Fuzzy match: vérifier similarité des mots
+                                from difflib import SequenceMatcher
+                                formatted_words = formatted_norm.replace(',', ' ').split()
+                                for word in formatted_words:
+                                    if len(word) > 3:
+                                        sim = SequenceMatcher(None, city_norm, word).ratio()
+                                        if sim > 0.6:  # 60% similarité
+                                            city_match = True
+                                            print(f"         ✅ '{name}': fuzzy match '{city_norm}' ~ '{word}' ({sim:.0%})")
+                                            break
                             if not city_match:
                                 print(f"         ❌ '{name}' exclu: ville '{city_norm}' non trouvée dans '{formatted_norm}'")
 
