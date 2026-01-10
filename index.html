@@ -949,6 +949,7 @@
                     <button id="btnMyPosition" onclick="getUserLocation()" title="Ma position">📍</button>
                     <button onclick="resetMapView()" id="resetViewBtn" style="display:none;" title="Réinitialiser la vue">🔄</button>
                     <button onclick="goToScanner()" class="scanner-btn" title="Scanner une affiche">📷</button>
+                    <button id="btnMyScans" onclick="toggleMyScans()" title="Mes scans uniquement" style="background:#f97316;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;opacity:0.6;">MyScans</button>
                     <span class="version-info">V_qr_multi_1 • 09/01/2026</span>
                 </div>
                 <div class="status" id="status">Maintenez appuyé sur la carte</div>
@@ -1598,8 +1599,9 @@
             }
 
             if (showScanned) {
-                // Filtrer les événements scannés par rayon
-                var filteredScanned = scannedEventsData.filter(function(event) {
+                // Filtrer les événements scannés par rayon (et par utilisateur si MyScans actif)
+                var scannedToFilter = getFilteredScannedEvents();
+                var filteredScanned = scannedToFilter.filter(function(event) {
                     if (!event.latitude || !event.longitude) return false;
                     var dist = haversine_km(lat, lon, event.latitude, event.longitude);
                     return dist <= currentRadiusKm;
@@ -1732,6 +1734,58 @@
             }
         }
 
+        // 📷 FILTRE MES SCANS UNIQUEMENT
+        var myScansOnly = false;
+
+        function toggleMyScans() {
+            var user = getCurrentUser();
+            if (!user) {
+                alert('⚠️ Connectez-vous pour voir vos scans');
+                return;
+            }
+
+            myScansOnly = !myScansOnly;
+            var btn = document.getElementById('btnMyScans');
+
+            if (myScansOnly) {
+                btn.style.opacity = '1';
+                btn.style.boxShadow = '0 0 8px #f97316';
+                updateStatus('📷 Mes scans uniquement', 'success');
+
+                // Activer le mode scannés si pas déjà actif
+                if (exclusiveMode !== 'scanned') {
+                    showScanned = true;
+                    exclusiveMode = 'scanned';
+                    showEvents = false;
+                    showCinema = false;
+                    showSalons = false;
+                    updateToggleVisuals();
+                }
+            } else {
+                btn.style.opacity = '0.6';
+                btn.style.boxShadow = 'none';
+                updateStatus('📷 Tous les scans', 'success');
+            }
+
+            // Rafraîchir l'affichage
+            if (currentPosition) {
+                refreshMapDisplay();
+            } else {
+                displayScannedEventsGlobal();
+            }
+        }
+
+        function getFilteredScannedEvents() {
+            if (!myScansOnly) return scannedEventsData;
+
+            var user = getCurrentUser();
+            if (!user) return scannedEventsData;
+
+            return scannedEventsData.filter(function(e) {
+                return e.user_id === user.id;
+            });
+        }
+
         // 📷 CHARGER LES ÉVÉNEMENTS SCANNÉS DEPUIS LE SERVEUR
         async function loadScannedEventsFromServer() {
             try {
@@ -1802,11 +1856,12 @@
 
         // 📷 METTRE À JOUR LE COMPTEUR DE SCANS (selon rayon si location sélectionnée)
         function updateScannedCount() {
+            var scannedToCount = getFilteredScannedEvents();
             if (currentPosition) {
                 // Location sélectionnée: compter seulement dans le rayon
                 var lat = currentPosition.coords.latitude;
                 var lon = currentPosition.coords.longitude;
-                var scansInRadius = scannedEventsData.filter(function(event) {
+                var scansInRadius = scannedToCount.filter(function(event) {
                     if (!event.latitude || !event.longitude) return false;
                     var dist = haversine_km(lat, lon, event.latitude, event.longitude);
                     return dist <= currentRadiusKm;
@@ -1814,7 +1869,7 @@
                 document.getElementById('scanned-count').textContent = scansInRadius;
             } else {
                 // Pas de location: afficher le total
-                document.getElementById('scanned-count').textContent = scannedEventsData.length;
+                document.getElementById('scanned-count').textContent = scannedToCount.length;
             }
         }
 
@@ -2540,13 +2595,17 @@
         
         // 📷 Afficher les événements scannés SANS zone de recherche (mode global)
         function displayScannedEventsGlobal() {
-            if (scannedEventsData.length === 0) return;
-            
-            console.log('📷 Affichage global de', scannedEventsData.length, 'événements scannés');
-            
+            var eventsToDisplay = getFilteredScannedEvents();
+            if (eventsToDisplay.length === 0) {
+                updateStatus(myScansOnly ? '📷 Aucun de vos scans' : '📷 Aucun événement scanné', 'waiting');
+                return;
+            }
+
+            console.log('📷 Affichage global de', eventsToDisplay.length, 'événements scannés' + (myScansOnly ? ' (MyScans)' : ''));
+
             // Créer un cluster pour les scannés
             if (currentMarkerCluster) map.removeLayer(currentMarkerCluster);
-            
+
             currentMarkerCluster = L.markerClusterGroup({
                 chunkedLoading: true,
                 spiderfyOnMaxZoom: true,
@@ -2562,11 +2621,11 @@
                     });
                 }
             });
-            
+
             var bounds = L.latLngBounds();
             var hasValidBounds = false;
-            
-            scannedEventsData.forEach(function(event) {
+
+            eventsToDisplay.forEach(function(event) {
                 if (!event.latitude || !event.longitude) return;
                 
                 var icon = createScannedIcon();
