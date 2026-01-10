@@ -2762,7 +2762,7 @@ JSON uniquement, sans markdown ni explications."""
                     }
                 }
 
-                response = requests.post(url, json=request_body, timeout=120)
+                response = requests.post(url, json=request_body, timeout=180)
 
                 if response.status_code == 200:
                     result = response.json()
